@@ -9,20 +9,20 @@ function assertSafeId(part: string, label: string): void {
   }
 }
 
-export function gasKey(branchId: string, variantId: string, state: GasState): string {
-  assertSafeId(branchId, "branch");
+export function gasKey(locationId: string, variantId: string, state: GasState): string {
+  assertSafeId(locationId, "location");
   assertSafeId(variantId, "variant");
-  return [branchId, variantId, state].join(SEPARATOR);
+  return [locationId, variantId, state].join(SEPARATOR);
 }
 
 export function custodyKey(
-  branchId: string,
+  locationId: string,
   variantId: string,
   custody: Custody,
 ): string {
-  assertSafeId(branchId, "branch");
+  assertSafeId(locationId, "location");
   assertSafeId(variantId, "variant");
-  return [branchId, variantId, custody].join(SEPARATOR);
+  return [locationId, variantId, custody].join(SEPARATOR);
 }
 
 /**
@@ -34,8 +34,8 @@ export function custodyKey(
 export class GasInventoryStore {
   private readonly balances = new Map<string, number>();
 
-  balance(branchId: string, variantId: string, state: GasState): number {
-    return this.balances.get(gasKey(branchId, variantId, state)) ?? 0;
+  balance(locationId: string, variantId: string, state: GasState): number {
+    return this.balances.get(gasKey(locationId, variantId, state)) ?? 0;
   }
 
   /**
@@ -43,16 +43,16 @@ export class GasInventoryStore {
    * exactly what the audit ledger needs.
    */
   add(
-    branchId: string,
+    locationId: string,
     variantId: string,
     state: GasState,
     delta: number,
   ): { before: number; after: number } {
-    const key = gasKey(branchId, variantId, state);
+    const key = gasKey(locationId, variantId, state);
     const before = this.balances.get(key) ?? 0;
     const after = before + delta;
     if (after < 0) {
-      throw new InsufficientStockError(branchId, variantId, state, -delta, before);
+      throw new InsufficientStockError(locationId, variantId, state, -delta, before);
     }
     if (after === 0) this.balances.delete(key);
     else this.balances.set(key, after);
@@ -61,15 +61,15 @@ export class GasInventoryStore {
 
   /** Every non-zero position. Used by reconciliation and the dashboard. */
   entries(): Array<{
-    branchId: string;
+    locationId: string;
     variantId: string;
     state: GasState;
     quantity: number;
   }> {
     return [...this.balances.entries()].map(([key, quantity]) => {
-      const [branchId, variantId, state] = key.split(SEPARATOR);
+      const [locationId, variantId, state] = key.split(SEPARATOR);
       return {
-        branchId,
+        locationId,
         variantId,
         state: state as GasState,
         quantity,
@@ -88,22 +88,22 @@ export class GasInventoryStore {
 export class CylinderCustodyStore {
   private readonly balances = new Map<string, number>();
 
-  balance(branchId: string, variantId: string, custody: Custody): number {
-    return this.balances.get(custodyKey(branchId, variantId, custody)) ?? 0;
+  balance(locationId: string, variantId: string, custody: Custody): number {
+    return this.balances.get(custodyKey(locationId, variantId, custody)) ?? 0;
   }
 
   add(
-    branchId: string,
+    locationId: string,
     variantId: string,
     custody: Custody,
     delta: number,
   ): { before: number; after: number } {
-    const key = custodyKey(branchId, variantId, custody);
+    const key = custodyKey(locationId, variantId, custody);
     const before = this.balances.get(key) ?? 0;
     const after = before + delta;
     if (after < 0) {
       throw new InsufficientCylindersError(
-        branchId,
+        locationId,
         variantId,
         custody,
         -delta,
@@ -116,15 +116,15 @@ export class CylinderCustodyStore {
   }
 
   entries(): Array<{
-    branchId: string;
+    locationId: string;
     variantId: string;
     custody: Custody;
     quantity: number;
   }> {
     return [...this.balances.entries()].map(([key, quantity]) => {
-      const [branchId, variantId, custody] = key.split(SEPARATOR);
+      const [locationId, variantId, custody] = key.split(SEPARATOR);
       return {
-        branchId,
+        locationId,
         variantId,
         custody: custody as Custody,
         quantity,

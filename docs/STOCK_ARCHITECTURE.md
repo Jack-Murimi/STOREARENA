@@ -1,270 +1,225 @@
-# LPG Stock Architecture — Gateway Gas Enterprises
+# Gateway Gas Enterprises — Stock & Sales Architecture
 
-**Status: for review.** No UI has been built against this yet. The domain, the
-relational schema and 104 tests are ready; the questions at the bottom are the
-ones worth settling before any screen is written.
-
-- Code: `src/lib/stock/` (pure TypeScript, no React/Next/database imports)
-- Schema: `src/lib/stock/schema.sql`
-- Tests: `src/lib/stock/__tests__/` — `npm test`
-- Seed: Afri Gas, TotalEnergies, Rubis across 3 trading branches
+Status: **reviewed with the owner, answers applied.** Schema + tests only, no UI yet.
+144 tests pass. Everything below is implemented in `src/lib/stock/` and verified by
+`src/lib/stock/__tests__/`.
 
 ---
 
-## 1. The core idea: two ledgers, never one
+## 1. The one rule that shapes everything: two ledgers
 
-The bug this design exists to prevent is treating a cylinder as a single number.
-It is two facts that move independently:
+Gas and cylinders are different things that happen to arrive in the same object.
+They are recorded in two ledgers that are **never merged and never summed together**:
 
 | Ledger | Table | Question it answers |
-| --- | --- | --- |
-| **Gas stock** | `inventory_positions` | How much saleable gas is at this branch, per brand/size, filled (`REFILL`) or empty (`EMPTY`)? |
-| **Cylinder custody** | `cylinder_custody` | Where are *our* shells right now — at the branch, at the depot, or out with a customer? |
+|---|---|---|
+| **Gas stock** | `inventory_positions` | How much saleable gas is at this location, per brand and size — filled (`REFILL`) or empty (`EMPTY`)? |
+| **Cylinder custody** | `cylinder_custody` | Where are *our own shells* right now — standing here (`BRANCH`), at the depot (`DEPOT`), out with a customer (`CUSTOMER`), or in transit (`IN_TRANSIT`)? |
 
-Why they must be separate, in practice:
+Why this matters:
 
-- A branch can hold 40 filled Total 13 kg cylinders in shells that all belong to
-  Total's exchange pool. Gas stock says 40; company assets say 0.
-- A branch can own 20 Afri Gas 6 kg shells that are all empty. Assets say 20;
-  saleable gas says 0.
-- Selling a **refill** moves gas only. Selling a **new cylinder** moves gas *and*
-  transfers ownership. Collapsing the two makes one of those two transactions
-  wrong, always.
+- Syokimau can hold 40 filled Total 13 kg cylinders whose shells all belong to the
+  branch — gas 40, custody 40.
+- Syokimau can own 20 Afri Gas 6 kg shells that are all empty — custody 20, gas 0.
+- A customer can walk off with a filled 13 kg in a shell we no longer hold — gas
+  leaves, custody moves from `BRANCH` to `CUSTOMER`, and nothing is created.
 
-Both ledgers write to **one append-only audit table** (`stock_movements`),
-discriminated by `ledger_kind`. So "show me everything that happened to Afri Gas
-13 kg at Syokimau" is one query, and balances can be rebuilt from zero by
-replaying it — which the tests do.
+Every operation writes both ledgers or explicitly writes neither. A test
+(`ownership.test.ts`) asserts that selling a cylinder moves custody and that an
+exchange does not.
 
----
+## 2. Locations: branches **and** rider vans
 
-## 2. Reference data
+Most sales happen when the rider reaches the customer, not over the counter. So a
+`StockLocation` is either:
+
+- `BRANCH` — a fixed trading point. Has no home location, no rider.
+- `VAN` — a rider's vehicle. **Must** have a `homeLocationId` and a `rider`.
+
+A van is a real stock-holding location, deliberately. If the rider's load were only
+a note on the branch's record, the branch count would drop when the van left and
+nobody could say what was on the road. Loading a van is an ordinary
+`transfer(branch → van)`; the night's reconciliation is
+`transfer(van → branch)` with the unsold refills and the collected empties.
+
+Seeded: `van-01` (Brian O., home Syokimau) and `van-02` (Amina S., home Mlolongo).
+Both start empty and are loaded by transfer.
+
+The registry refuses a van with no branch, a van with no rider, and a branch that
+claims a home location — enforced identically in `LocationRegistry` and as SQL CHECK
+constraints (`van_needs_branch_and_rider`, `branch_has_no_home`).
+
+## 3. Channel: how the sale happened
+
+Every sale and every sale-producing movement carries a `channel`:
+`WALK_IN`, `DELIVERY`, or `INTERNAL` for non-sale movements. It defaults by location
+— `DELIVERY` at a van, `WALK_IN` at a branch — and can be stated explicitly.
+
+## 4. Exchange: any brand, same size
+
+The earlier "same brand only" rule was **wrong** and has been removed. Customers hand
+over whatever empty they have, so:
+
+- **Cross-brand is allowed.** Give a filled Afri Gas 13 kg, take back a Total 13 kg.
+- **The size must match.** Different size only with an explicit
+  `allowSizeMismatch: true` override, which is rare and shows up in the audit trail.
+- **The incoming empty is booked against its own variant.** A Total 13 kg empty
+  coming in during an Afri Gas sale increases **Total** 13 kg empties by one, not
+  Afri Gas — that is the exact test the brief asked for, and it passes.
+- An exchange is a **gas** operation. Custody does not move: the customer keeps a
+  shell either way.
+
+A foreign-brand empty collected at our counter or in the van can then go back to
+*that brand's* depot with `returnToDepot` — never into our own brand's count.
+
+## 5. No deposits
+
+There are no deposits in this business. Customers are not charged for the cylinder,
+not charged for the exchange, and not charged when they are left holding the
+cylinder. Accordingly:
+
+- `deposit_ksh` has been **removed from the schema and the domain** entirely
+  (a schema test asserts no column matching `%deposit%` exists anywhere).
+- `sellWithCylinder` (formerly `sellNewCylinder`) moves gas **and** custody
+  `BRANCH → CUSTOMER`, and charges gas only.
+- No deposit ledger, no liability table, nothing to reconcile.
+
+## 6. Cylinder count = refills + empties
+
+"How many 13 kg Afri Gas cylinders are standing here?" counts a cylinder whether it
+is full or empty:
 
 ```
-categories ──┐
-             ├──< product_variants >──┐
-brands ──────┘                        │
-                                      │
-branches ──< inventory_positions >────┤
-         └─< cylinder_custody >───────┘
-         └─< stock_movements >────────┘
-         └─< sales >──< sale_lines >──┘
+3 × 13 kg Afri Gas REFILL  +  4 × 13 kg Afri Gas EMPTY  =  7 cylinders
 ```
 
-- **Category** carries a `stock_model`: `CYLINDER` (has a REFILL/EMPTY lifecycle)
-  or `SIMPLE` (accessories — regulators, hoses). A cylinder operation against a
-  `SIMPLE` variant is rejected, which is tested.
-- **Brand** carries its `depot_name`, because empties go back to a specific
-  brand's depot and exchange schemes never cross brands.
-- **Variant** is the intersection: *Afri Gas 13 kg*. It owns `size_kg`,
-  `refill_price_ksh` and `deposit_ksh`. `UNIQUE (brand_id, size_kg)` stops a
-  duplicate creeping in.
-- **Branch** has an `active` flag. Closed branches refuse every operation.
+Exposed as `service.cylinderCount(locationId, variantId)`, as
+`VariantPosition.cylinders`, and in SQL as the `v_cylinder_counts` view. An exchange
+keeps the count steady (one filled leaves, one empty arrives); a refill sale with no
+empty returned reduces it by one.
 
-Seeded variants: Afri Gas 3/6/13/50 kg, TotalEnergies 6/13/38 kg,
-Rubis 6/13/38 kg, plus two accessories. Branches: Syokimau, Mlolongo, Kitengela
-(active), Athi River (closed for refurbishment — deliberately, so the
-closed-branch path is testable).
+## 7. Pricing: list vs charged, and the reason for the gap
 
----
+Prices move — regulars get a rate, hotels get another. That is fine. What is not fine
+is a silent price. So:
 
-## 3. What each operation touches
+- Each variant has a `list_price_ksh`. Omitting a price on a sale **charges list**.
+- `SalePricing` is fully optional: `{ unitPriceKsh, discountReason, ... }`.
+- **Any** deviation from list — up or down — requires a reason of at least
+  `MIN_PRICE_REASON_LENGTH` (5) characters. Otherwise `InvalidPriceError`, and
+  nothing is written: prices are validated for every line **before** any stock is
+  touched.
+- Zero and negative prices are refused outright.
+- Every sale line records `listPriceKsh`, `unitPriceKsh`, `listTotalKsh`,
+  `chargedTotalKsh` and `discountReason`. The sale carries `listTotalKsh`,
+  `chargedTotalKsh` and `discountKsh = listTotalKsh − chargedTotalKsh`.
+- Discounts are one query away: `service.sales.discounted()` and
+  `service.sales.totalDiscountKsh()`, backed in SQL by a partial index on
+  `sale_lines(discount_reason IS NOT NULL)` and a CHECK constraint
+  `price_deviation_needs_reason`.
 
-`+`/`−` are deltas. Blank means the operation provably does not touch that
-ledger, which is exactly what the tests assert.
+## 8. Actor: who did it
 
-| Command | Gas `REFILL` | Gas `EMPTY` | Custody `BRANCH` | Custody `DEPOT` | Custody `CUSTOMER` |
-| --- | --- | --- | --- | --- | --- |
-| `purchase(refills, emptiesReturnedToDepot)` | +refills | −returned | +refills −returned | +returned | — |
-| `sellRefill(qty, emptiesReceived = 0)` | −qty | +received | — | — | — |
-| `sellNewCylinder(qty)` | −qty | — | −qty | — | +qty |
-| `sellNewCylinder(qty, transferCylinderOwnership: false)` | −qty | — | — | — | — |
-| `exchange(qty)` *(same brand enforced)* | −qty | +qty | — | — | — |
-| `returnEmpty(qty)` | — | +qty | — | — | — |
-| `returnEmpty(qty, companyOwnedShell: true)` | — | +qty | +qty | — | −qty |
-| `returnToDepot(qty)` | — | −qty | −qty | +qty | — |
-| `transfer(refills, empties)` | −/＋ at each end | −/＋ at each end | −/＋ at each end | — | — |
-| `stocktake(counted)` | Δ | Δ | — | — | — |
-| `adjustCustody(counted)` | — | — | Δ | Δ | Δ |
+`actor` is the person responsible for the command — the cashier, the rider, whoever
+signed for the delivery note. Right now it is a **free-text string** passed in the
+command context; `metaFor()` refuses anything shorter than two characters with
+`InvalidActorError`, and the SQL layer has the same CHECK.
 
-### Mapping real counter events to commands
+**This is the one gap worth flagging before the UI is built.** A typed-in name is
+not identity: it can be mistyped, copied, or written by somebody else. The plan is to
+replace it with a login — a `users` table, a session, and the actor derived from the
+authenticated user rather than typed at the till. The audit column already exists and
+every movement and sale already writes it, so the switch is a source-of-truth change,
+not a schema change.
 
-| What happens at the counter | Command |
-| --- | --- |
-| Customer hands over an empty, takes a filled one of the same brand/size | `exchange` |
-| Customer's own cylinder is filled for them | `sellRefill` |
-| Customer buys a cylinder outright, keeps the shell | `sellNewCylinder` |
-| Customer drops off a shell (deposit refund, moving house) | `returnEmpty` |
-| Depot truck arrives with filled cylinders, takes our empties | `purchase` |
-| Our empties go back to the brand | `returnToDepot` |
-| Van moves stock from Syokimau to Mlolongo | `transfer` |
-| Evening count disagrees with the system | `stocktake` |
+## 9. Operations
 
-**This mapping is decision #1 below** — which of the first two your stations
-actually do changes what the till screen calls.
+| Operation | Gas ledger | Custody ledger |
+|---|---|---|
+| `purchase` | REFILL in, optional EMPTY to depot | DEPOT → BRANCH |
+| `sellRefill` | REFILL out, optional EMPTY in | — |
+| `exchange` | REFILL out + EMPTY in (any brand, same size) | — |
+| `sellWithCylinder` | REFILL out | BRANCH → CUSTOMER |
+| `returnEmpty` | EMPTY in | optional CUSTOMER → BRANCH |
+| `returnToDepot` | EMPTY out | BRANCH → DEPOT |
+| `transfer` | both states move between locations | moves with them |
+| `stocktake` / `stocktakeMany` | corrected to the counted quantity | — |
+| `adjustCustody` | — | corrected to the counted shells |
+| `sellMany` | one ticket, many lines, one location | as per line |
 
----
+## 10. Guarantees the code enforces
 
-## 4. The example from the brief, as a test
+1. **Never negative.** Selling more than a location holds is refused. The owner's
+   reason stands: allowing it produces garbage that looks like a posting error.
+2. **All or nothing.** `sellMany` validates every line — quantities *and* prices —
+   before staging a single unit. If one line fails, the batch throws and nothing at
+   all is written; no sale row is created either.
+3. **Append-only audit.** Every movement records `balanceBefore` / `balanceAfter`,
+   the reason, the reference, the actor and the channel. A SQL trigger refuses
+   `UPDATE` and `DELETE`. Corrections are new movements.
+4. **Idempotent.** An `idempotencyKey` (e.g. an M-Pesa code) makes a retried command
+   replay the original receipt — including the sale it created — instead of
+   double-posting. Backed by a partial unique index on
+   `(idempotency_key, location_id, variant_id, movement_slot)`.
+5. **Reconcilable.** `assertLedgerMatchesPositions()` rebuilds every position from
+   the ledger alone and compares. It runs at the end of the mixed-trading test.
+6. **Custody checked per operation**, not by a blanket invariant. An exchange can
+   only return what a customer holds; a depot return can only send what stands here.
 
-`src/lib/stock/__tests__/inventory.test.ts`:
+## 11. Seed data
 
-```ts
-service.sellRefill({ branchId: SYOKIMAU, variantId: AFRIGAS_13, quantity: 1 }, ctx);
-service.returnEmpty({ branchId: SYOKIMAU, variantId: TOTAL_13, quantity: 1 }, ctx);
+Categories `LPG-CYL` (CYLINDER) and `ACC` (SIMPLE). Brands **Afri Gas**,
+**TotalEnergies**, **Rubis**.
 
-// Afri Gas 13 kg refills: 23 -> 22
-// Afri Gas 13 kg empties: 21 -> 21   (untouched)
-// Total 13 kg empties:      9 -> 10
-// Total 13 kg refills:     27 -> 27   (untouched)
+| Variant | List price (KSh) |
+|---|---|
+| 3 kg (Afri Gas) | 550 |
+| 6 kg | 1,050 · Total 1,080 |
+| 13 kg | 2,350 · Total 2,400 |
+| 38 kg | 6,450 · Rubis 6,400 |
+| 50 kg (Afri Gas) | 8,450 |
+| Regulator / hose | 1,200 / 450 |
+
+Locations: **Syokimau (SYK)**, **Mlolongo (MLO)**, **Kitengela (KTG)**,
+**Athi River (ATR, inactive** — so the closed-location path is tested),
+plus vans **VAN-01** and **VAN-02**.
+
+Opening balances are written through `stocktakeMany` + `adjustCustody` under the
+reference `SEED-OPEN`, so the ledger reconciles from zero rather than being seeded
+as a fact. Syokimau carries the full range; Mlolongo and Kitengela carry a subset;
+the vans start empty.
+
+## 12. Tests
+
 ```
-
-Brand isolation is asserted on all four positions, not just the two that move.
-
----
-
-## 5. Invariants
-
-**Enforced in the service** (`src/lib/stock/commands.ts`):
-
-1. No position and no custody count ever goes negative.
-2. `sellNewCylinder` and `returnToDepot` require enough **company shells at the
-   branch** — gas alone is not sufficient. Tested both ways: gas-but-no-shells
-   fails, shells-but-no-gas fails.
-3. `exchange` refuses a different brand (`BRAND_MISMATCH`), always. A different
-   *size* is refused unless the caller explicitly passes
-   `allowSizeMismatch: true`.
-4. `transfer` refuses the same branch on both ends, and refuses to move zero.
-5. Quantities must be whole numbers ≥ 1 (or ≥ 0 where zero is meaningful).
-6. `stocktake` requires a reason of at least 5 characters.
-7. Cylinder operations refuse `SIMPLE` variants; closed branches refuse
-   everything.
-8. **Atomicity.** Every command stages its deltas in a `ChangeSet`, validating
-   against *projected* balances, and commits at the end. If any step fails,
-   nothing was ever written — there is no partial state to roll back. A
-   multi-line batch that fails on line 3 leaves lines 1–2 unwritten, and says so
-   via `NOT_ATOMIC` carrying the underlying cause. If the failure happens before
-   anything was staged, the caller gets the real error instead of a rollback
-   wrapper.
-9. **Idempotency.** Replaying a command with the same `idempotencyKey` returns
-   the original receipt with `replayed: true` and writes nothing. This matters
-   because M-Pesa confirmations get retried.
-10. **Reconciliation.** `assertLedgerMatchesPositions()` rebuilds both ledgers
-    from the audit trail and compares them to live balances. The full-day test
-    runs a purchase, a 3-line batch sale, a new-cylinder sale, an exchange, a
-    transfer, an empty return, a depot return and a stocktake, then reconciles.
-
-**Enforced in PostgreSQL** (`schema.sql`, so a hand-run query can't corrupt it):
-
-- `CHECK (quantity >= 0)` on both ledgers.
-- Primary keys make a position one row per (branch, variant, state).
-- `movement_balance_consistent`: `balance_after = balance_before + quantity`.
-- `movement_ledger_shape`: a gas row must have a state and no custody, a
-  cylinder row the reverse.
-- `movement_no_self_counterparty`: a transfer cannot be recorded against itself.
-- `char_length(trim(reason)) >= 5` on every movement.
-- **Append-only trigger**: `UPDATE` and `DELETE` on `stock_movements` raise.
-  Corrections are new movements, never edits.
-- Partial unique index on `(idempotency_key, branch_id, variant_id,
-  movement_slot)` — one command may write several rows, but never the same row
-  twice.
-- Variant shape trigger: cylinder variants need a positive `size_kg`,
-  accessories must not have one.
-
----
-
-## 6. Decisions to review before we build screens
-
-1. **Which command is a counter sale?** Swap (`exchange`) or on-site fill
-   (`sellRefill`)? Most Kenyan stations swap; some decant. This decides the
-   button labels and whether every sale creates an empty.
-2. **Customer-owned shells.** Right now a customer's shell left at the counter
-   appears in `EMPTY` but not in the custody register, which counts company
-   assets only. Do you want a per-owner dimension on the gas ledger instead?
-3. **Deposits.** `deposit_ksh` exists on the variant but there is no deposit
-   ledger. If deposits are refundable liabilities, they need their own table and
-   movements — not a number on the variant.
-4. **Bulk tanks.** Everything here is cylinder-counted. If any branch decants
-   from a bulk tank, we need a kg-denominated stock entity alongside cylinders.
-5. **Per-branch pricing.** Price currently lives on the variant. If Syokimau and
-   Kitengela charge differently, it moves to a `(branch, variant, effective_from)`
-   price table.
-6. **Cylinder serials.** Custody is counted, not serialised. If you want QR or
-   barcode tracking per cylinder, that's an asset register with its own
-   movements — a meaningful addition, worth deciding now.
-7. **Negative stock policy.** Hard-blocked everywhere. Some operations teams
-   prefer "allow the sale, flag the deficit, correct at stocktake". Say the word
-   and it becomes a per-branch setting.
-8. **Actor identity.** `actor` is a plain string today. It becomes a user id once
-   authentication exists; the audit table already has the column.
-
----
-
-## 7. What I changed about the brief
-
-You asked for categories, brands, variants, branch inventories, REFILL/EMPTY,
-auditable movements, correct handling of purchases/sales/exchanges/transfers,
-separation of cylinder ownership from gas stock, and tests. All in. Additions I
-made on my own initiative, each because something broke without it:
-
-- **Two ledgers instead of one "stock" table with an owner column.** A single
-  table forces you to choose between gas and asset truth on every row.
-- **One append-only audit table for both ledgers**, with a `ledger_kind`
-  discriminator — one query answers "what happened here".
-- **Staged change sets** for real atomicity, rather than try/catch rollback of
-  writes that already happened.
-- **Idempotency keys**, because payment retries are a daily reality, not an edge
-  case.
-- **Stocktake as the only correction path**, with a mandatory reason.
-- **`IN_TRANSIT` and `DEPOT` custody states**, not just ours/theirs — transfers
-  and depot returns need somewhere to put the shells.
-- **Accessories as a second category**, to prove the model isn't accidentally
-  cylinder-only.
-- **A closed branch in the seed**, so the closed-branch path is covered.
-- **The SQL schema executed against a real PostgreSQL engine in tests** rather
-  than written and hoped for.
-
----
-
-## 8. Running it yourself
-
-```bash
-npm install
-
-npm test                 # all 104 tests
-npm run test:stock       # the stock domain only
-npx vitest run src/lib/stock/__tests__/schema.test.ts   # schema vs real Postgres
-npx vitest run -t "returning a Total 13 kg empty"       # the example from the brief
-
-npx tsc --noEmit         # typecheck
-npm run lint             # ESLint
-npm run build            # Next.js production build
+npm ci
+npx vitest run
 ```
-
-`schema.test.ts` boots **PostgreSQL 18.3** in WebAssembly via PGlite, applies
-`schema.sql`, and asserts the constraints and triggers actually fire. No
-external database needed.
-
-### Test inventory — 104 tests, 8 files
 
 | File | Tests | Covers |
-| --- | --- | --- |
-| `catalog.test.ts` | 14 | Categories, brands, variants, duplicate codes, variant shape rules |
-| `inventory.test.ts` | 11 | The brief's example, brand/size/branch isolation, purchases, kg and value |
-| `ownership.test.ts` | 11 | Gas vs cylinder separation, both failure directions, depot returns |
-| `exchange.test.ts` | 6 | Like-for-like, cross-brand rejection, size mismatch and its override |
-| `transfer.test.ts` | 9 | Both states move, conservation, same-branch, insufficient, closed branch |
-| `invalid-operations.test.ts` | 25 | Unknown entities, bad quantities, oversell, accessories, reasons — each asserting nothing was written |
-| `transactions.test.ts` | 9 | Batch atomicity, rollback, idempotency, audit chain, full-day reconciliation |
-| `schema.test.ts` | 19 | DDL, CHECKs, primary keys, append-only trigger, idempotency index, reporting view |
+|---|---|---|
+| `catalog.test.ts` | 17 | categories, brands, variants, list prices, no deposit, location registry incl. vans |
+| `inventory.test.ts` | 14 | The brief's example, isolation by brand/size/location, purchases, kg, value, cylinder counts |
+| `ownership.test.ts` | 11 | Custody moves independently of gas; shells with customers |
+| `exchange.test.ts` | 7 | Cross-brand allowed, size enforced, foreign empties booked to their own brand |
+| `transfer.test.ts` | 9 | Both states move, conservation, same-location refusal, insufficient stock, closed location |
+| `transactions.test.ts` | 9 | Atomic batches, idempotency, audit chain, full-day reconciliation |
+| `riders.test.ts` | 7 | Load the van, sell at the door, reconcile at night, what is on the road |
+| `pricing.test.ts` | 11 | List by default, discounts with reasons, refusal without one, visibility |
+| `invalid-operations.test.ts` | 29 | Every refusal path, including attribution |
+| `schema.test.ts` | 30 | The DDL against a real PostgreSQL engine (PGlite): constraints, triggers, views |
+| **Total** | **144** | |
 
----
+`schema.test.ts` runs the actual `schema.sql` inside PGlite (PostgreSQL compiled to
+WebAssembly), so the constraints and triggers are proven against a real server, not
+mocked.
 
-## 9. Deliberately not built
+## 13. Deliberately not built yet
 
-- Any UI. The dashboard at `/` still renders its own sample data
-  (`src/lib/data.ts`) and does **not** use this module yet.
-- No persistence wiring: `StockService` is in-memory. A Postgres-backed
-  repository implementing the same surface is the next step after this review.
-- No authentication, so `actor` is trusted input.
-- No reports or exports.
+1. **Cylinder serials.** Agreed for later. When they come, custody becomes per-shell
+   rather than per-count, and `cylinder_custody` gains a `cylinder_id` dimension.
+2. **Login / real actor identity.** See §8.
+3. **Per-location pricing.** Price lives on the variant. If branches charge
+   differently it moves to `(location, variant, effective_from)`.
+4. **Bulk tanks / decanting.** Everything here is cylinder-counted.
+5. **The UI.** Waiting on the sign-off of this document.

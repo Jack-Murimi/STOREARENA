@@ -1,72 +1,80 @@
 import { describe, expect, it } from "vitest";
 import {
-  BrandMismatchError,
   GasState,
   InsufficientStockError,
   SizeMismatchError,
-  StockErrorCode,
 } from "../index";
-import { BRANCH, OPENING, VARIANT, context, seeded } from "./helpers";
+import { LOC, OPENING, VARIANT, context, seeded } from "./helpers";
 
 describe("cylinder exchange", () => {
   it("swaps a filled cylinder for an empty one of the same variant", () => {
     const service = seeded();
 
     service.exchange(
-      { branchId: BRANCH.syokimau, variantId: VARIANT.total13, quantity: 5 },
+      { locationId: LOC.syokimau, variantId: VARIANT.total13, quantity: 5 },
       context(),
     );
 
-    expect(service.balance(BRANCH.syokimau, VARIANT.total13, GasState.Refill)).toBe(
+    expect(service.balance(LOC.syokimau, VARIANT.total13, GasState.Refill)).toBe(
       OPENING.total13.refill - 5,
     );
-    expect(service.balance(BRANCH.syokimau, VARIANT.total13, GasState.Empty)).toBe(
+    expect(service.balance(LOC.syokimau, VARIANT.total13, GasState.Empty)).toBe(
       OPENING.total13.empty + 5,
     );
     service.assertLedgerMatchesPositions();
   });
 
-  it("refuses to exchange across brands, because schemes are per brand", () => {
+  it("accepts a different brand back, because customers hand over whatever they have", () => {
     const service = seeded();
 
-    let caught: unknown;
-    try {
-      service.exchange(
-        {
-          branchId: BRANCH.syokimau,
-          variantId: VARIANT.afrigas13,
-          quantity: 1,
-          emptyVariantId: VARIANT.total13,
-        },
-        context(),
-      );
-    } catch (error) {
-      caught = error;
-    }
-
-    expect(caught).toBeInstanceOf(BrandMismatchError);
-    expect((caught as BrandMismatchError).code).toBe(StockErrorCode.BrandMismatch);
-    expect((caught as BrandMismatchError).details).toEqual({
-      outBrand: "Afri Gas",
-      inBrand: "TotalEnergies",
-    });
-
-    // Rejected means nothing moved, on either side.
-    expect(service.balance(BRANCH.syokimau, VARIANT.afrigas13, GasState.Refill)).toBe(
-      OPENING.afrigas13.refill,
+    service.exchange(
+      {
+        locationId: LOC.syokimau,
+        variantId: VARIANT.afrigas13,
+        quantity: 2,
+        emptyVariantId: VARIANT.total13,
+      },
+      context(),
     );
-    expect(service.balance(BRANCH.syokimau, VARIANT.total13, GasState.Empty)).toBe(
-      OPENING.total13.empty,
-    );
+
+    // Two Afri Gas 13 kg refills went out...
+    expect(service.balance(LOC.syokimau, VARIANT.afrigas13, GasState.Refill)).toBe(21);
+    // ...and the Total shells came in against Total, not against Afri Gas.
+    expect(service.balance(LOC.syokimau, VARIANT.total13, GasState.Empty)).toBe(11);
+    expect(service.balance(LOC.syokimau, VARIANT.afrigas13, GasState.Empty)).toBe(21);
   });
 
-  it("refuses a size mismatch on a like-for-like exchange", () => {
+  it("sends a foreign-brand empty back to that brand's depot, not ours", () => {
+    const service = seeded();
+
+    // A Rubis 13 kg shell came in during an Afri Gas sale.
+    service.exchange(
+      {
+        locationId: LOC.syokimau,
+        variantId: VARIANT.afrigas13,
+        quantity: 1,
+        emptyVariantId: VARIANT.rubis13,
+      },
+      context(),
+    );
+    expect(service.balance(LOC.syokimau, VARIANT.rubis13, GasState.Empty)).toBe(6);
+
+    // Returning it reduces the Rubis position, and Afri Gas is untouched.
+    service.returnToDepot(
+      { locationId: LOC.syokimau, variantId: VARIANT.rubis13, quantity: 1 },
+      context(),
+    );
+    expect(service.balance(LOC.syokimau, VARIANT.rubis13, GasState.Empty)).toBe(5);
+    expect(service.balance(LOC.syokimau, VARIANT.afrigas13, GasState.Empty)).toBe(21);
+  });
+
+  it("still refuses a different size, which is genuinely rare", () => {
     const service = seeded();
 
     expect(() =>
       service.exchange(
         {
-          branchId: BRANCH.syokimau,
+          locationId: LOC.syokimau,
           variantId: VARIANT.afrigas13,
           quantity: 1,
           emptyVariantId: VARIANT.afrigas6,
@@ -75,12 +83,28 @@ describe("cylinder exchange", () => {
       ),
     ).toThrow(SizeMismatchError);
 
-    expect(service.balance(BRANCH.syokimau, VARIANT.afrigas13, GasState.Refill)).toBe(
+    expect(service.balance(LOC.syokimau, VARIANT.afrigas13, GasState.Refill)).toBe(
       OPENING.afrigas13.refill,
     );
-    expect(service.balance(BRANCH.syokimau, VARIANT.afrigas6, GasState.Empty)).toBe(
+    expect(service.balance(LOC.syokimau, VARIANT.afrigas6, GasState.Empty)).toBe(
       OPENING.afrigas6.empty,
     );
+  });
+
+  it("refuses a size mismatch even when the brand also differs", () => {
+    const service = seeded();
+
+    expect(() =>
+      service.exchange(
+        {
+          locationId: LOC.syokimau,
+          variantId: VARIANT.afrigas13,
+          quantity: 1,
+          emptyVariantId: VARIANT.rubis6,
+        },
+        context(),
+      ),
+    ).toThrow(SizeMismatchError);
   });
 
   it("accepts a deliberate size mismatch and books the shell against its own variant", () => {
@@ -88,19 +112,19 @@ describe("cylinder exchange", () => {
 
     service.exchange(
       {
-        branchId: BRANCH.syokimau,
+        locationId: LOC.syokimau,
         variantId: VARIANT.afrigas13,
         quantity: 2,
         emptyVariantId: VARIANT.afrigas6,
         allowSizeMismatch: true,
       },
-      context(),
+      context({ reason: "Customer only had 6 kg shells to hand back" }),
     );
 
-    expect(service.balance(BRANCH.syokimau, VARIANT.afrigas13, GasState.Refill)).toBe(21);
+    expect(service.balance(LOC.syokimau, VARIANT.afrigas13, GasState.Refill)).toBe(21);
     // The empties land on the 6 kg position, not the 13 kg one.
-    expect(service.balance(BRANCH.syokimau, VARIANT.afrigas6, GasState.Empty)).toBe(38);
-    expect(service.balance(BRANCH.syokimau, VARIANT.afrigas13, GasState.Empty)).toBe(21);
+    expect(service.balance(LOC.syokimau, VARIANT.afrigas6, GasState.Empty)).toBe(38);
+    expect(service.balance(LOC.syokimau, VARIANT.afrigas13, GasState.Empty)).toBe(21);
   });
 
   it("cannot exchange more cylinders than are filled", () => {
@@ -108,28 +132,11 @@ describe("cylinder exchange", () => {
 
     expect(() =>
       service.exchange(
-        { branchId: BRANCH.mlolongo, variantId: VARIANT.afrigas13, quantity: 13 },
+        { locationId: LOC.mlolongo, variantId: VARIANT.afrigas13, quantity: 13 },
         context(),
       ),
     ).toThrow(InsufficientStockError);
 
-    expect(service.balance(BRANCH.mlolongo, VARIANT.afrigas13, GasState.Refill)).toBe(12);
-  });
-
-  it("also refuses a cross-brand exchange hidden inside a size mismatch", () => {
-    const service = seeded();
-
-    expect(() =>
-      service.exchange(
-        {
-          branchId: BRANCH.syokimau,
-          variantId: VARIANT.afrigas13,
-          quantity: 1,
-          emptyVariantId: VARIANT.rubis6,
-          allowSizeMismatch: true,
-        },
-        context(),
-      ),
-    ).toThrow(BrandMismatchError);
+    expect(service.balance(LOC.mlolongo, VARIANT.afrigas13, GasState.Refill)).toBe(12);
   });
 });

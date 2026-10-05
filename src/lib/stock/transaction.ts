@@ -6,8 +6,8 @@ import { custodyKey, gasKey } from "./stores";
 /** Everything an audit row needs except the balances, which are computed on commit. */
 export interface MovementMeta {
   operation: Operation;
-  branchId: string;
-  counterpartyBranchId?: string | null;
+  locationId: string;
+  counterpartyLocationId?: string | null;
   variantId: string;
   reason: string;
   reference?: string | null;
@@ -43,31 +43,31 @@ export class ChangeSet {
   }
 
   /** Live balance plus every staged delta for the same position. */
-  projectedGas(branchId: string, variantId: string, state: GasState): number {
-    const key = gasKey(branchId, variantId, state);
+  projectedGas(locationId: string, variantId: string, state: GasState): number {
+    const key = gasKey(locationId, variantId, state);
     let staged = 0;
     for (const item of this.staged) {
       const d = item.delta;
-      if (d.ledgerKind === LedgerKind.Gas && gasKey(d.branchId, d.variantId, d.state) === key) {
+      if (d.ledgerKind === LedgerKind.Gas && gasKey(d.locationId, d.variantId, d.state) === key) {
         staged += d.quantity;
       }
     }
-    return this.gasStore.balance(branchId, variantId, state) + staged;
+    return this.gasStore.balance(locationId, variantId, state) + staged;
   }
 
-  projectedCustody(branchId: string, variantId: string, custody: Custody): number {
-    const key = custodyKey(branchId, variantId, custody);
+  projectedCustody(locationId: string, variantId: string, custody: Custody): number {
+    const key = custodyKey(locationId, variantId, custody);
     let staged = 0;
     for (const item of this.staged) {
       const d = item.delta;
       if (
         d.ledgerKind === LedgerKind.Cylinder &&
-        custodyKey(d.branchId, d.variantId, d.custody) === key
+        custodyKey(d.locationId, d.variantId, d.custody) === key
       ) {
         staged += d.quantity;
       }
     }
-    return this.custodyStore.balance(branchId, variantId, custody) + staged;
+    return this.custodyStore.balance(locationId, variantId, custody) + staged;
   }
 
   /**
@@ -76,7 +76,7 @@ export class ChangeSet {
    * keeping even when nothing changed.
    */
   addGas(
-    branchId: string,
+    locationId: string,
     variantId: string,
     state: GasState,
     quantity: number,
@@ -85,14 +85,14 @@ export class ChangeSet {
   ): this {
     if (quantity === 0 && !options.keepZero) return this;
     this.staged.push({
-      delta: { ledgerKind: LedgerKind.Gas, branchId, variantId, state, quantity },
+      delta: { ledgerKind: LedgerKind.Gas, locationId, variantId, state, quantity },
       meta,
     });
     return this;
   }
 
   addCustody(
-    branchId: string,
+    locationId: string,
     variantId: string,
     custody: Custody,
     quantity: number,
@@ -101,7 +101,7 @@ export class ChangeSet {
   ): this {
     if (quantity === 0 && !options.keepZero) return this;
     this.staged.push({
-      delta: { ledgerKind: LedgerKind.Cylinder, branchId, variantId, custody, quantity },
+      delta: { ledgerKind: LedgerKind.Cylinder, locationId, variantId, custody, quantity },
       meta,
     });
     return this;

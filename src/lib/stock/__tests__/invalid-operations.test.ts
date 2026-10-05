@@ -2,18 +2,19 @@ import { describe, expect, it } from "vitest";
 import {
   GasState,
   InsufficientStockError,
+  InvalidActorError,
   InvalidQuantityError,
   InvalidReasonError,
   StockError,
   StockErrorCode,
   UnsupportedStockModelError,
 } from "../index";
-import { BRANCH, OPENING, VARIANT, context, seeded } from "./helpers";
+import { LOC, OPENING, VARIANT, context, seeded } from "./helpers";
 
 /** Assert a command failed and changed nothing at all. */
 function expectNoEffect(
   service: ReturnType<typeof seeded>,
-  branchId: string,
+  locationId: string,
   variantId: string,
   ledgerSizeBefore: number,
   run: () => unknown,
@@ -26,10 +27,10 @@ function expectNoEffect(
   }
   expect(caught).toBeInstanceOf(StockError);
   expect(service.ledger.size).toBe(ledgerSizeBefore);
-  expect(service.balance(branchId, variantId, GasState.Refill)).toBe(
+  expect(service.balance(locationId, variantId, GasState.Refill)).toBe(
     OPENING.afrigas13.refill,
   );
-  expect(service.balance(branchId, variantId, GasState.Empty)).toBe(
+  expect(service.balance(locationId, variantId, GasState.Empty)).toBe(
     OPENING.afrigas13.empty,
   );
   return caught as StockError;
@@ -42,20 +43,20 @@ describe("unknown entities", () => {
 
     const error = expectNoEffect(
       service,
-      BRANCH.syokimau,
+      LOC.syokimau,
       VARIANT.afrigas13,
       before,
       () =>
         service.sellRefill(
           {
-            branchId: "br-nowhere",
+            locationId: "br-nowhere",
             variantId: VARIANT.afrigas13,
             quantity: 1,
           },
           context(),
         ),
     );
-    expect(error.code).toBe(StockErrorCode.UnknownBranch);
+    expect(error.code).toBe(StockErrorCode.UnknownLocation);
   });
 
   it("rejects a variant that does not exist", () => {
@@ -64,13 +65,13 @@ describe("unknown entities", () => {
 
     const error = expectNoEffect(
       service,
-      BRANCH.syokimau,
+      LOC.syokimau,
       VARIANT.afrigas13,
       before,
       () =>
         service.sellRefill(
           {
-            branchId: BRANCH.syokimau,
+            locationId: LOC.syokimau,
             variantId: "var-ghost-99",
             quantity: 1,
           },
@@ -86,20 +87,20 @@ describe("unknown entities", () => {
 
     const error = expectNoEffect(
       service,
-      BRANCH.syokimau,
+      LOC.syokimau,
       VARIANT.afrigas13,
       before,
       () =>
         service.purchase(
           {
-            branchId: BRANCH.athiRiver,
+            locationId: LOC.athiRiver,
             variantId: VARIANT.afrigas13,
             refills: 20,
           },
           context(),
         ),
     );
-    expect(error.code).toBe(StockErrorCode.InactiveBranch);
+    expect(error.code).toBe(StockErrorCode.InactiveLocation);
   });
 
   it("rejects an accessory, which has no REFILL/EMPTY lifecycle", () => {
@@ -109,7 +110,7 @@ describe("unknown entities", () => {
     let caught: unknown;
     try {
       service.purchase(
-        { branchId: BRANCH.syokimau, variantId: VARIANT.regulator, refills: 10 },
+        { locationId: LOC.syokimau, variantId: VARIANT.regulator, refills: 10 },
         context(),
       );
     } catch (error) {
@@ -132,12 +133,12 @@ describe("invalid quantities", () => {
 
     const error = expectNoEffect(
       service,
-      BRANCH.syokimau,
+      LOC.syokimau,
       VARIANT.afrigas13,
       before,
       () =>
         service.sellRefill(
-          { branchId: BRANCH.syokimau, variantId: VARIANT.afrigas13, quantity },
+          { locationId: LOC.syokimau, variantId: VARIANT.afrigas13, quantity },
           context(),
         ),
     );
@@ -149,7 +150,7 @@ describe("invalid quantities", () => {
     const service = seeded();
     expect(() =>
       service.purchase(
-        { branchId: BRANCH.syokimau, variantId: VARIANT.afrigas13, refills },
+        { locationId: LOC.syokimau, variantId: VARIANT.afrigas13, refills },
         context(),
       ),
     ).toThrow(InvalidQuantityError);
@@ -160,7 +161,7 @@ describe("invalid quantities", () => {
     expect(() =>
       service.sellRefill(
         {
-          branchId: BRANCH.syokimau,
+          locationId: LOC.syokimau,
           variantId: VARIANT.afrigas13,
           quantity: 2,
           emptiesReceived: 3,
@@ -175,7 +176,7 @@ describe("invalid quantities", () => {
     expect(() =>
       service.stocktake(
         {
-          branchId: BRANCH.syokimau,
+          locationId: LOC.syokimau,
           variantId: VARIANT.afrigas13,
           state: GasState.Refill,
           countedQuantity: -3,
@@ -193,12 +194,12 @@ describe("insufficient stock", () => {
 
     const error = expectNoEffect(
       service,
-      BRANCH.syokimau,
+      LOC.syokimau,
       VARIANT.afrigas13,
       before,
       () =>
         service.sellRefill(
-          { branchId: BRANCH.syokimau, variantId: VARIANT.afrigas13, quantity: 24 },
+          { locationId: LOC.syokimau, variantId: VARIANT.afrigas13, quantity: 24 },
           context(),
         ),
     );
@@ -216,7 +217,7 @@ describe("insufficient stock", () => {
     const service = seeded();
     expect(() =>
       service.sellRefill(
-        { branchId: BRANCH.kitengela, variantId: VARIANT.afrigas13, quantity: 1 },
+        { locationId: LOC.kitengela, variantId: VARIANT.afrigas13, quantity: 1 },
         context(),
       ),
     ).toThrow(InsufficientStockError);
@@ -226,11 +227,11 @@ describe("insufficient stock", () => {
     const service = seeded();
     expect(() =>
       service.returnToDepot(
-        { branchId: BRANCH.mlolongo, variantId: VARIANT.afrigas13, quantity: 9 },
+        { locationId: LOC.mlolongo, variantId: VARIANT.afrigas13, quantity: 9 },
         context(),
       ),
     ).toThrow(InsufficientStockError);
-    expect(service.balance(BRANCH.mlolongo, VARIANT.afrigas13, GasState.Empty)).toBe(8);
+    expect(service.balance(LOC.mlolongo, VARIANT.afrigas13, GasState.Empty)).toBe(8);
   });
 });
 
@@ -240,7 +241,7 @@ describe("stocktake discipline", () => {
     expect(() =>
       service.stocktake(
         {
-          branchId: BRANCH.syokimau,
+          locationId: LOC.syokimau,
           variantId: VARIANT.afrigas13,
           state: GasState.Refill,
           countedQuantity: 20,
@@ -248,7 +249,7 @@ describe("stocktake discipline", () => {
         { actor: "Brian O.", reason },
       ),
     ).toThrow(InvalidReasonError);
-    expect(service.balance(BRANCH.syokimau, VARIANT.afrigas13, GasState.Refill)).toBe(
+    expect(service.balance(LOC.syokimau, VARIANT.afrigas13, GasState.Refill)).toBe(
       OPENING.afrigas13.refill,
     );
   });
@@ -259,7 +260,7 @@ describe("stocktake discipline", () => {
 
     service.stocktake(
       {
-        branchId: BRANCH.syokimau,
+        locationId: LOC.syokimau,
         variantId: VARIANT.afrigas13,
         state: GasState.Refill,
         countedQuantity: OPENING.afrigas13.refill,
@@ -268,7 +269,7 @@ describe("stocktake discipline", () => {
     );
 
     // Nothing moved, but the count itself is on the audit trail.
-    expect(service.balance(BRANCH.syokimau, VARIANT.afrigas13, GasState.Refill)).toBe(
+    expect(service.balance(LOC.syokimau, VARIANT.afrigas13, GasState.Refill)).toBe(
       OPENING.afrigas13.refill,
     );
     expect(service.ledger.size).toBe(before + 1);
@@ -283,5 +284,40 @@ describe("stocktake discipline", () => {
         reason: "Nothing to count today",
       }),
     ).toThrow(InvalidQuantityError);
+  });
+});
+
+describe("attribution", () => {
+  it.each(["", "   ", "x"])("rejects the actor %j", (actor) => {
+    const service = seeded();
+    const before = service.ledger.size;
+
+    expect(() =>
+      service.sellRefill(
+        { locationId: LOC.syokimau, variantId: VARIANT.afrigas13, quantity: 1 },
+        { actor, reference: "TILL-77" },
+      ),
+    ).toThrow(InvalidActorError);
+
+    expect(service.ledger.size).toBe(before);
+    expect(service.balance(LOC.syokimau, VARIANT.afrigas13, GasState.Refill)).toBe(
+      OPENING.afrigas13.refill,
+    );
+  });
+
+  it("names the actor on every movement it writes", () => {
+    const service = seeded();
+
+    service.purchase(
+      { locationId: LOC.syokimau, variantId: VARIANT.total13, refills: 10 },
+      { actor: "Brian O.", reference: "DN-1" },
+    );
+
+    const rows = service.movements({ reference: "DN-1" });
+    expect(rows.length).toBeGreaterThan(0);
+    for (const row of rows) {
+      expect(row.actor).toBe("Brian O.");
+      expect(row.reason.length).toBeGreaterThanOrEqual(5);
+    }
   });
 });

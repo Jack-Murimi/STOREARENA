@@ -1,44 +1,56 @@
 import { describe, expect, it } from "vitest";
 import {
+  Channel,
   Custody,
   GasState,
   LedgerKind,
   NotAtomicError,
   StockErrorCode,
+  UnknownEntityError,
 } from "../index";
-import { BRANCH, OPENING, VARIANT, context, seeded } from "./helpers";
+import { LOC, OPENING, VARIANT, context, seeded } from "./helpers";
 
 describe("atomic batches", () => {
-  it("commits every line of a valid batch", () => {
+  it("commits every line of a valid batch as one ticket", () => {
     const service = seeded();
 
-    service.sellMany(
+    const receipt = service.sellMany(
+      LOC.syokimau,
       [
-        { branchId: BRANCH.syokimau, variantId: VARIANT.afrigas13, quantity: 5 },
-        { branchId: BRANCH.syokimau, variantId: VARIANT.total13, quantity: 3 },
-        { branchId: BRANCH.mlolongo, variantId: VARIANT.afrigas13, quantity: 2 },
+        { variantId: VARIANT.afrigas13, quantity: 5 },
+        { variantId: VARIANT.total13, quantity: 3 },
+        { variantId: VARIANT.afrigas6, quantity: 4, emptiesReceived: 4 },
       ],
       context({ reference: "EOD-SYK-0510" }),
     );
 
-    expect(service.balance(BRANCH.syokimau, VARIANT.afrigas13, GasState.Refill)).toBe(18);
-    expect(service.balance(BRANCH.syokimau, VARIANT.total13, GasState.Refill)).toBe(24);
-    expect(service.balance(BRANCH.mlolongo, VARIANT.afrigas13, GasState.Refill)).toBe(10);
+    expect(service.balance(LOC.syokimau, VARIANT.afrigas13, GasState.Refill)).toBe(18);
+    expect(service.balance(LOC.syokimau, VARIANT.total13, GasState.Refill)).toBe(24);
+    expect(service.balance(LOC.syokimau, VARIANT.afrigas6, GasState.Refill)).toBe(10);
+    expect(service.balance(LOC.syokimau, VARIANT.afrigas6, GasState.Empty)).toBe(40);
+    expect(receipt.saleId).not.toBeNull();
+
+    const sale = service.sales.all().find((s) => s.id === receipt.saleId)!;
+    expect(sale.lines).toHaveLength(3);
+    expect(sale.channel).toBe(Channel.WalkIn);
+    expect(sale.chargedTotalKsh).toBe(5 * 2350 + 3 * 2400 + 4 * 1050);
     service.assertLedgerMatchesPositions();
   });
 
   it("writes nothing at all when one line of the batch cannot be served", () => {
     const service = seeded();
     const ledgerBefore = service.ledger.size;
+    const salesBefore = service.sales.size;
 
     let caught: unknown;
     try {
       service.sellMany(
+        LOC.syokimau,
         [
           // Fine on its own...
-          { branchId: BRANCH.syokimau, variantId: VARIANT.afrigas13, quantity: 20 },
+          { variantId: VARIANT.afrigas13, quantity: 20 },
           // ...but 20 + 10 is more than the 23 the branch holds.
-          { branchId: BRANCH.syokimau, variantId: VARIANT.afrigas13, quantity: 10 },
+          { variantId: VARIANT.afrigas13, quantity: 10 },
         ],
         context(),
       );
@@ -53,27 +65,36 @@ describe("atomic batches", () => {
     });
 
     // The first, perfectly valid line was not written either.
-    expect(service.balance(BRANCH.syokimau, VARIANT.afrigas13, GasState.Refill)).toBe(
+    expect(service.balance(LOC.syokimau, VARIANT.afrigas13, GasState.Refill)).toBe(
       OPENING.afrigas13.refill,
     );
     expect(service.ledger.size).toBe(ledgerBefore);
+    expect(service.sales.size).toBe(salesBefore);
   });
 
   it("rejects a batch containing an unknown variant without applying the rest", () => {
     const service = seeded();
     const ledgerBefore = service.ledger.size;
 
-    expect(() =>
+    // Every line is validated before any stock is touched, so the caller gets
+    // the real reason rather than a rollback wrapper.
+    let caught: unknown;
+    try {
       service.sellMany(
+        LOC.syokimau,
         [
-          { branchId: BRANCH.syokimau, variantId: VARIANT.total6, quantity: 4 },
-          { branchId: BRANCH.syokimau, variantId: "var-ghost-99", quantity: 1 },
+          { variantId: VARIANT.total6, quantity: 4 },
+          { variantId: "var-ghost-99", quantity: 1 },
         ],
         context(),
-      ),
-    ).toThrow(NotAtomicError);
+      );
+    } catch (error) {
+      caught = error;
+    }
+    expect(caught).toBeInstanceOf(UnknownEntityError);
+    expect((caught as UnknownEntityError).code).toBe(StockErrorCode.UnknownVariant);
 
-    expect(service.balance(BRANCH.syokimau, VARIANT.total6, GasState.Refill)).toBe(
+    expect(service.balance(LOC.syokimau, VARIANT.total6, GasState.Refill)).toBe(
       OPENING.total6.refill,
     );
     expect(service.ledger.size).toBe(ledgerBefore);
@@ -86,18 +107,20 @@ describe("idempotency", () => {
     const key = "MPESA-OPK7Q2X9L4";
 
     const first = service.sellRefill(
-      { branchId: BRANCH.syokimau, variantId: VARIANT.afrigas13, quantity: 3 },
+      { locationId: LOC.syokimau, variantId: VARIANT.afrigas13, quantity: 3 },
       context({ idempotencyKey: key }),
     );
     const second = service.sellRefill(
-      { branchId: BRANCH.syokimau, variantId: VARIANT.afrigas13, quantity: 3 },
+      { locationId: LOC.syokimau, variantId: VARIANT.afrigas13, quantity: 3 },
       context({ idempotencyKey: key }),
     );
 
     expect(first.replayed).toBe(false);
     expect(second.replayed).toBe(true);
     expect(second.movementIds).toEqual(first.movementIds);
-    expect(service.balance(BRANCH.syokimau, VARIANT.afrigas13, GasState.Refill)).toBe(
+    expect(second.saleId).toBe(first.saleId);
+    expect(service.sales.size).toBe(1);
+    expect(service.balance(LOC.syokimau, VARIANT.afrigas13, GasState.Refill)).toBe(
       OPENING.afrigas13.refill - 3,
     );
   });
@@ -106,17 +129,18 @@ describe("idempotency", () => {
     const service = seeded();
 
     service.sellRefill(
-      { branchId: BRANCH.syokimau, variantId: VARIANT.afrigas13, quantity: 3 },
+      { locationId: LOC.syokimau, variantId: VARIANT.afrigas13, quantity: 3 },
       context({ idempotencyKey: "MPESA-AAA" }),
     );
     service.sellRefill(
-      { branchId: BRANCH.syokimau, variantId: VARIANT.afrigas13, quantity: 3 },
+      { locationId: LOC.syokimau, variantId: VARIANT.afrigas13, quantity: 3 },
       context({ idempotencyKey: "MPESA-BBB" }),
     );
 
-    expect(service.balance(BRANCH.syokimau, VARIANT.afrigas13, GasState.Refill)).toBe(
+    expect(service.balance(LOC.syokimau, VARIANT.afrigas13, GasState.Refill)).toBe(
       OPENING.afrigas13.refill - 6,
     );
+    expect(service.sales.size).toBe(2);
   });
 
   it("replays a purchase the same way", () => {
@@ -124,16 +148,16 @@ describe("idempotency", () => {
     const key = "DN-8841";
 
     service.purchase(
-      { branchId: BRANCH.syokimau, variantId: VARIANT.total13, refills: 12 },
+      { locationId: LOC.syokimau, variantId: VARIANT.total13, refills: 12 },
       context({ idempotencyKey: key }),
     );
     const replay = service.purchase(
-      { branchId: BRANCH.syokimau, variantId: VARIANT.total13, refills: 12 },
+      { locationId: LOC.syokimau, variantId: VARIANT.total13, refills: 12 },
       context({ idempotencyKey: key }),
     );
 
     expect(replay.replayed).toBe(true);
-    expect(service.balance(BRANCH.syokimau, VARIANT.total13, GasState.Refill)).toBe(39);
+    expect(service.balance(LOC.syokimau, VARIANT.total13, GasState.Refill)).toBe(39);
   });
 });
 
@@ -142,20 +166,20 @@ describe("audit trail", () => {
     const service = seeded();
 
     service.purchase(
-      { branchId: BRANCH.syokimau, variantId: VARIANT.afrigas13, refills: 10 },
+      { locationId: LOC.syokimau, variantId: VARIANT.afrigas13, refills: 10 },
       context(),
     );
     service.sellRefill(
-      { branchId: BRANCH.syokimau, variantId: VARIANT.afrigas13, quantity: 7 },
+      { locationId: LOC.syokimau, variantId: VARIANT.afrigas13, quantity: 7 },
       context(),
     );
     service.exchange(
-      { branchId: BRANCH.syokimau, variantId: VARIANT.afrigas13, quantity: 2 },
+      { locationId: LOC.syokimau, variantId: VARIANT.afrigas13, quantity: 2 },
       context(),
     );
 
     const rows = service
-      .movements({ branchId: BRANCH.syokimau, variantId: VARIANT.afrigas13 })
+      .movements({ locationId: LOC.syokimau, variantId: VARIANT.afrigas13 })
       .filter((m) => m.ledgerKind === LedgerKind.Gas && m.state === GasState.Refill);
 
     let running = 0;
@@ -164,7 +188,9 @@ describe("audit trail", () => {
       expect(row.balanceAfter).toBe(running + row.quantity);
       running = row.balanceAfter;
     }
-    expect(running).toBe(service.balance(BRANCH.syokimau, VARIANT.afrigas13, GasState.Refill));
+    expect(running).toBe(
+      service.balance(LOC.syokimau, VARIANT.afrigas13, GasState.Refill),
+    );
     expect(rows.length).toBeGreaterThanOrEqual(4);
   });
 
@@ -172,7 +198,7 @@ describe("audit trail", () => {
     const service = seeded();
     service.purchase(
       {
-        branchId: BRANCH.syokimau,
+        locationId: LOC.syokimau,
         variantId: VARIANT.afrigas6,
         refills: 20,
         emptiesReturnedToDepot: 10,
@@ -191,7 +217,7 @@ describe("audit trail", () => {
 
     service.purchase(
       {
-        branchId: BRANCH.syokimau,
+        locationId: LOC.syokimau,
         variantId: VARIANT.afrigas6,
         refills: 60,
         emptiesReturnedToDepot: 30,
@@ -199,25 +225,26 @@ describe("audit trail", () => {
       context({ reference: "DN-9001" }),
     );
     service.sellMany(
+      LOC.syokimau,
       [
-        { branchId: BRANCH.syokimau, variantId: VARIANT.afrigas6, quantity: 12, emptiesReceived: 9 },
-        { branchId: BRANCH.syokimau, variantId: VARIANT.afrigas13, quantity: 6, emptiesReceived: 6 },
-        { branchId: BRANCH.mlolongo, variantId: VARIANT.afrigas13, quantity: 4 },
+        { variantId: VARIANT.afrigas6, quantity: 12, emptiesReceived: 9 },
+        { variantId: VARIANT.afrigas13, quantity: 6, emptiesReceived: 6 },
+        { variantId: VARIANT.total13, quantity: 2, emptiesReceived: 2 },
       ],
       context({ reference: "EOD-0510" }),
     );
-    service.sellNewCylinder(
-      { branchId: BRANCH.syokimau, variantId: VARIANT.total13, quantity: 2 },
+    service.sellWithCylinder(
+      { locationId: LOC.syokimau, variantId: VARIANT.total13, quantity: 2 },
       context(),
     );
     service.exchange(
-      { branchId: BRANCH.kitengela, variantId: VARIANT.afrigas3, quantity: 5 },
+      { locationId: LOC.kitengela, variantId: VARIANT.afrigas3, quantity: 5 },
       context(),
     );
     service.transfer(
       {
-        fromBranchId: BRANCH.syokimau,
-        toBranchId: BRANCH.kitengela,
+        fromLocationId: LOC.syokimau,
+        toLocationId: LOC.kitengela,
         variantId: VARIANT.afrigas6,
         refills: 15,
         empties: 8,
@@ -226,7 +253,7 @@ describe("audit trail", () => {
     );
     service.returnEmpty(
       {
-        branchId: BRANCH.mlolongo,
+        locationId: LOC.mlolongo,
         variantId: VARIANT.total13,
         quantity: 2,
         companyOwnedShell: true,
@@ -234,12 +261,12 @@ describe("audit trail", () => {
       context(),
     );
     service.returnToDepot(
-      { branchId: BRANCH.mlolongo, variantId: VARIANT.afrigas13, quantity: 5 },
+      { locationId: LOC.mlolongo, variantId: VARIANT.afrigas13, quantity: 5 },
       context(),
     );
     service.stocktake(
       {
-        branchId: BRANCH.kitengela,
+        locationId: LOC.kitengela,
         variantId: VARIANT.afrigas3,
         state: GasState.Empty,
         countedQuantity: 12,
@@ -251,16 +278,20 @@ describe("audit trail", () => {
     expect(() => service.assertLedgerMatchesPositions()).not.toThrow();
 
     // Spot-check the arithmetic the ledgers should have produced.
-    expect(service.balance(BRANCH.syokimau, VARIANT.afrigas6, GasState.Refill)).toBe(
+    expect(service.balance(LOC.syokimau, VARIANT.afrigas6, GasState.Refill)).toBe(
       14 + 60 - 12 - 15,
     );
-    expect(service.balance(BRANCH.syokimau, VARIANT.afrigas6, GasState.Empty)).toBe(
+    expect(service.balance(LOC.syokimau, VARIANT.afrigas6, GasState.Empty)).toBe(
       36 - 30 + 9 - 8,
     );
-    expect(service.balance(BRANCH.kitengela, VARIANT.afrigas6, GasState.Refill)).toBe(22);
-    expect(service.balance(BRANCH.kitengela, VARIANT.afrigas6, GasState.Empty)).toBe(17);
-    expect(service.balance(BRANCH.mlolongo, VARIANT.total13, GasState.Empty)).toBe(6);
-    expect(service.balance(BRANCH.mlolongo, VARIANT.afrigas13, GasState.Empty)).toBe(3);
-    expect(service.cylinders(BRANCH.syokimau, VARIANT.total13, Custody.Customer)).toBe(13);
+    expect(service.balance(LOC.kitengela, VARIANT.afrigas6, GasState.Refill)).toBe(22);
+    expect(service.balance(LOC.kitengela, VARIANT.afrigas6, GasState.Empty)).toBe(17);
+    expect(service.balance(LOC.mlolongo, VARIANT.total13, GasState.Empty)).toBe(6);
+    expect(service.balance(LOC.mlolongo, VARIANT.afrigas13, GasState.Empty)).toBe(3);
+    expect(service.cylinders(LOC.syokimau, VARIANT.total13, Custody.Customer)).toBe(13);
+
+    // Four tickets: the batch, the cylinder-left-out sale, the exchange, and
+    // nothing for purchases, transfers, returns or stocktakes.
+    expect(service.sales.size).toBe(3);
   });
 });

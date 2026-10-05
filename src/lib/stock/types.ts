@@ -102,30 +102,57 @@ export interface ProductVariant {
   name: string;
   /** Nominal fill weight. Null for non-cylinder variants. */
   sizeKg: number | null;
-  /** Retail refill price. Null when not sold at retail. */
-  refillPriceKsh: number | null;
-  /** Refundable cylinder deposit held against a company shell. */
-  depositKsh: number | null;
+  /**
+   * Standard retail refill price — the starting point for a sale, never the
+   * amount actually charged. The charged price lives on the sale line, so a
+   * discount is always visible as the gap between the two.
+   */
+  listPriceKsh: number | null;
   active: boolean;
 }
 
-export interface Branch {
+/**
+ * A branch is a fixed station. A van is a rider's mobile stock: it is loaded at
+ * the branch, sells at the customer's door, and hands back what is left plus
+ * the empties collected.
+ */
+export const LocationKind = {
+  Branch: "BRANCH",
+  Van: "VAN",
+} as const;
+export type LocationKind = (typeof LocationKind)[keyof typeof LocationKind];
+
+export interface StockLocation {
   id: string;
   code: string;
   name: string;
+  kind: LocationKind;
+  /** The branch a van belongs to. Null for a branch. */
+  homeLocationId: string | null;
+  /** Rider responsible for a van. Null for a branch. */
+  rider: string | null;
   active: boolean;
 }
 
+/** Where a sale happened: over the counter, or at the customer's door. */
+export const Channel = {
+  WalkIn: "WALK_IN",
+  Delivery: "DELIVERY",
+  /** Purchases, transfers, stocktakes — not a customer sale. */
+  Internal: "INTERNAL",
+} as const;
+export type Channel = (typeof Channel)[keyof typeof Channel];
+
 /** Composite key for a gas stock position. */
 export interface PositionKey {
-  branchId: string;
+  locationId: string;
   variantId: string;
   state: GasState;
 }
 
 /** Composite key for a cylinder custody position. */
 export interface CustodyKey {
-  branchId: string;
+  locationId: string;
   variantId: string;
   custody: Custody;
 }
@@ -141,9 +168,9 @@ export interface StockMovement {
   occurredAt: string;
   /** ISO-8601, when the record was written. */
   recordedAt: string;
-  branchId: string;
+  locationId: string;
   /** Set for transfers: the branch on the other end. */
-  counterpartyBranchId: string | null;
+  counterpartyLocationId: string | null;
   variantId: string;
   /** Gas movements carry a state; custody movements carry a custody. */
   state: GasState | null;
@@ -160,7 +187,10 @@ export interface StockMovement {
 
 /** Who did it, and how to find it again. */
 export interface CommandContext {
+  /** The staff member or rider responsible. Never blank. */
   actor: string;
+  /** Defaults to Internal; sales set WalkIn or Delivery. */
+  channel?: Channel;
   /** External document number: receipt, delivery note, transfer slip. */
   reference?: string;
   /** Defaults to the moment the command runs. */
@@ -168,20 +198,22 @@ export interface CommandContext {
   /** Replaying a command with the same key is a no-op. */
   idempotencyKey?: string;
   reason?: string;
+  /** Customer or delivery reference, recorded on the sale. */
+  customer?: string;
 }
 
 /** A single staged change to one of the two ledgers. */
 export type StockDelta =
   | {
       ledgerKind: typeof LedgerKind.Gas;
-      branchId: string;
+      locationId: string;
       variantId: string;
       state: GasState;
       quantity: number;
     }
   | {
       ledgerKind: typeof LedgerKind.Cylinder;
-      branchId: string;
+      locationId: string;
       variantId: string;
       custody: Custody;
       quantity: number;
@@ -194,16 +226,64 @@ export interface OperationReceipt {
   committedAt: string;
   movementIds: string[];
   deltas: StockDelta[];
+  /** Set when the operation also recorded a sale. */
+  saleId: string | null;
   /** True when the command was a replay of an earlier one. */
   replayed: boolean;
 }
 
-/** Snapshot of a variant's position at one branch. */
+/**
+ * What one line of a sale cost, and what it should have cost.
+ *
+ * Omit it entirely and the customer is charged list price. Say anything else
+ * and you must say why — see `resolvePricing`.
+ */
+export interface SalePricing {
+  /** Defaults to the variant's list price. */
+  listPriceKsh?: number;
+  /** What the customer actually paid per cylinder. Defaults to list. */
+  unitPriceKsh?: number;
+  /** Required whenever the charged price differs from list. */
+  discountReason?: string;
+}
+
+export interface SaleLine {
+  variantId: string;
+  quantity: number;
+  listPriceKsh: number;
+  unitPriceKsh: number;
+  /** Null when the customer paid list price. */
+  discountReason: string | null;
+  listTotalKsh: number;
+  chargedTotalKsh: number;
+}
+
+/** A sale as the office sees it: money, channel, who took it, what was discounted. */
+export interface Sale {
+  id: string;
+  locationId: string;
+  channel: Channel;
+  operation: Operation;
+  occurredAt: string;
+  actor: string;
+  customer: string | null;
+  reference: string | null;
+  idempotencyKey: string | null;
+  lines: SaleLine[];
+  listTotalKsh: number;
+  chargedTotalKsh: number;
+  /** listTotalKsh - chargedTotalKsh. Zero means nobody got a discount. */
+  discountKsh: number;
+}
+
+/** Snapshot of a variant's position at one location. */
 export interface VariantPosition {
-  branchId: string;
+  locationId: string;
   variantId: string;
   refill: number;
   empty: number;
+  /** Physical cylinders standing here: refill + empty. */
+  cylinders: number;
   /** Company-owned shells held at this branch, for reference. */
-  companyShellsAtBranch: number;
+  companyShellsOnSite: number;
 }

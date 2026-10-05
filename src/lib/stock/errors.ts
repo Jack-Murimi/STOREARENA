@@ -9,18 +9,20 @@ export const StockErrorCode = {
   UnknownCategory: "UNKNOWN_CATEGORY",
   UnknownBrand: "UNKNOWN_BRAND",
   UnknownVariant: "UNKNOWN_VARIANT",
-  UnknownBranch: "UNKNOWN_BRANCH",
+  UnknownLocation: "UNKNOWN_LOCATION",
   DuplicateCode: "DUPLICATE_CODE",
   InvalidVariantShape: "INVALID_VARIANT_SHAPE",
   InvalidQuantity: "INVALID_QUANTITY",
   InvalidReason: "INVALID_REASON",
   InsufficientStock: "INSUFFICIENT_STOCK",
   InsufficientCylinders: "INSUFFICIENT_CYLINDERS",
-  BrandMismatch: "BRAND_MISMATCH",
+  InvalidLocation: "INVALID_LOCATION",
+  InvalidPrice: "INVALID_PRICE",
+  InvalidActor: "INVALID_ACTOR",
   SizeMismatch: "SIZE_MISMATCH",
-  SameBranchTransfer: "SAME_BRANCH_TRANSFER",
+  SameLocationTransfer: "SAME_LOCATION_TRANSFER",
   UnsupportedStockModel: "UNSUPPORTED_STOCK_MODEL",
-  InactiveBranch: "INACTIVE_BRANCH",
+  InactiveLocation: "INACTIVE_LOCATION",
   InactiveVariant: "INACTIVE_VARIANT",
   NotAtomic: "NOT_ATOMIC",
   BalanceMismatch: "BALANCE_MISMATCH",
@@ -45,7 +47,7 @@ export class StockError extends Error {
 }
 
 export class UnknownEntityError extends StockError {
-  constructor(kind: "category" | "brand" | "variant" | "branch", id: string) {
+  constructor(kind: "category" | "brand" | "variant" | "location", id: string) {
     super(
       kind === "category"
         ? StockErrorCode.UnknownCategory
@@ -53,7 +55,7 @@ export class UnknownEntityError extends StockError {
           ? StockErrorCode.UnknownBrand
           : kind === "variant"
             ? StockErrorCode.UnknownVariant
-            : StockErrorCode.UnknownBranch,
+            : StockErrorCode.UnknownLocation,
       `Unknown ${kind}: ${id}`,
       { kind, id },
     );
@@ -100,9 +102,40 @@ export class InvalidReasonError extends StockError {
   }
 }
 
+export class InvalidLocationError extends StockError {
+  constructor(locationId: string, rule: string) {
+    super(
+      StockErrorCode.InvalidLocation,
+      `Invalid location ${locationId}: ${rule}`,
+      { locationId, rule },
+    );
+  }
+}
+
+/**
+ * A charged price that differs from list price must say why. Discounts are
+ * legitimate; invisible discounts are not.
+ */
+/** Every movement needs to be attributable to a real person. */
+export class InvalidActorError extends StockError {
+  constructor(actor: string | undefined) {
+    super(
+      StockErrorCode.InvalidActor,
+      "An actor is required: every stock movement must name who did it",
+      { actor: actor ?? null },
+    );
+  }
+}
+
+export class InvalidPriceError extends StockError {
+  constructor(field: string, message: string, details: Record<string, unknown> = {}) {
+    super(StockErrorCode.InvalidPrice, `${field}: ${message}`, { field, ...details });
+  }
+}
+
 export class InsufficientStockError extends StockError {
   constructor(
-    branchId: string,
+    locationId: string,
     variantId: string,
     state: string,
     requested: number,
@@ -110,16 +143,16 @@ export class InsufficientStockError extends StockError {
   ) {
     super(
       StockErrorCode.InsufficientStock,
-      `Not enough ${state} stock at branch ${branchId} for variant ${variantId}: ` +
+      `Not enough ${state} stock at location ${locationId} for variant ${variantId}: ` +
         `requested ${requested}, available ${available}`,
-      { branchId, variantId, state, requested, available },
+      { locationId, variantId, state, requested, available },
     );
   }
 }
 
 export class InsufficientCylindersError extends StockError {
   constructor(
-    branchId: string,
+    locationId: string,
     variantId: string,
     custody: string,
     requested: number,
@@ -127,20 +160,9 @@ export class InsufficientCylindersError extends StockError {
   ) {
     super(
       StockErrorCode.InsufficientCylinders,
-      `Branch ${branchId} does not hold ${requested} company-owned ${variantId} ` +
+      `Location ${locationId} does not hold ${requested} company-owned ${variantId} ` +
         `cylinder(s) in ${custody} custody (available: ${available})`,
-      { branchId, variantId, custody, requested, available },
-    );
-  }
-}
-
-export class BrandMismatchError extends StockError {
-  constructor(outBrand: string, inBrand: string) {
-    super(
-      StockErrorCode.BrandMismatch,
-      `Cannot exchange across brands: giving ${outBrand}, receiving ${inBrand}. ` +
-        `Cylinder exchange schemes are per brand.`,
-      { outBrand, inBrand },
+      { locationId, variantId, custody, requested, available },
     );
   }
 }
@@ -155,12 +177,12 @@ export class SizeMismatchError extends StockError {
   }
 }
 
-export class SameBranchTransferError extends StockError {
-  constructor(branchId: string) {
+export class SameLocationTransferError extends StockError {
+  constructor(locationId: string) {
     super(
-      StockErrorCode.SameBranchTransfer,
-      `Transfer source and destination are the same branch: ${branchId}`,
-      { branchId },
+      StockErrorCode.SameLocationTransfer,
+      `Transfer source and destination are the same location: ${locationId}`,
+      { locationId },
     );
   }
 }
@@ -176,10 +198,10 @@ export class UnsupportedStockModelError extends StockError {
   }
 }
 
-export class InactiveBranchError extends StockError {
-  constructor(branchId: string) {
-    super(StockErrorCode.InactiveBranch, `Branch is closed: ${branchId}`, {
-      branchId,
+export class InactiveLocationError extends StockError {
+  constructor(locationId: string) {
+    super(StockErrorCode.InactiveLocation, `StockLocation is closed: ${locationId}`, {
+      locationId,
     });
   }
 }

@@ -2,23 +2,23 @@ import { describe, expect, it } from "vitest";
 import {
   Custody,
   GasState,
-  InactiveBranchError,
+  InactiveLocationError,
   InsufficientStockError,
   InvalidQuantityError,
   LedgerKind,
   Operation,
-  SameBranchTransferError,
+  SameLocationTransferError,
   StockErrorCode,
 } from "../index";
-import { BRANCH, OPENING, VARIANT, context, seeded } from "./helpers";
+import { LOC, OPENING, VARIANT, context, seeded } from "./helpers";
 
 /** Total refills of one variant across every branch. */
 function refillsEverywhere(
   service: ReturnType<typeof seeded>,
   variantId: string,
 ): number {
-  return [BRANCH.syokimau, BRANCH.mlolongo, BRANCH.kitengela].reduce(
-    (sum, branchId) => sum + service.balance(branchId, variantId, GasState.Refill),
+  return [LOC.syokimau, LOC.mlolongo, LOC.kitengela].reduce(
+    (sum, locationId) => sum + service.balance(locationId, variantId, GasState.Refill),
     0,
   );
 }
@@ -29,8 +29,8 @@ describe("inter-branch transfers", () => {
 
     service.transfer(
       {
-        fromBranchId: BRANCH.syokimau,
-        toBranchId: BRANCH.mlolongo,
+        fromLocationId: LOC.syokimau,
+        toLocationId: LOC.mlolongo,
         variantId: VARIANT.afrigas13,
         refills: 8,
         empties: 5,
@@ -38,15 +38,15 @@ describe("inter-branch transfers", () => {
       context({ reference: "TRF-1001" }),
     );
 
-    expect(service.balance(BRANCH.syokimau, VARIANT.afrigas13, GasState.Refill)).toBe(15);
-    expect(service.balance(BRANCH.syokimau, VARIANT.afrigas13, GasState.Empty)).toBe(16);
-    expect(service.balance(BRANCH.mlolongo, VARIANT.afrigas13, GasState.Refill)).toBe(20);
-    expect(service.balance(BRANCH.mlolongo, VARIANT.afrigas13, GasState.Empty)).toBe(13);
+    expect(service.balance(LOC.syokimau, VARIANT.afrigas13, GasState.Refill)).toBe(15);
+    expect(service.balance(LOC.syokimau, VARIANT.afrigas13, GasState.Empty)).toBe(16);
+    expect(service.balance(LOC.mlolongo, VARIANT.afrigas13, GasState.Refill)).toBe(20);
+    expect(service.balance(LOC.mlolongo, VARIANT.afrigas13, GasState.Empty)).toBe(13);
 
-    expect(service.cylinders(BRANCH.syokimau, VARIANT.afrigas13, Custody.Branch)).toBe(
+    expect(service.cylinders(LOC.syokimau, VARIANT.afrigas13, Custody.Branch)).toBe(
       OPENING.afrigas13.companyShells - 13,
     );
-    expect(service.cylinders(BRANCH.mlolongo, VARIANT.afrigas13, Custody.Branch)).toBe(
+    expect(service.cylinders(LOC.mlolongo, VARIANT.afrigas13, Custody.Branch)).toBe(
       18 + 13,
     );
 
@@ -59,8 +59,8 @@ describe("inter-branch transfers", () => {
 
     service.transfer(
       {
-        fromBranchId: BRANCH.mlolongo,
-        toBranchId: BRANCH.syokimau,
+        fromLocationId: LOC.mlolongo,
+        toLocationId: LOC.syokimau,
         variantId: VARIANT.afrigas13,
         refills: 5,
       },
@@ -72,20 +72,20 @@ describe("inter-branch transfers", () => {
 
   it("can open a position at a branch that never stocked the variant", () => {
     const service = seeded();
-    expect(service.balance(BRANCH.kitengela, VARIANT.total13, GasState.Refill)).toBe(0);
+    expect(service.balance(LOC.kitengela, VARIANT.total13, GasState.Refill)).toBe(0);
 
     service.transfer(
       {
-        fromBranchId: BRANCH.syokimau,
-        toBranchId: BRANCH.kitengela,
+        fromLocationId: LOC.syokimau,
+        toLocationId: LOC.kitengela,
         variantId: VARIANT.total13,
         refills: 6,
       },
       context(),
     );
 
-    expect(service.balance(BRANCH.kitengela, VARIANT.total13, GasState.Refill)).toBe(6);
-    expect(service.cylinders(BRANCH.kitengela, VARIANT.total13, Custody.Branch)).toBe(6);
+    expect(service.balance(LOC.kitengela, VARIANT.total13, GasState.Refill)).toBe(6);
+    expect(service.cylinders(LOC.kitengela, VARIANT.total13, Custody.Branch)).toBe(6);
   });
 
   it("names the branch at the other end on both sides of the audit trail", () => {
@@ -93,8 +93,8 @@ describe("inter-branch transfers", () => {
 
     service.transfer(
       {
-        fromBranchId: BRANCH.syokimau,
-        toBranchId: BRANCH.mlolongo,
+        fromLocationId: LOC.syokimau,
+        toLocationId: LOC.mlolongo,
         variantId: VARIANT.total6,
         refills: 3,
       },
@@ -106,12 +106,12 @@ describe("inter-branch transfers", () => {
       .filter((m) => m.reference === "TRF-1002");
 
     expect(rows).toHaveLength(2);
-    const out = rows.find((m) => m.branchId === BRANCH.syokimau)!;
-    const incoming = rows.find((m) => m.branchId === BRANCH.mlolongo)!;
+    const out = rows.find((m) => m.locationId === LOC.syokimau)!;
+    const incoming = rows.find((m) => m.locationId === LOC.mlolongo)!;
     expect(out.quantity).toBe(-3);
-    expect(out.counterpartyBranchId).toBe(BRANCH.mlolongo);
+    expect(out.counterpartyLocationId).toBe(LOC.mlolongo);
     expect(incoming.quantity).toBe(3);
-    expect(incoming.counterpartyBranchId).toBe(BRANCH.syokimau);
+    expect(incoming.counterpartyLocationId).toBe(LOC.syokimau);
   });
 });
 
@@ -123,8 +123,8 @@ describe("transfer validation", () => {
     try {
       service.transfer(
         {
-          fromBranchId: BRANCH.syokimau,
-          toBranchId: BRANCH.syokimau,
+          fromLocationId: LOC.syokimau,
+          toLocationId: LOC.syokimau,
           variantId: VARIANT.afrigas13,
           refills: 1,
         },
@@ -133,9 +133,9 @@ describe("transfer validation", () => {
     } catch (error) {
       caught = error;
     }
-    expect(caught).toBeInstanceOf(SameBranchTransferError);
-    expect((caught as SameBranchTransferError).code).toBe(
-      StockErrorCode.SameBranchTransfer,
+    expect(caught).toBeInstanceOf(SameLocationTransferError);
+    expect((caught as SameLocationTransferError).code).toBe(
+      StockErrorCode.SameLocationTransfer,
     );
   });
 
@@ -145,8 +145,8 @@ describe("transfer validation", () => {
     expect(() =>
       service.transfer(
         {
-          fromBranchId: BRANCH.syokimau,
-          toBranchId: BRANCH.mlolongo,
+          fromLocationId: LOC.syokimau,
+          toLocationId: LOC.mlolongo,
           variantId: VARIANT.afrigas13,
         },
         context(),
@@ -160,8 +160,8 @@ describe("transfer validation", () => {
     expect(() =>
       service.transfer(
         {
-          fromBranchId: BRANCH.mlolongo,
-          toBranchId: BRANCH.kitengela,
+          fromLocationId: LOC.mlolongo,
+          toLocationId: LOC.kitengela,
           variantId: VARIANT.afrigas13,
           refills: 40,
         },
@@ -169,9 +169,9 @@ describe("transfer validation", () => {
       ),
     ).toThrow(InsufficientStockError);
 
-    expect(service.balance(BRANCH.mlolongo, VARIANT.afrigas13, GasState.Refill)).toBe(12);
-    expect(service.balance(BRANCH.kitengela, VARIANT.afrigas13, GasState.Refill)).toBe(0);
-    expect(service.cylinders(BRANCH.mlolongo, VARIANT.afrigas13, Custody.Branch)).toBe(18);
+    expect(service.balance(LOC.mlolongo, VARIANT.afrigas13, GasState.Refill)).toBe(12);
+    expect(service.balance(LOC.kitengela, VARIANT.afrigas13, GasState.Refill)).toBe(0);
+    expect(service.cylinders(LOC.mlolongo, VARIANT.afrigas13, Custody.Branch)).toBe(18);
   });
 
   it("rejects a transfer to a closed branch and leaves the source untouched", () => {
@@ -180,19 +180,19 @@ describe("transfer validation", () => {
     expect(() =>
       service.transfer(
         {
-          fromBranchId: BRANCH.syokimau,
-          toBranchId: BRANCH.athiRiver,
+          fromLocationId: LOC.syokimau,
+          toLocationId: LOC.athiRiver,
           variantId: VARIANT.afrigas13,
           refills: 5,
         },
         context(),
       ),
-    ).toThrow(InactiveBranchError);
+    ).toThrow(InactiveLocationError);
 
-    expect(service.balance(BRANCH.syokimau, VARIANT.afrigas13, GasState.Refill)).toBe(
+    expect(service.balance(LOC.syokimau, VARIANT.afrigas13, GasState.Refill)).toBe(
       OPENING.afrigas13.refill,
     );
-    expect(service.cylinders(BRANCH.syokimau, VARIANT.afrigas13, Custody.Branch)).toBe(
+    expect(service.cylinders(LOC.syokimau, VARIANT.afrigas13, Custody.Branch)).toBe(
       OPENING.afrigas13.companyShells,
     );
   });
@@ -202,21 +202,21 @@ describe("transfer validation", () => {
 
     service.transfer(
       {
-        fromBranchId: BRANCH.syokimau,
-        toBranchId: BRANCH.kitengela,
+        fromLocationId: LOC.syokimau,
+        toLocationId: LOC.kitengela,
         variantId: VARIANT.afrigas6,
         empties: 12,
       },
       context(),
     );
 
-    expect(service.balance(BRANCH.syokimau, VARIANT.afrigas6, GasState.Empty)).toBe(24);
-    expect(service.balance(BRANCH.syokimau, VARIANT.afrigas6, GasState.Refill)).toBe(
+    expect(service.balance(LOC.syokimau, VARIANT.afrigas6, GasState.Empty)).toBe(24);
+    expect(service.balance(LOC.syokimau, VARIANT.afrigas6, GasState.Refill)).toBe(
       OPENING.afrigas6.refill,
     );
-    expect(service.balance(BRANCH.kitengela, VARIANT.afrigas6, GasState.Empty)).toBe(21);
-    expect(service.cylinders(BRANCH.syokimau, VARIANT.afrigas6, Custody.Branch)).toBe(33);
-    expect(service.cylinders(BRANCH.kitengela, VARIANT.afrigas6, Custody.Branch)).toBe(26);
+    expect(service.balance(LOC.kitengela, VARIANT.afrigas6, GasState.Empty)).toBe(21);
+    expect(service.cylinders(LOC.syokimau, VARIANT.afrigas6, Custody.Branch)).toBe(33);
+    expect(service.cylinders(LOC.kitengela, VARIANT.afrigas6, Custody.Branch)).toBe(26);
 
     service.assertLedgerMatchesPositions();
   });

@@ -8,10 +8,12 @@ export type MovementDraft = Omit<
 >;
 
 export interface MovementQuery {
-  branchId?: string;
+  locationId?: string;
   variantId?: string;
   operation?: StockMovement["operation"];
   ledgerKind?: LedgerKind;
+  /** External document number: delivery note, receipt, transfer slip. */
+  reference?: string;
 }
 
 /**
@@ -56,10 +58,11 @@ export class MovementLedger {
   query(filter: MovementQuery = {}): StockMovement[] {
     return this.movements.filter(
       (m) =>
-        (filter.branchId === undefined || m.branchId === filter.branchId) &&
+        (filter.locationId === undefined || m.locationId === filter.locationId) &&
         (filter.variantId === undefined || m.variantId === filter.variantId) &&
         (filter.operation === undefined || m.operation === filter.operation) &&
-        (filter.ledgerKind === undefined || m.ledgerKind === filter.ledgerKind),
+        (filter.ledgerKind === undefined || m.ledgerKind === filter.ledgerKind) &&
+        (filter.reference === undefined || m.reference === filter.reference),
     );
   }
 
@@ -76,7 +79,7 @@ export class MovementLedger {
     const balances = new Map<string, number>();
     for (const m of this.movements) {
       if (m.ledgerKind !== LedgerKind.Gas || m.state === null) continue;
-      const key = gasKey(m.branchId, m.variantId, m.state);
+      const key = gasKey(m.locationId, m.variantId, m.state);
       balances.set(key, (balances.get(key) ?? 0) + m.quantity);
     }
     return balances;
@@ -87,7 +90,7 @@ export class MovementLedger {
     const balances = new Map<string, number>();
     for (const m of this.movements) {
       if (m.ledgerKind !== LedgerKind.Cylinder || m.custody === null) continue;
-      const key = custodyKey(m.branchId, m.variantId, m.custody);
+      const key = custodyKey(m.locationId, m.variantId, m.custody);
       balances.set(key, (balances.get(key) ?? 0) + m.quantity);
     }
     return balances;

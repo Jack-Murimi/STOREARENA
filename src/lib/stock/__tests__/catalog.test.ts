@@ -4,17 +4,19 @@ import {
   DuplicateCodeError,
   InvalidVariantShapeError,
   SEED_ACCESSORIES,
-  SEED_BRANCHES,
+  SEED_LOCATIONS,
   SEED_BRANDS,
   SEED_CATEGORIES,
   SEED_VARIANTS,
   StockErrorCode,
   StockModel,
+  LocationKind,
+  InvalidLocationError,
   UnknownEntityError,
-  buildBranches,
+  buildLocations,
   buildCatalog,
 } from "../index";
-import { BRANCH } from "./helpers";
+import { LOC } from "./helpers";
 
 describe("catalogue reference data", () => {
   it("seeds three LPG brands: Afri Gas, TotalEnergies and Rubis", () => {
@@ -45,7 +47,7 @@ describe("catalogue reference data", () => {
   });
 
   it("includes one closed branch so closed-branch handling is testable", () => {
-    const closed = SEED_BRANCHES.find((b) => b.id === BRANCH.athiRiver);
+    const closed = SEED_LOCATIONS.find((b) => b.id === LOC.athiRiver);
     expect(closed?.active).toBe(false);
   });
 
@@ -62,10 +64,11 @@ describe("catalogue reference data", () => {
     expect(catalog.variantsOfBrand("brand-rubis")).toHaveLength(3);
   });
 
-  it("prices every cylinder variant and holds a deposit against it", () => {
+  it("gives every cylinder variant a list price, and no deposit", () => {
     for (const variant of SEED_VARIANTS) {
-      expect(variant.refillPriceKsh).toBeGreaterThan(0);
-      expect(variant.depositKsh).toBeGreaterThan(0);
+      expect(variant.listPriceKsh).toBeGreaterThan(0);
+      // The business holds no deposits, so the field does not exist at all.
+      expect("depositKsh" in variant).toBe(false);
     }
   });
 });
@@ -93,9 +96,8 @@ describe("catalogue validation", () => {
         brandId: "brand-afrigas",
         name: "Rogue 13 kg",
         sizeKg: 13,
-        refillPriceKsh: 100,
-        depositKsh: 100,
-        active: true,
+        listPriceKsh: 100,
+          active: true,
       }),
     ).toThrow(DuplicateCodeError);
   });
@@ -124,9 +126,8 @@ describe("catalogue validation", () => {
         brandId: "brand-x",
         name: "Mystery",
         sizeKg: null,
-        refillPriceKsh: 100,
-        depositKsh: 100,
-        active: true,
+        listPriceKsh: 100,
+          active: true,
       });
     } catch (error) {
       caught = error;
@@ -147,8 +148,7 @@ describe("catalogue validation", () => {
         brandId: "brand-total",
         name: "Confused hose",
         sizeKg: 6,
-        refillPriceKsh: 450,
-        depositKsh: null,
+        listPriceKsh: 450,
         active: true,
       }),
     ).toThrow(InvalidVariantShapeError);
@@ -164,22 +164,89 @@ describe("catalogue validation", () => {
         brandId: "brand-ghost",
         name: "Ghost 6 kg",
         sizeKg: 6,
-        refillPriceKsh: 1000,
-        depositKsh: 1000,
+        listPriceKsh: 1000,
         active: true,
       }),
     ).toThrow(UnknownEntityError);
   });
 
-  it("rejects a duplicate branch code", () => {
-    const branches = buildBranches();
+  it("rejects a duplicate location code", () => {
+    const locations = buildLocations();
     expect(() =>
-      branches.add({
-        id: "br-copy",
+      locations.add({
+        id: "loc-copy",
         code: "SYK",
         name: "Copy branch",
+        kind: LocationKind.Branch,
+        homeLocationId: null,
+        rider: null,
         active: true,
       }),
     ).toThrow(DuplicateCodeError);
+  });
+});
+
+describe("location registry", () => {
+  it("keeps branches and rider vans apart", () => {
+    const locations = buildLocations();
+
+    expect(locations.branches().map((l) => l.code)).toEqual([
+      "SYK",
+      "MLO",
+      "KTG",
+      "ATR",
+    ]);
+    expect(locations.vans().map((l) => l.code)).toEqual(["VAN-01", "VAN-02"]);
+    expect(locations.require(LOC.van1)).toMatchObject({
+      kind: LocationKind.Van,
+      rider: "Brian O.",
+      homeLocationId: LOC.syokimau,
+    });
+    expect(locations.vansOf(LOC.mlolongo).map((l) => l.code)).toEqual(["VAN-02"]);
+    expect(locations.vansOf(LOC.kitengela)).toEqual([]);
+  });
+
+  it("refuses a van with nobody responsible for it", () => {
+    const locations = buildLocations();
+
+    expect(() =>
+      locations.add({
+        id: "van-x",
+        code: "VAN-X",
+        name: "Rider van with no rider",
+        kind: LocationKind.Van,
+        homeLocationId: LOC.syokimau,
+        rider: null,
+        active: true,
+      }),
+    ).toThrow(InvalidLocationError);
+
+    expect(() =>
+      locations.add({
+        id: "van-y",
+        code: "VAN-Y",
+        name: "Rider van with no branch",
+        kind: LocationKind.Van,
+        homeLocationId: null,
+        rider: "Brian O.",
+        active: true,
+      }),
+    ).toThrow(InvalidLocationError);
+  });
+
+  it("refuses to give a branch a home branch", () => {
+    const locations = buildLocations();
+
+    expect(() =>
+      locations.add({
+        id: "loc-nested",
+        code: "NST",
+        name: "Nested branch",
+        kind: LocationKind.Branch,
+        homeLocationId: LOC.syokimau,
+        rider: null,
+        active: true,
+      }),
+    ).toThrow(InvalidLocationError);
   });
 });

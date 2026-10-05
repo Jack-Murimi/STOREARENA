@@ -1,13 +1,16 @@
-import type { CommandContext, StockService } from "../index";
+import type { CommandContext, SalePricing, StockService } from "../index";
 import { createSeededService, SeedId } from "../index";
 import type { OpeningBalance } from "../index";
 
-export const BRANCH = {
-  syokimau: SeedId.branchSyokimau,
-  mlolongo: SeedId.branchMlolongo,
-  kitengela: SeedId.branchKitengela,
+export const LOC = {
+  syokimau: SeedId.locationSyokimau,
+  mlolongo: SeedId.locationMlolongo,
+  kitengela: SeedId.locationKitengela,
   /** Exists in the catalogue but is closed for refurbishment. */
-  athiRiver: SeedId.branchAthiRiver,
+  athiRiver: SeedId.locationAthiRiver,
+  /** Rider vans: loaded at their branch, reconciled at the end of the shift. */
+  van1: SeedId.locationVan1,
+  van2: SeedId.locationVan2,
 } as const;
 
 export const VARIANT = {
@@ -26,10 +29,11 @@ export const VARIANT = {
 
 /** Syokimau opening balances, so tests can assert against known numbers. */
 export const OPENING = {
-  afrigas13: { refill: 23, empty: 21, companyShells: 40 },
-  total13: { refill: 27, empty: 9, companyShells: 33 },
-  afrigas6: { refill: 14, empty: 36, companyShells: 45 },
-  total6: { refill: 19, empty: 12, companyShells: 28 },
+  afrigas13: { refill: 23, empty: 21, cylinders: 44, companyShells: 40 },
+  total13: { refill: 27, empty: 9, cylinders: 36, companyShells: 33 },
+  afrigas6: { refill: 14, empty: 36, cylinders: 50, companyShells: 45 },
+  total6: { refill: 19, empty: 12, cylinders: 31, companyShells: 28 },
+  afrigas3: { refill: 42, empty: 18, cylinders: 60, companyShells: 54 },
 } as const;
 
 export function seeded(): StockService {
@@ -39,6 +43,11 @@ export function seeded(): StockService {
 /** A service with a hand-built opening balance, for edge-case scenarios. */
 export function seededWith(opening: OpeningBalance[]): StockService {
   return createSeededService(opening);
+}
+
+/** Prices a line at the variant's list price — the no-discount case. */
+export function atList(service: StockService, variantId: string): SalePricing {
+  return { unitPriceKsh: service.catalog.requireVariant(variantId).listPriceKsh! };
 }
 
 let counter = 0;
