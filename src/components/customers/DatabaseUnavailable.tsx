@@ -4,7 +4,13 @@
  * This exists so a missing or wrong DATABASE_URL produces a screen that says
  * what to do, instead of a crashed serverless function.
  */
-export function DatabaseUnavailable({ notice }: { notice: string | null }) {
+export function DatabaseUnavailable({
+  notice,
+  diagnostic,
+}: {
+  notice: string | null;
+  diagnostic?: string;
+}) {
   return (
     <section className="overflow-hidden rounded-xl border border-warn/30 bg-card shadow-[0_1px_2px_rgba(15,23,42,0.04)]">
       <div className="border-b border-line px-5 py-4">
@@ -18,6 +24,12 @@ export function DatabaseUnavailable({ notice }: { notice: string | null }) {
       </div>
 
       <div className="space-y-4 p-5 text-[13px] text-ink-soft">
+        {diagnostic ? (
+          <p className="rounded-lg border border-line bg-canvas px-4 py-3 font-mono text-[12px] text-ink-soft">
+            {diagnostic}
+          </p>
+        ) : null}
+
         {notice ? (
           <p className="rounded-lg border border-warn/30 bg-warn-soft px-4 py-3 text-warn">
             {notice}

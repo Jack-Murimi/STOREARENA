@@ -21,6 +21,8 @@ export interface CustomerContext {
   service: CustomerService | null;
   mode: DataSourceMode;
   notice: string | null;
+  /** What the function could see of its own configuration. Never a secret. */
+  diagnostic?: string;
 }
 
 const CONNECT_TIMEOUT_MS = 8_000;
@@ -30,10 +32,32 @@ declare global {
   var __gatewayCustomerContext: Promise<CustomerContext> | undefined;
 }
 
+/**
+ * What the running function can see, without ever echoing the password.
+ *
+ * "Is the variable actually there?" is the first question when a host like
+ * Netlify serves this page, and guessing wastes a deploy cycle.
+ */
+export function describeDatabaseConfig(): string {
+  const raw = process.env.DATABASE_URL;
+  if (!raw || raw.trim().length === 0) {
+    return "DATABASE_URL: not present in this function's environment.";
+  }
+  try {
+    const url = new URL(raw);
+    return `DATABASE_URL: present (host ${url.hostname}, database ${
+      url.pathname.replace(/^\//, "") || "postgres"
+    }, user ${url.username}).`;
+  } catch {
+    return "DATABASE_URL: present, but it is not a valid connection string.";
+  }
+}
+
 function unavailable(reason: string): CustomerContext {
   return {
     service: null,
     mode: "unavailable",
+    diagnostic: describeDatabaseConfig(),
     notice: `${reason} Set DATABASE_URL to your Supabase connection string — in .env.local here, or under Site settings → Environment variables on Netlify — then redeploy.`,
   };
 }
@@ -54,6 +78,7 @@ async function tryDatabase(url: string): Promise<CustomerContext | null> {
       service: new CustomerService(postgresDatabase(sql)),
       mode: "database",
       notice: null,
+      diagnostic: describeDatabaseConfig(),
     };
   } catch (error) {
     await sql.end({ timeout: 2 }).catch(() => {});
@@ -81,6 +106,7 @@ async function demoContext(): Promise<CustomerContext | null> {
       mode: "demo",
       notice:
         "Showing demo customers in a temporary in-memory database. Changes are real but vanish on restart — set DATABASE_URL to use Supabase.",
+      diagnostic: describeDatabaseConfig(),
     };
   } catch (error) {
     console.warn(`[customers] demo store unavailable: ${(error as Error).message}`);

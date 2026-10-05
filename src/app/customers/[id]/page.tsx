@@ -49,7 +49,7 @@ export default async function CustomerPage({ params, searchParams }: PageProps) 
   const error = typeof query.error === "string" ? query.error : null;
   const saved = typeof query.saved === "string" ? query.saved : null;
 
-  const { service, notice } = await getCustomerContext();
+  const { service, notice, diagnostic } = await getCustomerContext();
 
 
   if (!service) {
@@ -64,7 +64,7 @@ export default async function CustomerPage({ params, searchParams }: PageProps) 
             activeHref="/customers"
           />
           <main className="flex-1 space-y-5 px-4 py-5 sm:px-6 lg:px-8">
-            <DatabaseUnavailable notice={notice} />
+            <DatabaseUnavailable notice={notice} diagnostic={diagnostic} />
           </main>
         </div>
       </div>

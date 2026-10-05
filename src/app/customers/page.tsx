@@ -28,7 +28,7 @@ export default async function CustomersPage({ searchParams }: PageProps) {
   const error = typeof params.error === "string" ? params.error : null;
   const justDeleted = params.deleted === "1";
 
-  const { service, mode, notice } = await getCustomerContext();
+  const { service, mode, notice, diagnostic } = await getCustomerContext();
 
   if (!service) {
     return (
@@ -42,7 +42,7 @@ export default async function CustomersPage({ searchParams }: PageProps) {
             activeHref="/customers"
           />
           <main className="flex-1 space-y-5 px-4 py-5 sm:px-6 lg:px-8">
-            <DatabaseUnavailable notice={notice} />
+            <DatabaseUnavailable notice={notice} diagnostic={diagnostic} />
           </main>
         </div>
       </div>
