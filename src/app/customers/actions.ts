@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { CustomerError, CustomerKind } from "@/lib/customers";
+import type { CustomerService } from "@/lib/customers";
 import { getCustomerContext } from "@/lib/db";
 
 /**
@@ -32,6 +33,21 @@ function kindFrom(form: FormData): CustomerKind {
     : CustomerKind.Household;
 }
 
+/**
+ * The service, or a redirect explaining that there is no database. A missing
+ * DATABASE_URL must produce a message, never a crashed function.
+ */
+async function requireService(backTo: string): Promise<CustomerService> {
+  const { service } = await getCustomerContext();
+  if (!service) {
+    fail(
+      new Error("No database connection. Set DATABASE_URL and redeploy."),
+      backTo,
+    );
+  }
+  return service;
+}
+
 /** Sends the visitor back with the reason a change was refused. */
 function fail(error: unknown, backTo: string): never {
   const message =
@@ -44,7 +60,7 @@ function fail(error: unknown, backTo: string): never {
 // ------------------------------------------------------------------ customer
 
 export async function createCustomer(form: FormData): Promise<void> {
-  const { service } = await getCustomerContext();
+  const service = await requireService("/customers");
 
   let id: string;
   try {
@@ -80,7 +96,7 @@ export async function createCustomer(form: FormData): Promise<void> {
 }
 
 export async function updateCustomer(form: FormData): Promise<void> {
-  const { service } = await getCustomerContext();
+  const service = await requireService("/customers");
   const id = text(form, "id");
 
   try {
@@ -100,7 +116,7 @@ export async function updateCustomer(form: FormData): Promise<void> {
 }
 
 export async function deleteCustomer(form: FormData): Promise<void> {
-  const { service } = await getCustomerContext();
+  const service = await requireService("/customers");
   const id = text(form, "id");
 
   try {
@@ -116,7 +132,7 @@ export async function deleteCustomer(form: FormData): Promise<void> {
 // ----------------------------------------------------------------- locations
 
 export async function addLocation(form: FormData): Promise<void> {
-  const { service } = await getCustomerContext();
+  const service = await requireService("/customers");
   const id = text(form, "customerId");
 
   try {
@@ -137,7 +153,7 @@ export async function addLocation(form: FormData): Promise<void> {
 }
 
 export async function updateLocation(form: FormData): Promise<void> {
-  const { service } = await getCustomerContext();
+  const service = await requireService("/customers");
   const id = text(form, "customerId");
   const locationId = text(form, "locationId");
 
@@ -158,7 +174,7 @@ export async function updateLocation(form: FormData): Promise<void> {
 }
 
 export async function removeLocation(form: FormData): Promise<void> {
-  const { service } = await getCustomerContext();
+  const service = await requireService("/customers");
   const id = text(form, "customerId");
 
   try {
@@ -174,7 +190,7 @@ export async function removeLocation(form: FormData): Promise<void> {
 // ------------------------------------------------------------------ contacts
 
 export async function addContact(form: FormData): Promise<void> {
-  const { service } = await getCustomerContext();
+  const service = await requireService("/customers");
   const id = text(form, "customerId");
 
   try {
@@ -195,7 +211,7 @@ export async function addContact(form: FormData): Promise<void> {
 }
 
 export async function updateContact(form: FormData): Promise<void> {
-  const { service } = await getCustomerContext();
+  const service = await requireService("/customers");
   const id = text(form, "customerId");
   const contactId = text(form, "contactId");
 
@@ -216,7 +232,7 @@ export async function updateContact(form: FormData): Promise<void> {
 }
 
 export async function removeContact(form: FormData): Promise<void> {
-  const { service } = await getCustomerContext();
+  const service = await requireService("/customers");
   const id = text(form, "customerId");
 
   try {

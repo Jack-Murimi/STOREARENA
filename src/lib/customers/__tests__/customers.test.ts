@@ -472,3 +472,16 @@ describe("database constraints", () => {
     expect(rows.some((r) => r.role === null)).toBe(true);
   });
 });
+
+describe("the embedded schema", () => {
+  it("matches schema.sql, so a deployed server runs the same DDL", async () => {
+    const { readFileSync } = await import("node:fs");
+    const { CUSTOMER_SCHEMA } = await import("../schemaText");
+    const onDisk = readFileSync(
+      new URL("../schema.sql", import.meta.url),
+      "utf8",
+    );
+
+    expect(CUSTOMER_SCHEMA).toBe(onDisk);
+  });
+});

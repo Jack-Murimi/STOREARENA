@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { DatabaseUnavailable } from "@/components/customers/DatabaseUnavailable";
 import {
   Banner,
   Checkbox,
@@ -49,6 +50,26 @@ export default async function CustomerPage({ params, searchParams }: PageProps) 
   const saved = typeof query.saved === "string" ? query.saved : null;
 
   const { service, notice } = await getCustomerContext();
+
+
+  if (!service) {
+    return (
+      <div className="flex min-h-screen bg-canvas">
+        <Sidebar staff={currentStaff} station={stationName} activeHref="/customers" />
+        <div className="flex min-w-0 flex-1 flex-col">
+          <Topbar
+            title="Customer"
+            subtitle="Customer records"
+            staff={currentStaff}
+            activeHref="/customers"
+          />
+          <main className="flex-1 space-y-5 px-4 py-5 sm:px-6 lg:px-8">
+            <DatabaseUnavailable notice={notice} />
+          </main>
+        </div>
+      </div>
+    );
+  }
 
   let customer;
   try {

@@ -1,31 +1,41 @@
-import { readFileSync } from "node:fs";
-import { join } from "node:path";
 import { CustomerService, seedCustomers } from "@/lib/customers";
-import type { Database } from "@/lib/customers";
+import { CUSTOMER_SCHEMA } from "@/lib/customers/schemaText";
 import { connectPostgres, postgresDatabase } from "@/lib/customers/postgres";
 
 /**
  * Where customer data comes from.
  *
- * In production this is Supabase over TLS, using `DATABASE_URL`. When that is
- * missing or unreachable — a laptop with no VPN, this sandbox, a CI box — the
- * app falls back to a throwaway in-process PostgreSQL (PGlite) seeded with demo
- * customers, and says so on screen. Nothing is ever silently written to the
- * wrong place: the mode is reported to the UI every time.
+ * - `database`    — Supabase over TLS, using DATABASE_URL. This is production.
+ * - `demo`        — a throwaway in-process PostgreSQL (PGlite) with demo rows.
+ *                   Development only, because PGlite is a devDependency and a
+ *                   serverless function has no writable filesystem to boot it
+ *                   on.
+ * - `unavailable` — no usable database. The screens explain what to set instead
+ *                   of throwing, because a fallback that crashes the page is
+ *                   worse than no fallback at all.
  */
-export type DataSourceMode = "database" | "demo";
+export type DataSourceMode = "database" | "demo" | "unavailable";
 
 export interface CustomerContext {
-  service: CustomerService;
+  /** Null when there is no usable database — check before using. */
+  service: CustomerService | null;
   mode: DataSourceMode;
   notice: string | null;
 }
 
-const CONNECT_TIMEOUT_MS = 6_000;
+const CONNECT_TIMEOUT_MS = 8_000;
 
 declare global {
   // Survives Next.js hot reloads in development.
   var __gatewayCustomerContext: Promise<CustomerContext> | undefined;
+}
+
+function unavailable(reason: string): CustomerContext {
+  return {
+    service: null,
+    mode: "unavailable",
+    notice: `${reason} Set DATABASE_URL to your Supabase connection string — in .env.local here, or under Site settings → Environment variables on Netlify — then redeploy.`,
+  };
 }
 
 async function tryDatabase(url: string): Promise<CustomerContext | null> {
@@ -48,41 +58,62 @@ async function tryDatabase(url: string): Promise<CustomerContext | null> {
   } catch (error) {
     await sql.end({ timeout: 2 }).catch(() => {});
     console.warn(
-      `[customers] DATABASE_URL unreachable (${(error as Error).message}); using the demo store.`,
+      `[customers] DATABASE_URL unreachable (${(error as Error).message})`,
     );
     return null;
   }
 }
 
-async function demoContext(reason: string): Promise<CustomerContext> {
-  const { PGlite } = await import("@electric-sql/pglite");
-  const { pgliteDatabase } = await import("@/lib/customers/pglite");
+/** Development convenience only. Never runs in a production deployment. */
+async function demoContext(): Promise<CustomerContext | null> {
+  try {
+    const { PGlite } = await import("@electric-sql/pglite");
+    const { pgliteDatabase } = await import("@/lib/customers/pglite");
 
-  const db = new PGlite();
-  const ddl = readFileSync(
-    join(process.cwd(), "src/lib/customers/schema.sql"),
-    "utf8",
+    const db = new PGlite();
+    await db.exec(CUSTOMER_SCHEMA);
+
+    const service = new CustomerService(pgliteDatabase(db));
+    await seedCustomers(service);
+
+    return {
+      service,
+      mode: "demo",
+      notice:
+        "Showing demo customers in a temporary in-memory database. Changes are real but vanish on restart — set DATABASE_URL to use Supabase.",
+    };
+  } catch (error) {
+    console.warn(`[customers] demo store unavailable: ${(error as Error).message}`);
+    return null;
+  }
+}
+
+function demoAllowed(): boolean {
+  return (
+    process.env.NODE_ENV !== "production" || process.env.ALLOW_DEMO_STORE === "1"
   );
-  await db.exec(ddl);
-
-  const service = new CustomerService(pgliteDatabase(db) satisfies Database);
-  await seedCustomers(service);
-
-  return {
-    service,
-    mode: "demo",
-    notice: `Showing demo customers in a temporary in-memory database (${reason}). Changes are real but will be lost when the server restarts — set DATABASE_URL to write to Supabase.`,
-  };
 }
 
 async function build(): Promise<CustomerContext> {
   const url = process.env.DATABASE_URL;
-  if (!url) {
-    return demoContext("no DATABASE_URL configured");
+
+  if (url) {
+    const connected = await tryDatabase(url);
+    if (connected) return connected;
+    if (!demoAllowed()) {
+      return unavailable("The configured database could not be reached.");
+    }
+    const demo = await demoContext();
+    if (demo) return demo;
+    return unavailable("The configured database could not be reached.");
   }
-  const connected = await tryDatabase(url);
-  if (connected) return connected;
-  return demoContext("could not reach the configured database");
+
+  if (!demoAllowed()) {
+    return unavailable("No database is configured.");
+  }
+
+  const demo = await demoContext();
+  return demo ?? unavailable("No database is configured.");
 }
 
 /** The customer service for this request, and where it is pointed. */

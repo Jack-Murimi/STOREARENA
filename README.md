@@ -104,6 +104,21 @@ DATABASE_URL=postgresql://postgres:YOUR_PASSWORD@db.YOUR_PROJECT.supabase.co:543
 Then create the tables once — paste `src/lib/customers/schema.sql` into
 Supabase → SQL Editor and run it.
 
+### Deploying (Netlify, Vercel, anywhere serverless)
+
+Set `DATABASE_URL` in the host's environment variables — **Site configuration →
+Environment variables** on Netlify — then redeploy. Use the **transaction
+pooler** URI from Supabase → Connect, not the direct `db.<ref>.supabase.co`
+host: serverless functions are short-lived and the pooler is built for them.
+
+```
+DATABASE_URL=postgresql://postgres.<project-ref>:<password>@aws-1-<region>.pooler.supabase.com:6543/postgres?sslmode=require
+```
+
+The demo store never runs in a production build (PGlite is a devDependency and a
+function has no writable filesystem). Without a reachable database the customer
+screens show what to configure instead of failing.
+
 If `DATABASE_URL` is missing or the database cannot be reached, the app falls
 back to a temporary in-process PostgreSQL seeded with demo customers and says so
 in a banner at the top of the screen. Nothing is silently written to the wrong

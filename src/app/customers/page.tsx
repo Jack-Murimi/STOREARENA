@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { DatabaseUnavailable } from "@/components/customers/DatabaseUnavailable";
 import { Banner, Field, SelectInput, SubmitButton, TextInput } from "@/components/customers/Form";
 import { Sidebar } from "@/components/Sidebar";
 import { Topbar } from "@/components/Topbar";
@@ -28,6 +29,26 @@ export default async function CustomersPage({ searchParams }: PageProps) {
   const justDeleted = params.deleted === "1";
 
   const { service, mode, notice } = await getCustomerContext();
+
+  if (!service) {
+    return (
+      <div className="flex min-h-screen bg-canvas">
+        <Sidebar staff={currentStaff} station={stationName} activeHref="/customers" />
+        <div className="flex min-w-0 flex-1 flex-col">
+          <Topbar
+            title="Customers"
+            subtitle="Customer records"
+            staff={currentStaff}
+            activeHref="/customers"
+          />
+          <main className="flex-1 space-y-5 px-4 py-5 sm:px-6 lg:px-8">
+            <DatabaseUnavailable notice={notice} />
+          </main>
+        </div>
+      </div>
+    );
+  }
+
   const customers = await service.list({
     includeInactive: true,
     search: query || undefined,
