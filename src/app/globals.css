@@ -1,0 +1,53 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-geist-mono), ui-monospace, monospace;
+
+  /* Gateway Gas brand: deep navy shell + flame amber accent */
+  --color-navy-950: #060d17;
+  --color-navy-900: #0b1725;
+  --color-navy-800: #122538;
+  --color-navy-700: #1b3550;
+  --color-navy-600: #2a4b6b;
+
+  --color-flame-300: #fcd34d;
+  --color-flame-400: #fbbf24;
+  --color-flame-500: #f59e0b;
+  --color-flame-600: #d97706;
+  --color-flame-700: #b45309;
+
+  /* Surfaces and type */
+  --color-canvas: #f4f6f9;
+  --color-card: #ffffff;
+  --color-line: #e4e9f0;
+  --color-ink: #0f172a;
+  --color-ink-soft: #5b6b80;
+  --color-ink-faint: #8a99ad;
+
+  /* Status */
+  --color-good: #15803d;
+  --color-good-soft: #dcfce7;
+  --color-warn: #b45309;
+  --color-warn-soft: #fef3c7;
+  --color-bad: #b91c1c;
+  --color-bad-soft: #fee2e2;
+  --color-info: #1d4ed8;
+  --color-info-soft: #dbeafe;
+}
+
+html {
+  color-scheme: light;
+}
+
+body {
+  background-color: var(--color-canvas);
+  color: var(--color-ink);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Subtle hairline separators used inside data panels */
+.divide-line > * + * {
+  border-top: 1px solid var(--color-line);
+}
