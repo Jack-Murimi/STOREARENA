@@ -9,6 +9,7 @@ import {
   DuplicatePhoneError,
   InvalidNameError,
   InvalidPhoneError,
+  InvalidPinError,
   NoContactsError,
   NoLocationsError,
   UnknownContactError,
@@ -483,5 +484,95 @@ describe("the embedded schema", () => {
     );
 
     expect(CUSTOMER_SCHEMA).toBe(onDisk);
+  });
+});
+
+describe("addresses and map pins", () => {
+  it("keeps a free-text address and the details that get you in the gate", async () => {
+    const created = await service.create({
+      name: "Jamry Apartment",
+      locations: [
+        {
+          label: "Main house",
+          addressLine: "house no 46 on Kinyajui road off Naivasha road",
+          details: "opposite Fryz Inn hotel",
+          pinLat: -1.2841,
+          pinLng: 36.7519,
+        },
+      ],
+      contacts: [{ phone: "0712345678", name: "Jane Wanjiku", role: "Wife" }],
+    });
+
+    expect(created.locations[0]).toMatchObject({
+      addressLine: "house no 46 on Kinyajui road off Naivasha road",
+      details: "opposite Fryz Inn hotel",
+      pinLat: -1.2841,
+      pinLng: 36.7519,
+    });
+  });
+
+  it("accepts coordinates that arrive as text, the way a form sends them", async () => {
+    const created = await service.create({
+      name: "Text Pin Household",
+      locations: [{ label: "Home", pinLat: "-1.284100", pinLng: "36.751900" }],
+      contacts: [{ phone: "0712345678", name: "A One" }],
+    });
+
+    expect(created.locations[0].pinLat).toBe(-1.2841);
+    expect(created.locations[0].pinLng).toBe(36.7519);
+  });
+
+  it("treats blank coordinates as no pin at all", async () => {
+    const created = await service.create({
+      name: "No Pin Household",
+      locations: [{ label: "Home", pinLat: "", pinLng: "  " }],
+      contacts: [{ phone: "0712345678", name: "A One" }],
+    });
+
+    expect(created.locations[0].pinLat).toBeNull();
+    expect(created.locations[0].pinLng).toBeNull();
+  });
+
+  it("refuses half a pin, and coordinates off the map", async () => {
+    for (const pin of [
+      { pinLat: -1.2841 },
+      { pinLng: 36.7519 },
+      { pinLat: 91, pinLng: 36.7519 },
+      { pinLat: -1.2841, pinLng: 181 },
+      { pinLat: "not a number", pinLng: "36.75" },
+    ]) {
+      await expect(
+        service.create({
+          name: "Bad Pin Household",
+          locations: [{ label: "Home", ...pin }],
+          contacts: [{ phone: "0712345678", name: "A One" }],
+        }),
+      ).rejects.toThrow(InvalidPinError);
+    }
+    expect(await service.list()).toEqual([]);
+  });
+
+  it("adds and corrects a pin afterwards", async () => {
+    const created = await kathomi();
+    const main = created.locations.find((l) => l.label === "Main house")!;
+    expect(main.pinLat).toBeNull();
+
+    const pinned = await service.updateLocation(created.id, main.id, {
+      pinLat: "-1.2841",
+      pinLng: "36.7519",
+      details: "blue gate, second driveway",
+    });
+    const updated = pinned.locations.find((l) => l.id === main.id)!;
+    expect(updated).toMatchObject({
+      pinLat: -1.2841,
+      pinLng: 36.7519,
+      details: "blue gate, second driveway",
+    });
+
+    const cleared = await service.updateLocation(created.id, main.id, {
+      pinLat: null,
+      pinLng: null,
+    });
+    expect(cleared.locations.find((l) => l.id === main.id)?.pinLat).toBeNull();
   });
 });

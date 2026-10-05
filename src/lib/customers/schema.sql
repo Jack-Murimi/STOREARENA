@@ -30,12 +30,21 @@ CREATE TABLE IF NOT EXISTS customer_locations (
   id           TEXT PRIMARY KEY,
   customer_id  TEXT NOT NULL REFERENCES customers (id) ON DELETE CASCADE,
   label        TEXT NOT NULL CHECK (char_length(trim(label)) >= 2),
+  -- Free text on purpose: "house no 46 on Kinyajui road off Naivasha road".
   address_line TEXT,
+  -- The bit that actually gets you through the gate: "opposite Fryz Inn hotel".
+  details      TEXT,
   area         TEXT,
   town         TEXT,
+  -- Optional map pin, so a rider can be sent coordinates rather than a guess.
+  pin_lat      NUMERIC(9, 6) CHECK (pin_lat IS NULL OR (pin_lat >= -90 AND pin_lat <= 90)),
+  pin_lng      NUMERIC(9, 6) CHECK (pin_lng IS NULL OR (pin_lng >= -180 AND pin_lng <= 180)),
   is_primary   BOOLEAN NOT NULL DEFAULT false,
   active       BOOLEAN NOT NULL DEFAULT true,
   created_at   TIMESTAMPTZ NOT NULL DEFAULT now(),
+  CONSTRAINT pin_is_a_pair CHECK (
+    (pin_lat IS NULL AND pin_lng IS NULL) OR (pin_lat IS NOT NULL AND pin_lng IS NOT NULL)
+  ),
   -- One "Main house" per customer.
   CONSTRAINT customer_location_label_unique UNIQUE (customer_id, label)
 );
@@ -115,8 +124,11 @@ SELECT c.id            AS customer_id,
        c.active,
        l.label         AS location_label,
        l.address_line,
+       l.details,
        l.area,
        l.town,
+       l.pin_lat,
+       l.pin_lng,
        l.is_primary    AS primary_location,
        ct.name         AS contact_name,
        ct.phone,

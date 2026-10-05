@@ -71,8 +71,10 @@ customers, their delivery places and the people to call.
 
 A customer is a household or a business, and one customer can have:
 
-- **Several delivery places** — main house, annex, shop — each with a label,
-  address, area and town, and exactly one marked as the main place.
+- **Several delivery places** — main house, annex, shop — each with a label, a
+  free-text address ("house no 46 on Kinyajui road off Naivasha road"),
+  additional details for the rider ("opposite Fryz Inn hotel"), an optional map
+  pin, and exactly one marked as the main place.
 - **Several phone numbers** — each with the name of the person who answers and,
   optionally, their role: wife, father, children, maid, caretaker. The role is
   free text, with the common ones offered as suggestions.
@@ -87,6 +89,9 @@ Rules the code and the database both enforce:
   — but the same caretaker's number may appear at several households.
 - Exactly one place and one number are primary; removing the primary promotes
   the next one.
+- A map pin is both coordinates or neither, and they must be real coordinates —
+  half a pin would send a rider to the equator. "Use my location" reads the
+  browser's own position, so standing at the gate is enough to pin a place.
 - Deleting a customer removes their places and numbers. Recorded sales are not
   touched.
 

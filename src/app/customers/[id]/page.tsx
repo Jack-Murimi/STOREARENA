@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { DatabaseUnavailable } from "@/components/customers/DatabaseUnavailable";
+import { PinField } from "@/components/customers/PinField";
 import {
   Banner,
   Checkbox,
@@ -183,9 +184,27 @@ export default async function CustomerPage({ params, searchParams }: PageProps) 
                         {location.active ? null : <Pill tone="bad">Inactive</Pill>}
                       </div>
                       <p className="mt-1 text-[12.5px] text-ink-soft">
-                        {[location.addressLine, location.area, location.town]
-                          .filter(Boolean)
-                          .join(" · ") || "No address recorded"}
+                        {location.addressLine || "No address recorded"}
+                      </p>
+                      {location.details ? (
+                        <p className="mt-0.5 text-[12.5px] text-ink-soft/85">
+                          {location.details}
+                        </p>
+                      ) : null}
+                      <p className="mt-0.5 flex flex-wrap items-center gap-2 text-[11.5px] text-ink-soft/75">
+                        {[location.area, location.town].filter(Boolean).join(" · ")}
+                        {location.pinLat !== null && location.pinLng !== null ? (
+                          <a
+                            className="font-medium text-info hover:underline"
+                            target="_blank"
+                            rel="noreferrer"
+                            href={`https://www.google.com/maps?q=${location.pinLat},${location.pinLng}`}
+                          >
+                            Pinned · open map
+                          </a>
+                        ) : (
+                          <span>No pin yet</span>
+                        )}
                       </p>
                     </div>
 
@@ -207,6 +226,18 @@ export default async function CustomerPage({ params, searchParams }: PageProps) 
                             <TextInput
                               name="addressLine"
                               defaultValue={location.addressLine ?? ""}
+                              placeholder="house no 46 on Kinyajui road off Naivasha road"
+                            />
+                          </Field>
+                          <Field
+                            label="Additional details"
+                            className="sm:col-span-2"
+                            hint="The bit that gets you through the gate."
+                          >
+                            <TextInput
+                              name="details"
+                              defaultValue={location.details ?? ""}
+                              placeholder="opposite Fryz Inn hotel"
                             />
                           </Field>
                           <Field label="Area">
@@ -215,6 +246,17 @@ export default async function CustomerPage({ params, searchParams }: PageProps) 
                           <Field label="Town">
                             <TextInput name="town" defaultValue={location.town ?? ""} />
                           </Field>
+                          <div className="sm:col-span-2">
+                            <span className="mb-1 block text-[11.5px] font-medium text-ink-soft">
+                              Map pin
+                            </span>
+                            <PinField
+                              latName="pinLat"
+                              lngName="pinLng"
+                              defaultLat={location.pinLat}
+                              defaultLng={location.pinLng}
+                            />
+                          </div>
                           <div className="flex items-center justify-between gap-3 sm:col-span-2">
                             <Checkbox
                               name="isPrimary"
@@ -241,23 +283,44 @@ export default async function CustomerPage({ params, searchParams }: PageProps) 
 
             <form
               action={addLocation}
-              className="grid gap-4 border-t border-line bg-canvas/60 p-5 sm:grid-cols-5"
+              className="grid gap-4 border-t border-line bg-canvas/60 p-5 sm:grid-cols-3"
             >
               <input type="hidden" name="customerId" value={customer.id} />
-              <Field label="Label">
+              <Field label="Name for it">
                 <TextInput name="label" placeholder="Annex" required />
               </Field>
-              <Field label="Address">
-                <TextInput name="addressLine" placeholder="Plot 214B" />
+              <Field
+                label="Address"
+                className="sm:col-span-2"
+              >
+                <TextInput
+                  name="addressLine"
+                  placeholder="house no 46 on Kinyajui road off Naivasha road"
+                />
+              </Field>
+              <Field
+                label="Additional details"
+                className="sm:col-span-3"
+                hint="Landmarks and gate instructions: opposite Fryz Inn hotel."
+              >
+                <TextInput name="details" placeholder="opposite Fryz Inn hotel" />
               </Field>
               <Field label="Area">
-                <TextInput name="area" placeholder="Syokimau" />
+                <TextInput name="area" placeholder="Kangemi" />
               </Field>
               <Field label="Town">
-                <TextInput name="town" placeholder="Machakos" />
+                <TextInput name="town" placeholder="Nairobi" />
               </Field>
-              <div className="flex items-end justify-between gap-2">
-                <Checkbox name="isPrimary" label="Make main" />
+              <div className="flex items-end justify-end">
+                <Checkbox name="isPrimary" label="Make this the main place" />
+              </div>
+              <div className="sm:col-span-2">
+                <span className="mb-1 block text-[11.5px] font-medium text-ink-soft">
+                  Map pin (optional)
+                </span>
+                <PinField latName="pinLat" lngName="pinLng" />
+              </div>
+              <div className="flex items-end justify-end">
                 <SubmitButton>Add place</SubmitButton>
               </div>
             </form>

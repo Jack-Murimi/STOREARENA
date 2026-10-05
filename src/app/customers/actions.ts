@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { CustomerError, CustomerKind } from "@/lib/customers";
+import type { NewContactInput, NewLocationInput } from "@/lib/customers";
 import type { CustomerService } from "@/lib/customers";
 import { getCustomerContext } from "@/lib/db";
 
@@ -25,6 +26,41 @@ function optional(form: FormData, key: string): string | null {
 
 function checked(form: FormData, key: string): boolean {
   return form.get(key) === "on";
+}
+
+/**
+ * Reads the repeatable rows the new-customer form posts (`loc_label_0`,
+ * `loc_label_1`, …). Rows left blank are skipped rather than refused, so a
+ * stray extra row is harmless.
+ */
+function readLocations(form: FormData): NewLocationInput[] {
+  const rows: NewLocationInput[] = [];
+  for (let i = 0; form.has(`loc_label_${i}`); i += 1) {
+    const label = text(form, `loc_label_${i}`).trim();
+    if (label.length === 0) continue;
+    rows.push({
+      label,
+      addressLine: optional(form, `loc_address_${i}`),
+      details: optional(form, `loc_details_${i}`),
+    });
+  }
+  return rows;
+}
+
+function readContacts(form: FormData): NewContactInput[] {
+  const rows: NewContactInput[] = [];
+  for (let i = 0; form.has(`con_name_${i}`); i += 1) {
+    const name = text(form, `con_name_${i}`).trim();
+    const phone = text(form, `con_phone_${i}`).trim();
+    if (name.length === 0 && phone.length === 0) continue;
+    rows.push({
+      name,
+      phone,
+      role: optional(form, `con_role_${i}`),
+      isPrimary: i === 0,
+    });
+  }
+  return rows;
 }
 
 function kindFrom(form: FormData): CustomerKind {
@@ -68,23 +104,8 @@ export async function createCustomer(form: FormData): Promise<void> {
       name: text(form, "name"),
       kind: kindFrom(form),
       notes: optional(form, "notes"),
-      locations: [
-        {
-          label: text(form, "locationLabel"),
-          addressLine: optional(form, "locationAddress"),
-          area: optional(form, "locationArea"),
-          town: optional(form, "locationTown"),
-          isPrimary: true,
-        },
-      ],
-      contacts: [
-        {
-          phone: text(form, "contactPhone"),
-          name: text(form, "contactName"),
-          role: optional(form, "contactRole"),
-          isPrimary: true,
-        },
-      ],
+      locations: readLocations(form),
+      contacts: readContacts(form),
     });
     id = created.id;
   } catch (error) {
@@ -139,8 +160,11 @@ export async function addLocation(form: FormData): Promise<void> {
     await service.addLocation(id, {
       label: text(form, "label"),
       addressLine: optional(form, "addressLine"),
+      details: optional(form, "details"),
       area: optional(form, "area"),
       town: optional(form, "town"),
+      pinLat: optional(form, "pinLat"),
+      pinLng: optional(form, "pinLng"),
       isPrimary: checked(form, "isPrimary"),
     });
   } catch (error) {
@@ -161,8 +185,11 @@ export async function updateLocation(form: FormData): Promise<void> {
     await service.updateLocation(id, locationId, {
       label: text(form, "label"),
       addressLine: optional(form, "addressLine"),
+      details: optional(form, "details"),
       area: optional(form, "area"),
       town: optional(form, "town"),
+      pinLat: optional(form, "pinLat"),
+      pinLng: optional(form, "pinLng"),
       isPrimary: checked(form, "isPrimary"),
     });
   } catch (error) {

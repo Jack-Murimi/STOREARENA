@@ -1,14 +1,15 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { CustomerCreateForm } from "@/components/customers/CustomerCreateForm";
 import { DatabaseUnavailable } from "@/components/customers/DatabaseUnavailable";
-import { Banner, Field, SelectInput, SubmitButton, TextInput } from "@/components/customers/Form";
+import { Banner } from "@/components/customers/Form";
+import { SubmitButton } from "@/components/customers/SubmitButton";
 import { Sidebar } from "@/components/Sidebar";
 import { Topbar } from "@/components/Topbar";
 import { Pill } from "@/components/dashboard/Panel";
 import { CustomerKind, formatKenyanPhone } from "@/lib/customers";
 import { currentStaff, stationName } from "@/lib/data";
 import { getCustomerContext } from "@/lib/db";
-import { createCustomer } from "./actions";
 
 export const metadata: Metadata = {
   title: "Customers",
@@ -109,88 +110,7 @@ export default async function CustomersPage({ searchParams }: PageProps) {
 
             {showNewForm ? (
               <div className="border-b border-line bg-canvas/60 px-5 py-5">
-                <form action={createCustomer} className="space-y-5">
-                  <div>
-                    <h2 className="text-[13.5px] font-semibold text-ink">
-                      Who is the customer?
-                    </h2>
-                    <p className="mt-0.5 text-[12px] text-ink-soft">
-                      More delivery places and more people to call can be added
-                      straight after.
-                    </p>
-                  </div>
-
-                  <div className="grid gap-4 sm:grid-cols-3">
-                    <Field label="Customer name" className="sm:col-span-2">
-                      <TextInput
-                        name="name"
-                        placeholder="Kathomi Household"
-                        required
-                      />
-                    </Field>
-                    <Field label="Type">
-                      <SelectInput
-                        name="kind"
-                        defaultValue={CustomerKind.Household}
-                        options={[CustomerKind.Household, CustomerKind.Business]}
-                      />
-                    </Field>
-                  </div>
-
-                  <Field label="Notes" hint="Gate codes, delivery windows, standing orders.">
-                    <TextInput name="notes" placeholder="Gate code 4417, call before 7am" />
-                  </Field>
-
-                  <div className="rounded-lg border border-line bg-white p-4">
-                    <h3 className="mb-3 text-[12.5px] font-semibold text-ink">
-                      First delivery place
-                    </h3>
-                    <div className="grid gap-4 sm:grid-cols-4">
-                      <Field label="Label">
-                        <TextInput name="locationLabel" placeholder="Main house" required />
-                      </Field>
-                      <Field label="Address">
-                        <TextInput name="locationAddress" placeholder="Plot 214, Syokimau Road" />
-                      </Field>
-                      <Field label="Area">
-                        <TextInput name="locationArea" placeholder="Syokimau" />
-                      </Field>
-                      <Field label="Town">
-                        <TextInput name="locationTown" placeholder="Machakos" />
-                      </Field>
-                    </div>
-                  </div>
-
-                  <div className="rounded-lg border border-line bg-white p-4">
-                    <h3 className="mb-1 text-[12.5px] font-semibold text-ink">
-                      Main person to call
-                    </h3>
-                    <p className="mb-3 text-[11.5px] text-ink-soft">
-                      The role is optional — wife, father, children, maid, caretaker.
-                    </p>
-                    <div className="grid gap-4 sm:grid-cols-3">
-                      <Field label="Name">
-                        <TextInput name="contactName" placeholder="Jane Kathomi" required />
-                      </Field>
-                      <Field label="Phone number" hint="0712 345 678 or +254712345678">
-                        <TextInput name="contactPhone" placeholder="0712 345 678" required />
-                      </Field>
-                      <Field label="Role (optional)">
-                        <TextInput name="contactRole" placeholder="Wife" />
-                      </Field>
-                    </div>
-                  </div>
-
-                  <div className="flex gap-2">
-                    <SubmitButton>Save customer</SubmitButton>
-                    <Link
-                      href="/customers"
-                      className="inline-flex items-center rounded-lg bg-white px-3 py-2 text-[12.5px] font-semibold text-ink ring-1 ring-line transition hover:bg-canvas"
-                    >
-                      Cancel
-                    </Link>
-                  </div>
-                </form>
+                <CustomerCreateForm />
               </div>
             ) : null}
 

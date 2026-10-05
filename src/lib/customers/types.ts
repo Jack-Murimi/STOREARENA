@@ -17,9 +17,15 @@ export interface CustomerLocation {
   customerId: string;
   /** "Main house", "Annex", "Shop" — unique within the customer. */
   label: string;
+  /** Free text: "house no 46 on Kinyajui road off Naivasha road". */
   addressLine: string | null;
+  /** The bit that gets you through the gate: "opposite Fryz Inn hotel". */
+  details: string | null;
   area: string | null;
   town: string | null;
+  /** Optional map pin, both together or neither. */
+  pinLat: number | null;
+  pinLng: number | null;
   isPrimary: boolean;
   active: boolean;
   createdAt: string;
@@ -74,8 +80,12 @@ export interface NewCustomerInput {
 export interface NewLocationInput {
   label: string;
   addressLine?: string | null;
+  details?: string | null;
   area?: string | null;
   town?: string | null;
+  /** Accepted as text because that is what a form posts; parsed on the way in. */
+  pinLat?: number | string | null;
+  pinLng?: number | string | null;
   isPrimary?: boolean;
 }
 

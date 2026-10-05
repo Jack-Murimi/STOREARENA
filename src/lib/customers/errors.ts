@@ -16,6 +16,7 @@ export const CustomerErrorCode = {
   InvalidRole: "INVALID_ROLE",
   InvalidLabel: "INVALID_LABEL",
   InvalidNotes: "INVALID_NOTES",
+  InvalidPin: "INVALID_PIN",
   NoLocations: "NO_LOCATIONS",
   NoContacts: "NO_CONTACTS",
   PrimaryRequired: "PRIMARY_REQUIRED",
@@ -142,6 +143,17 @@ export class InvalidNotesError extends CustomerError {
       CustomerErrorCode.InvalidNotes,
       "Notes must be at least 3 characters, or left blank",
       { value },
+    );
+  }
+}
+
+/** A pin is both coordinates or neither, and they must be real coordinates. */
+export class InvalidPinError extends CustomerError {
+  constructor(lat: unknown, lng: unknown) {
+    super(
+      CustomerErrorCode.InvalidPin,
+      "A map pin needs both latitude and longitude — latitude between -90 and 90, longitude between -180 and 180.",
+      { lat, lng },
     );
   }
 }

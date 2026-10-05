@@ -10,6 +10,7 @@ import {
   InvalidLabelError,
   InvalidNameError,
   InvalidNotesError,
+  InvalidPinError,
   InvalidRoleError,
   NoContactsError,
   NoLocationsError,
@@ -181,8 +182,10 @@ export class CustomerService {
       customerId,
       label,
       addressLine: input.addressLine?.trim() || null,
+      details: input.details?.trim() || null,
       area: input.area?.trim() || null,
       town: input.town?.trim() || null,
+      ...cleanPin(input.pinLat, input.pinLng),
       // First one wins if nobody is marked.
       isPrimary:
         input.isPrimary === true || customer.locations.length === 0
@@ -221,8 +224,12 @@ export class CustomerService {
       clean.label = label;
     }
     if (patch.addressLine !== undefined) clean.addressLine = patch.addressLine?.trim() || null;
+    if (patch.details !== undefined) clean.details = patch.details?.trim() || null;
     if (patch.area !== undefined) clean.area = patch.area?.trim() || null;
     if (patch.town !== undefined) clean.town = patch.town?.trim() || null;
+    if (patch.pinLat !== undefined || patch.pinLng !== undefined) {
+      Object.assign(clean, cleanPin(patch.pinLat, patch.pinLng));
+    }
     if (patch.isPrimary !== undefined) clean.isPrimary = patch.isPrimary;
 
     await this.repository.transaction(async (tx) => {
@@ -362,8 +369,10 @@ export class CustomerService {
         id: newId("loc"),
         label,
         addressLine: input.addressLine?.trim() || null,
+        details: input.details?.trim() || null,
         area: input.area?.trim() || null,
         town: input.town?.trim() || null,
+        ...cleanPin(input.pinLat, input.pinLng),
         isPrimary: input.isPrimary === true,
         active: true,
         createdAt,
@@ -403,6 +412,36 @@ export class CustomerService {
 }
 
 // ------------------------------------------------------------- small helpers
+
+/**
+ * A map pin is both coordinates or neither. Half a pin is worse than no pin:
+ * a rider would be sent to the equator.
+ */
+function cleanPin(
+  lat: number | string | null | undefined,
+  lng: number | string | null | undefined,
+): { pinLat: number | null; pinLng: number | null } {
+  const parse = (v: number | string | null | undefined): number | null => {
+    if (v === null || v === undefined) return null;
+    const text = String(v).trim();
+    if (text.length === 0) return null;
+    const n = Number(text);
+    return Number.isFinite(n) ? n : Number.NaN;
+  };
+
+  const pinLat = parse(lat);
+  const pinLng = parse(lng);
+
+  if (pinLat === null && pinLng === null) return { pinLat: null, pinLng: null };
+  if (
+    pinLat === null || pinLng === null ||
+    Number.isNaN(pinLat) || Number.isNaN(pinLng) ||
+    pinLat < -90 || pinLat > 90 || pinLng < -180 || pinLng > 180
+  ) {
+    throw new InvalidPinError(lat, lng);
+  }
+  return { pinLat, pinLng };
+}
 
 /**
  * Exactly one row must be primary. Whoever is marked wins (the first of them if

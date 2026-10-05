@@ -29,6 +29,7 @@ export {
   InvalidNameError,
   InvalidNotesError,
   InvalidPhoneError,
+  InvalidPinError,
   InvalidRoleError,
   NoContactsError,
   NoLocationsError,

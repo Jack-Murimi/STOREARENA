@@ -28,6 +28,8 @@ const str = (v: unknown): string => (v === null || v === undefined ? "" : String
 const strOrNull = (v: unknown): string | null =>
   v === null || v === undefined ? null : String(v);
 const bool = (v: unknown): boolean => v === true || v === "t" || v === "true";
+const numOrNull = (v: unknown): number | null =>
+  v === null || v === undefined ? null : Number(v);
 
 function toCustomer(row: Row): Customer {
   return {
@@ -48,8 +50,11 @@ function toLocation(row: Row): CustomerLocation {
     customerId: str(row.customer_id),
     label: str(row.label),
     addressLine: strOrNull(row.address_line),
+    details: strOrNull(row.details),
     area: strOrNull(row.area),
     town: strOrNull(row.town),
+    pinLat: numOrNull(row.pin_lat),
+    pinLng: numOrNull(row.pin_lng),
     isPrimary: bool(row.is_primary),
     active: bool(row.active),
     createdAt: String(row.created_at),
@@ -210,15 +215,19 @@ export class CustomerRepository {
   ): Promise<void> {
     await db.query(
       `INSERT INTO customer_locations
-         (id, customer_id, label, address_line, area, town, is_primary, active, created_at)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+         (id, customer_id, label, address_line, details, area, town,
+          pin_lat, pin_lng, is_primary, active, created_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)`,
       [
         location.id,
         location.customerId,
         location.label,
         location.addressLine,
+        location.details,
         location.area,
         location.town,
+        location.pinLat,
+        location.pinLng,
         location.isPrimary,
         location.active,
         location.createdAt,
@@ -286,8 +295,11 @@ export class CustomerRepository {
     for (const [column, key] of [
       ["label", "label"],
       ["address_line", "addressLine"],
+      ["details", "details"],
       ["area", "area"],
       ["town", "town"],
+      ["pin_lat", "pinLat"],
+      ["pin_lng", "pinLng"],
       ["is_primary", "isPrimary"],
       ["active", "active"],
     ] as const) {
