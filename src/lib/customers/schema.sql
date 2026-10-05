@@ -75,7 +75,7 @@ CREATE INDEX IF NOT EXISTS idx_customer_locations_area ON customer_locations (ar
 -- A customer must always have at least one location and one phone number; a
 -- record you cannot deliver to or call is not a customer. Deleting the customer
 -- itself is fine — the cascade takes the children with it.
-CREATE FUNCTION assert_customer_still_reachable() RETURNS trigger AS $$
+CREATE OR REPLACE FUNCTION assert_customer_still_reachable() RETURNS trigger AS $$
 BEGIN
   IF NOT EXISTS (SELECT 1 FROM customers WHERE id = OLD.customer_id) THEN
     RETURN NULL;
@@ -92,11 +92,13 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
+DROP TRIGGER IF EXISTS trg_customer_keeps_location ON customer_locations;
 CREATE CONSTRAINT TRIGGER trg_customer_keeps_location
   AFTER DELETE ON customer_locations
   DEFERRABLE INITIALLY DEFERRED
   FOR EACH ROW EXECUTE FUNCTION assert_customer_still_reachable();
 
+DROP TRIGGER IF EXISTS trg_customer_keeps_phone ON customer_contacts;
 CREATE CONSTRAINT TRIGGER trg_customer_keeps_phone
   AFTER DELETE ON customer_contacts
   DEFERRABLE INITIALLY DEFERRED
@@ -105,7 +107,7 @@ CREATE CONSTRAINT TRIGGER trg_customer_keeps_phone
 -- --------------------------------------------------------------- convenience
 
 -- Everything the rider screen needs in one row per contact.
-CREATE VIEW v_customer_directory AS
+CREATE OR REPLACE VIEW v_customer_directory AS
 SELECT c.id            AS customer_id,
        c.code,
        c.name          AS customer_name,

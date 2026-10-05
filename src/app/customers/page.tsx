@@ -44,6 +44,7 @@ export default async function CustomersPage({ searchParams }: PageProps) {
           title="Customers"
           subtitle="Households and businesses we deliver to, with every place and every person to call"
           staff={currentStaff}
+          activeHref="/customers"
         />
 
         <main className="flex-1 space-y-5 px-4 py-5 sm:px-6 lg:px-8">

@@ -75,6 +75,7 @@ export default async function CustomerPage({ params, searchParams }: PageProps) 
             customer.contacts.length === 1 ? "" : "s"
           }`}
           staff={currentStaff}
+          activeHref="/customers"
         />
 
         <main className="flex-1 space-y-5 px-4 py-5 sm:px-6 lg:px-8">

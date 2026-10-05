@@ -1,55 +1,7 @@
-import Link from "next/link";
 import { BrandMark } from "./BrandMark";
-import {
-  ChartIcon,
-  CylinderIcon,
-  GaugeIcon,
-  ReceiptIcon,
-  SlidersIcon,
-  SoonBadge,
-  TruckIcon,
-  UsersIcon,
-} from "./icons";
+import { SoonBadge } from "./icons";
+import { navGroups } from "./nav";
 import type { StaffMember } from "@/lib/types";
-
-interface NavItem {
-  label: string;
-  icon: typeof GaugeIcon;
-  href: string;
-  /** Route not built yet — renders as a non-navigating item. */
-  soon?: boolean;
-}
-
-interface NavGroup {
-  label: string;
-  items: NavItem[];
-}
-
-const navGroups: NavGroup[] = [
-  {
-    label: "Operations",
-    items: [
-      { label: "Dashboard", icon: GaugeIcon, href: "/" },
-      { label: "Customers", icon: UsersIcon, href: "/customers" },
-      { label: "Stock levels", icon: CylinderIcon, href: "/stock", soon: true },
-      { label: "Record sale", icon: ReceiptIcon, href: "/sales/new", soon: true },
-      { label: "Deliveries", icon: TruckIcon, href: "/deliveries", soon: true },
-    ],
-  },
-  {
-    label: "Insights",
-    items: [
-      { label: "Reports", icon: ChartIcon, href: "/reports", soon: true },
-      { label: "Team", icon: UsersIcon, href: "/team", soon: true },
-    ],
-  },
-  {
-    label: "Setup",
-    items: [
-      { label: "Settings", icon: SlidersIcon, href: "/settings", soon: true },
-    ],
-  },
-];
 
 interface SidebarProps {
   staff: StaffMember;
@@ -93,7 +45,13 @@ export function Sidebar({ staff, station, activeHref = "/" }: SidebarProps) {
 
                 return (
                   <li key={item.label}>
-                    <Link
+                    {/*
+                      A plain anchor rather than next/link: an internal portal
+                      gains nothing from client-side routing, and a real page
+                      load works everywhere — including inside a sandboxed
+                      preview frame where the router's fetch can be blocked.
+                    */}
+                    <a
                       href={item.href}
                       className={`flex items-center gap-3 rounded-lg px-3 py-2 text-[13.5px] font-medium transition ${
                         isActive
@@ -110,7 +68,7 @@ export function Sidebar({ staff, station, activeHref = "/" }: SidebarProps) {
                       {isActive ? (
                         <span className="h-1.5 w-1.5 rounded-full bg-flame-400" />
                       ) : null}
-                    </Link>
+                    </a>
                   </li>
                 );
               })}

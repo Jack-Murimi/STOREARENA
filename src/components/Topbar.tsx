@@ -1,26 +1,23 @@
 import { BrandMark } from "./BrandMark";
-import { BellIcon, MenuIcon, SearchIcon } from "./icons";
+import { MobileNav } from "./MobileNav";
+import { BellIcon, SearchIcon } from "./icons";
 import type { StaffMember } from "@/lib/types";
 
 interface TopbarProps {
   title: string;
   subtitle: string;
   staff: StaffMember;
+  /** Highlights the current screen in the mobile navigation drawer. */
+  activeHref?: string;
 }
 
-export function Topbar({ title, subtitle, staff }: TopbarProps) {
+export function Topbar({ title, subtitle, staff, activeHref = "/" }: TopbarProps) {
   return (
     <header className="sticky top-0 z-20 border-b border-line bg-card/90 backdrop-blur">
       {/* Mobile-only brand strip: the sidebar is hidden below lg. */}
       <div className="flex items-center justify-between border-b border-line bg-navy-900 px-4 py-3 lg:hidden">
         <BrandMark />
-        <button
-          type="button"
-          aria-label="Open navigation"
-          className="grid h-9 w-9 place-items-center rounded-lg text-white/70 hover:bg-navy-800 hover:text-white"
-        >
-          <MenuIcon className="h-5 w-5" />
-        </button>
+        <MobileNav activeHref={activeHref} />
       </div>
 
       <div className="flex flex-wrap items-center gap-3 px-4 py-3.5 sm:px-6 lg:px-8">
