@@ -25,21 +25,48 @@ Every figure on the page is **derived from the same data** in
 `src/lib/data.ts` through the helpers in `src/lib/metrics.ts`, so the KPI row,
 the chart and the sales feed can never disagree with one another.
 
+## Stock domain (for review — not yet wired to the UI)
+
+`src/lib/stock/` is a framework-free TypeScript implementation of LPG stock
+control, built to be reviewed before any screen is written on top of it:
+
+- **Two ledgers**: gas stock (`REFILL` / `EMPTY` per branch and variant) and
+  cylinder custody (where the company's own shells are). They move independently
+  and are never conflated — a refill sale touches gas only, a new-cylinder sale
+  touches both.
+- **Operations**: purchase, refill sale, new-cylinder sale, exchange,
+  empty return, depot return, inter-branch transfer, stocktake.
+- **Append-only audit trail** with before/after balances, actor, reason,
+  reference and idempotency key. Corrections are new movements, never edits.
+- **Atomic**: commands stage their deltas and commit at the end, so a failed
+  multi-line batch writes nothing at all.
+- **Seed data** for Afri Gas, TotalEnergies and Rubis across three branches.
+- **`schema.sql`** mirrors the domain in PostgreSQL, and the test suite executes
+  it against a real Postgres engine (PGlite) to prove the constraints fire.
+
+```bash
+npm test      # 104 tests, including the SQL schema
+```
+
+Read [`docs/STOCK_ARCHITECTURE.md`](docs/STOCK_ARCHITECTURE.md) for the model,
+the operation-to-ledger matrix and the open decisions.
+
 ## Roadmap
 
 | Screen | Status |
 | --- | --- |
-| Operations dashboard | Built (this commit) |
-| Stock levels management | Next |
+| Operations dashboard | Built |
+| Stock domain, schema and tests | Built — awaiting architecture review |
+| Stock levels management | Blocked on the review above |
 | Record a sale / cash-up | Next |
 | Deliveries and depot requests | Planned |
 | Reports and exports (CSV/XLSX) | Planned |
 | Staff accounts, roles and audit log | Planned |
-| Stock database + API | Planned |
+| Stock database + API | Next after the review |
 
-The dashboard currently renders sample data. Replacing
-`src/lib/data.ts` with database queries is the only change needed to go live —
-the components read the same types defined in `src/lib/types.ts`.
+The dashboard still renders sample data from `src/lib/data.ts`. Wiring it to the
+stock domain is deliberately waiting on the architecture review, so the screens
+are built once against a settled model.
 
 ## Sample data
 
