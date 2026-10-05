@@ -40,8 +40,21 @@ declare global {
  */
 export function describeDatabaseConfig(): string {
   const raw = process.env.DATABASE_URL;
+
   if (!raw || raw.trim().length === 0) {
-    return "DATABASE_URL: not present in this function's environment.";
+    // Names only, never values: enough to spot a misspelled key, a variable
+    // scoped to the build instead of the function, or one saved blank.
+    const similar = Object.keys(process.env)
+      .filter((key) => key !== "DATABASE_URL" && /DATABASE|SUPABASE|POSTGRES|PG_|SQL/i.test(key))
+      .sort();
+    const also =
+      similar.length > 0
+        ? ` Other database-like variables it can see: ${similar.join(", ")}.`
+        : " It can see no other database-like variable either.";
+
+    return Object.prototype.hasOwnProperty.call(process.env, "DATABASE_URL")
+      ? `DATABASE_URL: present but empty — it was saved without a value.${also}`
+      : `DATABASE_URL: not present in this function's environment.${also}`;
   }
   try {
     const url = new URL(raw);
