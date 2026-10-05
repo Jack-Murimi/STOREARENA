@@ -127,15 +127,20 @@ export class CustomerService {
     const locations = this.prepareLocations(input.locations);
     const contacts = this.prepareContacts(input.contacts);
 
-    for (const contact of contacts) {
-      await this.assertPhoneFree(contact.phone);
+    // One question for the whole batch, not one per number.
+    const taken = await this.repository.phonesTaken(contacts.map((c) => c.phone));
+    if (taken.length > 0) {
+      throw new DuplicatePhoneError(taken[0].phone, {
+        code: taken[0].code,
+        name: taken[0].name,
+      });
     }
 
     const id = newId("cus");
     const createdAt = nowIso();
     const customer: Customer = {
       id,
-      code: await this.repository.nextCode(),
+      code: "", // filled in by the INSERT, which counts the book itself
       name,
       kind: input.kind ?? CustomerKind.Household,
       notes,
@@ -146,12 +151,14 @@ export class CustomerService {
 
     await this.repository.transaction(async (tx) => {
       await this.repository.insert(customer, tx);
-      for (const location of locations) {
-        await this.repository.insertLocation({ ...location, customerId: id }, tx);
-      }
-      for (const contact of contacts) {
-        await this.repository.insertContact({ ...contact, customerId: id }, tx);
-      }
+      await this.repository.insertLocations(
+        locations.map((l) => ({ ...l, customerId: id })),
+        tx,
+      );
+      await this.repository.insertContacts(
+        contacts.map((c) => ({ ...c, customerId: id })),
+        tx,
+      );
     });
 
     return this.get(id);

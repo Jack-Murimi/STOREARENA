@@ -22,6 +22,8 @@ import {
 } from "@/lib/customers";
 import { currentStaff, stationName } from "@/lib/data";
 import { getCustomerContext } from "@/lib/db";
+import { AccountPanel } from "@/components/customers/AccountPanel";
+import { SavedToast } from "@/components/customers/SavedToast";
 import {
   addContact,
   addLocation,
@@ -50,7 +52,7 @@ export default async function CustomerPage({ params, searchParams }: PageProps) 
   const error = typeof query.error === "string" ? query.error : null;
   const saved = typeof query.saved === "string" ? query.saved : null;
 
-  const { service, notice, diagnostic } = await getCustomerContext();
+  const { service, billing, notice, diagnostic } = await getCustomerContext();
 
 
   if (!service) {
@@ -80,10 +82,23 @@ export default async function CustomerPage({ params, searchParams }: PageProps) 
     throw exception;
   }
 
+  if (!customer) notFound();
+
+  // One statement: the invoices, the payments and the balance between them.
+  const statement = billing
+    ? await billing.statement(customer.id)
+    : {
+        invoices: [],
+        payments: [],
+        balance: { invoiced: 0, paid: 0, balance: 0, invoiceCount: 0, paymentCount: 0 },
+      };
+
   const roles = ["", ...ROLE_SUGGESTIONS];
 
   return (
-    <div className="flex min-h-screen bg-canvas">
+    <>
+      <SavedToast key={saved ?? error ?? "none"} message={saved ?? error} tone={error ? "bad" : "good"} />
+      <div className="flex min-h-screen bg-canvas">
       <Sidebar staff={currentStaff} station={stationName} activeHref="/customers" />
 
       <div className="flex min-w-0 flex-1 flex-col">
@@ -432,6 +447,24 @@ export default async function CustomerPage({ params, searchParams }: PageProps) 
           </section>
 
           {/* ------------------------------------------------------- danger */}
+          <section className="space-y-3">
+            <h2 className="text-[14.5px] font-semibold tracking-tight text-ink">
+              Account — invoices and payments
+            </h2>
+            {billing ? (
+              <AccountPanel
+                customerId={customer.id}
+                invoices={statement.invoices}
+                payments={statement.payments}
+                balance={statement.balance}
+              />
+            ) : (
+              <p className="rounded-xl border border-line bg-card px-5 py-4 text-[13px] text-ink-soft">
+                Billing is unavailable without a database connection.
+              </p>
+            )}
+          </section>
+
           <section className="overflow-hidden rounded-xl border border-bad/25 bg-bad-soft/40">
             <div className="flex flex-wrap items-center justify-between gap-4 p-5">
               <div>
@@ -455,5 +488,6 @@ export default async function CustomerPage({ params, searchParams }: PageProps) 
         </main>
       </div>
     </div>
+    </>
   );
 }

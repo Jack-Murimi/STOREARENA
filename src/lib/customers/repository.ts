@@ -75,6 +75,24 @@ function toContact(row: Row): CustomerContact {
 }
 
 /** Persists customers. Knows SQL; does not know business rules. */
+/** What a batch insert needs — the rest of the row the database fills in. */
+type LocationRow = Pick<
+  CustomerLocation,
+  | "id"
+  | "customerId"
+  | "label"
+  | "addressLine"
+  | "details"
+  | "area"
+  | "town"
+  | "pinLat"
+  | "pinLng"
+>;
+type ContactRow = Pick<
+  CustomerContact,
+  "id" | "customerId" | "phone" | "name" | "role" | "notes"
+>;
+
 export class CustomerRepository {
   constructor(private readonly db: Database) {}
 
@@ -142,14 +160,8 @@ export class CustomerRepository {
   }
 
   async get(id: string): Promise<CustomerRecord | null> {
-    const rows = await this.db.query<Row>(
-      "SELECT * FROM customers WHERE id = $1",
-      [id],
-    );
-    if (rows.length === 0) return null;
-
-    const customer = toCustomer(rows[0]);
-    const [locations, contacts] = await Promise.all([
+    const [rows, locations, contacts] = await Promise.all([
+      this.db.query<Row>("SELECT * FROM customers WHERE id = $1", [id]),
       this.db.query<Row>(
         `SELECT * FROM customer_locations WHERE customer_id = $1
           ORDER BY is_primary DESC, label`,
@@ -161,7 +173,9 @@ export class CustomerRepository {
         [id],
       ),
     ]);
+    if (rows.length === 0) return null;
 
+    const customer = toCustomer(rows[0]);
     return {
       ...customer,
       locations: locations.map(toLocation),
@@ -195,6 +209,73 @@ export class CustomerRepository {
     return { id: str(rows[0].id), code: str(rows[0].code), name: str(rows[0].name) };
   }
 
+  /**
+   * The same question for a whole batch, in one round trip. A save used to
+   * ask once per number, and every question was a trip to Frankfurt.
+   */
+  async phonesTaken(
+    phones: string[],
+  ): Promise<{ phone: string; id: string; code: string; name: string }[]> {
+    if (phones.length === 0) return [];
+    const rows = await this.db.query<Row>(
+      `SELECT ct.phone, c.id, c.code, c.name
+         FROM customer_contacts ct
+         JOIN customers c ON c.id = ct.customer_id
+        WHERE ct.phone = ANY($1)`,
+      [phones],
+    );
+    return rows.map((r) => ({
+      phone: str(r.phone),
+      id: str(r.id),
+      code: str(r.code),
+      name: str(r.name),
+    }));
+  }
+
+  /** All of a customer's places in one statement. */
+  async insertLocations(
+    rows: LocationRow[],
+    db: Database = this.db,
+  ): Promise<void> {
+    if (rows.length === 0) return;
+    const values: unknown[] = [];
+    const tuples = rows.map((row, i) => {
+      const o = i * 9;
+      values.push(
+        row.id, row.customerId, row.label, row.addressLine ?? null, row.details ?? null,
+        row.area ?? null, row.town ?? null, row.pinLat ?? null, row.pinLng ?? null,
+      );
+      return `($${o + 1},$${o + 2},$${o + 3},$${o + 4},$${o + 5},$${o + 6},$${o + 7},$${o + 8},$${o + 9},${i === 0},true,now())`;
+    });
+    await db.query(
+      `INSERT INTO customer_locations
+         (id, customer_id, label, address_line, details, area, town,
+          pin_lat, pin_lng, is_primary, active, created_at)
+       VALUES ${tuples.join(", ")}`,
+      values,
+    );
+  }
+
+  /** All of a customer's numbers in one statement. */
+  async insertContacts(
+    rows: ContactRow[],
+    db: Database = this.db,
+  ): Promise<void> {
+    if (rows.length === 0) return;
+    const values: unknown[] = [];
+    const tuples = rows.map((row, i) => {
+      const o = i * 6;
+      values.push(row.id, row.customerId, row.phone, row.name, row.role ?? null, row.notes ?? null);
+      return `($${o + 1},$${o + 2},$${o + 3},$${o + 4},$${o + 5},$${o + 6},${i === 0},now())`;
+    });
+    await db.query(
+      `INSERT INTO customer_contacts
+         (id, customer_id, phone, name, role, notes, is_primary, created_at)
+       VALUES ${tuples.join(", ")}`,
+      values,
+    );
+  }
+
   /** Next free customer reference: CUS-0001, CUS-0002, ... */
   async nextCode(): Promise<string> {
     const rows = await this.db.query<{ next: number | string }>(
@@ -208,13 +289,22 @@ export class CustomerRepository {
 
   // ------------------------------------------------------------------ writes
 
-  async insert(customer: Customer, db: Database = this.db): Promise<void> {
-    await db.query(
+  /**
+   * Writes the customer and works out its own CUS-#### reference in the same
+   * statement, so a save is not paying for a separate "what's the next code?"
+   * round trip. Returns the code that was actually used.
+   */
+  async insert(customer: Customer, db: Database = this.db): Promise<string> {
+    const rows = await db.query<Row>(
       `INSERT INTO customers (id, code, name, kind, notes, active, created_at, updated_at)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+       SELECT $1,
+              'CUS-' || lpad(
+                (coalesce(max(substring(code from '[0-9]+$')::int), 0) + 1)::text, 4, '0'),
+              $2, $3, $4, $5, $6, $7
+         FROM customers
+       RETURNING code`,
       [
         customer.id,
-        customer.code,
         customer.name,
         customer.kind,
         customer.notes,
@@ -223,6 +313,7 @@ export class CustomerRepository {
         customer.updatedAt,
       ],
     );
+    return str(rows[0].code);
   }
 
   async insertLocation(

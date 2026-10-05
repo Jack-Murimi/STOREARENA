@@ -7,6 +7,7 @@ import { SubmitButton } from "@/components/customers/SubmitButton";
 import { Sidebar } from "@/components/Sidebar";
 import { Topbar } from "@/components/Topbar";
 import { Pill } from "@/components/dashboard/Panel";
+import { SavedToast } from "@/components/customers/SavedToast";
 import { CustomerKind, formatKenyanPhone } from "@/lib/customers";
 import { currentStaff, stationName } from "@/lib/data";
 import { getCustomerContext } from "@/lib/db";
@@ -28,8 +29,9 @@ export default async function CustomersPage({ searchParams }: PageProps) {
   const showNewForm = params.new === "1";
   const error = typeof params.error === "string" ? params.error : null;
   const justDeleted = params.deleted === "1";
+  const saved = typeof params.saved === "string" ? params.saved : null;
 
-  const { service, mode, notice, diagnostic } = await getCustomerContext();
+  const { service, billing, mode, notice, diagnostic } = await getCustomerContext();
 
   if (!service) {
     return (
@@ -55,9 +57,15 @@ export default async function CustomersPage({ searchParams }: PageProps) {
     search: query || undefined,
   });
 
+  const balances = billing ? await billing.balances() : {};
   const activeCount = customers.filter((c) => c.active).length;
 
   return (
+    <>
+      <SavedToast
+        key={saved ?? (justDeleted ? "deleted" : "none")}
+        message={saved ?? (justDeleted ? "Customer deleted." : null)}
+      />
     <div className="flex min-h-screen bg-canvas">
       <Sidebar staff={currentStaff} station={stationName} activeHref="/customers" />
 
@@ -123,6 +131,7 @@ export default async function CustomersPage({ searchParams }: PageProps) {
                     <th className="px-3 py-3 font-semibold">Places</th>
                     <th className="px-3 py-3 font-semibold">People to call</th>
                     <th className="px-3 py-3 font-semibold">Main number</th>
+                    <th className="px-3 py-3 text-right font-semibold">Balance</th>
                     <th className="px-5 py-3 text-right font-semibold"> </th>
                   </tr>
                 </thead>
@@ -183,6 +192,27 @@ export default async function CustomersPage({ searchParams }: PageProps) {
                               : ""}
                           </span>
                         </td>
+                        {(() => {
+                          const owed = balances[customer.id]?.balance ?? 0;
+                          const tone =
+                            owed > 0 ? "text-bad" : owed < 0 ? "text-good" : "text-ink-soft";
+                          return (
+                            <td className="px-3 py-3 text-right">
+                              <span className={`font-semibold tabular-nums ${tone}`}>
+                                {owed === 0
+                                  ? "Settled"
+                                  : `KSh ${Math.abs(owed).toLocaleString("en-KE")}`}
+                              </span>
+                              <span className="block text-[11.5px] text-ink-soft/80">
+                                {owed > 0
+                                  ? "owes you"
+                                  : owed < 0
+                                    ? "in credit"
+                                    : "nothing outstanding"}
+                              </span>
+                            </td>
+                          );
+                        })()}
                         <td className="px-5 py-3 text-right">
                           <Link
                             href={`/customers/${customer.id}`}
@@ -197,7 +227,7 @@ export default async function CustomersPage({ searchParams }: PageProps) {
 
                   {customers.length === 0 ? (
                     <tr>
-                      <td colSpan={6} className="px-5 py-10 text-center text-[13px] text-ink-soft">
+                      <td colSpan={7} className="px-5 py-10 text-center text-[13px] text-ink-soft">
                         {query
                           ? `No customer matches “${query}”.`
                           : "No customers yet — add the first one."}
@@ -211,5 +241,6 @@ export default async function CustomersPage({ searchParams }: PageProps) {
         </main>
       </div>
     </div>
+    </>
   );
 }

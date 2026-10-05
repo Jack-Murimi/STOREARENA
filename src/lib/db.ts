@@ -1,5 +1,6 @@
+import { BillingService } from "@/lib/billing";
 import { CustomerService, seedCustomers } from "@/lib/customers";
-import { CUSTOMER_SCHEMA } from "@/lib/customers/schemaText";
+import { BILLING_SCHEMA, CUSTOMER_SCHEMA } from "@/lib/customers/schemaText";
 import { connectPostgres, postgresDatabase } from "@/lib/customers/postgres";
 
 /**
@@ -19,6 +20,8 @@ export type DataSourceMode = "database" | "demo" | "unavailable";
 export interface CustomerContext {
   /** Null when there is no usable database — check before using. */
   service: CustomerService | null;
+  /** Invoices, payments and balances. Null alongside `service`. */
+  billing: BillingService | null;
   mode: DataSourceMode;
   notice: string | null;
   /** What the function could see of its own configuration. Never a secret. */
@@ -69,6 +72,7 @@ export function describeDatabaseConfig(): string {
 function unavailable(reason: string): CustomerContext {
   return {
     service: null,
+    billing: null,
     mode: "unavailable",
     diagnostic: describeDatabaseConfig(),
     notice: `${reason} Set DATABASE_URL to your Supabase connection string — in .env.local here, or under Site settings → Environment variables on Netlify — then redeploy.`,
@@ -87,8 +91,10 @@ async function tryDatabase(url: string): Promise<CustomerContext | null> {
         ),
       ),
     ]);
+    const db = postgresDatabase(sql);
     return {
-      service: new CustomerService(postgresDatabase(sql)),
+      service: new CustomerService(db),
+      billing: new BillingService(db),
       mode: "database",
       notice: null,
       diagnostic: describeDatabaseConfig(),
@@ -110,12 +116,15 @@ async function demoContext(): Promise<CustomerContext | null> {
 
     const db = new PGlite();
     await db.exec(CUSTOMER_SCHEMA);
+    await db.exec(BILLING_SCHEMA);
 
-    const service = new CustomerService(pgliteDatabase(db));
+    const adapter = pgliteDatabase(db);
+    const service = new CustomerService(adapter);
     await seedCustomers(service);
 
     return {
       service,
+      billing: new BillingService(adapter),
       mode: "demo",
       notice:
         "Showing demo customers in a temporary in-memory database. Changes are real but vanish on restart — set DATABASE_URL to use Supabase.",

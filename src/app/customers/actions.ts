@@ -2,6 +2,8 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
+import { BillingError } from "@/lib/billing";
+import type { BillingService } from "@/lib/billing";
 import { CustomerError, CustomerKind } from "@/lib/customers";
 import type { NewContactInput, NewLocationInput } from "@/lib/customers";
 import type { CustomerService } from "@/lib/customers";
@@ -86,6 +88,9 @@ async function requireService(backTo: string): Promise<CustomerService> {
 
 /** Sends the visitor back with the reason a change was refused. */
 function fail(error: unknown, backTo: string): never {
+  if (error instanceof BillingError) {
+    redirect(`${backTo}${backTo.includes("?") ? "&" : "?"}error=${encodeURIComponent(error.message)}`);
+  }
   const message =
     error instanceof CustomerError
       ? error.message
@@ -100,7 +105,7 @@ function fail(error: unknown, backTo: string): never {
 export async function createCustomer(form: FormData): Promise<void> {
   const service = await requireService("/customers");
 
-  let id: string;
+  let name: string;
   try {
     const created = await service.create({
       name: text(form, "name"),
@@ -109,13 +114,13 @@ export async function createCustomer(form: FormData): Promise<void> {
       locations: readLocations(form),
       contacts: readContacts(form),
     });
-    id = created.id;
+    name = created.name;
   } catch (error) {
     fail(error, "/customers?new=1");
   }
 
   revalidatePath("/customers");
-  redirect(`/customers/${id}`);
+  redirect(`/customers?saved=${encodeURIComponent(`Saved. ${name} is on the list.`)}`);
 }
 
 export async function updateCustomer(form: FormData): Promise<void> {
@@ -272,4 +277,96 @@ export async function removeContact(form: FormData): Promise<void> {
 
   revalidatePath(`/customers/${id}`);
   redirect(`/customers/${id}?saved=Contact+removed`);
+}
+
+// ------------------------------------------------------------------- billing
+
+async function requireBilling(backTo: string): Promise<BillingService> {
+  const { billing } = await getCustomerContext();
+  if (!billing) {
+    fail(
+      new Error("No database connection. Set DATABASE_URL and redeploy."),
+      backTo,
+    );
+  }
+  return billing;
+}
+
+/** Raises an invoice. Lines come in as groups of `line_description_N` etc. */
+export async function raiseInvoice(form: FormData): Promise<void> {
+  const customerId = text(form, "customerId");
+  const backTo = `/customers/${customerId}`;
+  const billing = await requireBilling(backTo);
+
+  const lines: { description: string; quantity: string; unitPrice: string }[] = [];
+  for (let i = 0; form.has(`line_description_${i}`); i += 1) {
+    const description = text(form, `line_description_${i}`);
+    const quantity = text(form, `line_quantity_${i}`);
+    const unitPrice = text(form, `line_price_${i}`);
+    if (!description && !quantity && !unitPrice) continue; // a blank spare row
+    lines.push({ description, quantity, unitPrice });
+  }
+
+  let reference = "";
+  try {
+    const invoice = await billing.raiseInvoice({
+      customerId,
+      issuedOn: optional(form, "issuedOn"),
+      notes: optional(form, "notes"),
+      lines,
+    });
+    reference = invoice.reference;
+  } catch (error) {
+    fail(error, backTo);
+  }
+
+  revalidatePath(backTo);
+  revalidatePath("/customers");
+  redirect(`${backTo}?saved=${encodeURIComponent(`Invoice ${reference} raised.`)}`);
+}
+
+/** Records money coming in and spreads it over the oldest invoices. */
+export async function recordPayment(form: FormData): Promise<void> {
+  const customerId = text(form, "customerId");
+  const backTo = `/customers/${customerId}`;
+  const billing = await requireBilling(backTo);
+
+  let amount = 0;
+  try {
+    const payment = await billing.recordPayment({
+      customerId,
+      amount: text(form, "amount"),
+      method: text(form, "method"),
+      reference: optional(form, "reference"),
+      receivedOn: optional(form, "receivedOn"),
+      notes: optional(form, "notes"),
+    });
+    amount = payment.amount;
+  } catch (error) {
+    fail(error, backTo);
+  }
+
+  revalidatePath(backTo);
+  revalidatePath("/customers");
+  redirect(
+    `${backTo}?saved=${encodeURIComponent(
+      `Payment of KSh ${amount.toLocaleString("en-KE")} recorded.`,
+    )}`,
+  );
+}
+
+export async function cancelInvoice(form: FormData): Promise<void> {
+  const customerId = text(form, "customerId");
+  const backTo = `/customers/${customerId}`;
+  const billing = await requireBilling(backTo);
+
+  try {
+    await billing.cancelInvoice(text(form, "invoiceId"));
+  } catch (error) {
+    fail(error, backTo);
+  }
+
+  revalidatePath(backTo);
+  revalidatePath("/customers");
+  redirect(`${backTo}?saved=${encodeURIComponent("Invoice cancelled.")}`);
 }

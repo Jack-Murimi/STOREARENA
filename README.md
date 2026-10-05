@@ -88,6 +88,30 @@ Rules the code and the database both enforce:
 - A label is unique within a customer. **A phone number is unique across the
   whole book** — it cannot appear on two accounts, and a refusal names the
   customer who already has it.
+
+## Invoices, payments and balances
+
+`src/lib/billing/` is the money side of a customer. It is deliberately separate
+from gas stock: what a customer owes and what cylinders they are holding are
+two different questions.
+
+- **Invoice** — raised when gas goes out (normally by the stock layer when a
+  sale is committed), or directly for extras that never touched a cylinder.
+  Numbered `INV-0001` upwards; lines keep the order they were entered.
+- **Payment** — M-Pesa, cash, bank transfer, cheque or card, each with an
+  optional reference. Money is spread over the **oldest unpaid invoice first**;
+  anything left over sits on the account as credit.
+- **Balance** — everything invoiced minus everything paid. Credit is normal
+  here: nobody is blocked from ordering because they still owe last month. A
+  negative balance means they are in credit.
+- A cancelled invoice keeps its record but stops counting towards debt.
+- The database refuses to allocate more to an invoice than it totals
+  (`trg_allocation_within_invoice`), so a statement can never show an invoice
+  paid twice.
+
+Tables `invoices`, `invoice_lines`, `payments`, `payment_allocations`; views
+`v_customer_balance` and `v_invoice_outstanding`. The DDL is in
+`src/lib/customers/billing.sql` and is safe to re-run.
 - Exactly one place and one number are primary; removing the primary promotes
   the next one.
 - A map pin is both coordinates or neither, and they must be real coordinates —
