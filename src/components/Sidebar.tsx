@@ -16,7 +16,6 @@ interface NavItem {
   label: string;
   icon: typeof GaugeIcon;
   href: string;
-  active?: boolean;
   /** Route not built yet — renders as a non-navigating item. */
   soon?: boolean;
 }
@@ -30,7 +29,8 @@ const navGroups: NavGroup[] = [
   {
     label: "Operations",
     items: [
-      { label: "Dashboard", icon: GaugeIcon, href: "/", active: true },
+      { label: "Dashboard", icon: GaugeIcon, href: "/" },
+      { label: "Customers", icon: UsersIcon, href: "/customers" },
       { label: "Stock levels", icon: CylinderIcon, href: "/stock", soon: true },
       { label: "Record sale", icon: ReceiptIcon, href: "/sales/new", soon: true },
       { label: "Deliveries", icon: TruckIcon, href: "/deliveries", soon: true },
@@ -54,9 +54,11 @@ const navGroups: NavGroup[] = [
 interface SidebarProps {
   staff: StaffMember;
   station: string;
+  /** The route being rendered, so the matching nav item lights up. */
+  activeHref?: string;
 }
 
-export function Sidebar({ staff, station }: SidebarProps) {
+export function Sidebar({ staff, station, activeHref = "/" }: SidebarProps) {
   return (
     <aside className="hidden w-[264px] shrink-0 flex-col border-r border-navy-800/60 bg-navy-900 lg:flex">
       <div className="px-5 py-5">
@@ -72,6 +74,7 @@ export function Sidebar({ staff, station }: SidebarProps) {
             <ul className="space-y-1">
               {group.items.map((item) => {
                 const Icon = item.icon;
+                const isActive = item.href === activeHref;
 
                 if (item.soon) {
                   return (
@@ -93,18 +96,18 @@ export function Sidebar({ staff, station }: SidebarProps) {
                     <Link
                       href={item.href}
                       className={`flex items-center gap-3 rounded-lg px-3 py-2 text-[13.5px] font-medium transition ${
-                        item.active
+                        isActive
                           ? "bg-navy-700/70 text-white shadow-inner ring-1 ring-white/10"
                           : "text-white/70 hover:bg-navy-800 hover:text-white"
                       }`}
                     >
                       <Icon
                         className={`h-[18px] w-[18px] ${
-                          item.active ? "text-flame-400" : ""
+                          isActive ? "text-flame-400" : ""
                         }`}
                       />
                       <span className="flex-1">{item.label}</span>
-                      {item.active ? (
+                      {isActive ? (
                         <span className="h-1.5 w-1.5 rounded-full bg-flame-400" />
                       ) : null}
                     </Link>

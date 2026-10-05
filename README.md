@@ -58,18 +58,64 @@ now applied:
   it against a real Postgres engine (PGlite) to prove the constraints fire.
 
 ```bash
-npm test      # 144 tests, including the SQL schema
+npm test      # 198 tests, including both SQL schemas
 ```
 
 Read [`docs/STOCK_ARCHITECTURE.md`](docs/STOCK_ARCHITECTURE.md) for the model,
 the operation-to-ledger matrix and the open decisions.
+
+## Customers (live CRUD)
+
+`/customers` is a working screen, not a mockup: create, read, update and delete
+customers, their delivery places and the people to call.
+
+A customer is a household or a business, and one customer can have:
+
+- **Several delivery places** — main house, annex, shop — each with a label,
+  address, area and town, and exactly one marked as the main place.
+- **Several phone numbers** — each with the name of the person who answers and,
+  optionally, their role: wife, father, children, maid, caretaker. The role is
+  free text, with the common ones offered as suggestions.
+
+Rules the code and the database both enforce:
+
+- A customer always has at least one delivery place and one phone number — the
+  last of either cannot be removed.
+- Numbers are stored normalised to `+254…`, so `0712 345 678`, `+254712345678`
+  and `712345678` are all the same number. Landlines are refused.
+- A label is unique within a customer, and a number is unique within a customer
+  — but the same caretaker's number may appear at several households.
+- Exactly one place and one number are primary; removing the primary promotes
+  the next one.
+- Deleting a customer removes their places and numbers. Recorded sales are not
+  touched.
+
+Every refusal is shown on screen with the reason, and every change runs in one
+transaction, so a half-written customer cannot survive.
+
+### Connecting the database
+
+The screens read `DATABASE_URL`. Put it in `.env.local` (already git-ignored):
+
+```
+DATABASE_URL=postgresql://postgres:YOUR_PASSWORD@db.YOUR_PROJECT.supabase.co:5432/postgres?sslmode=require
+```
+
+Then create the tables once — paste `src/lib/customers/schema.sql` into
+Supabase → SQL Editor and run it.
+
+If `DATABASE_URL` is missing or the database cannot be reached, the app falls
+back to a temporary in-process PostgreSQL seeded with demo customers and says so
+in a banner at the top of the screen. Nothing is silently written to the wrong
+place.
 
 ## Roadmap
 
 | Screen | Status |
 | --- | --- |
 | Operations dashboard | Built |
-| Stock domain, schema and tests | Built — review answers applied, 144 tests green |
+| Stock domain, schema and tests | Built — review answers applied |
+| Customers: full CRUD, places and people to call | Built — 54 tests, live against Supabase |
 | Staff login (so `actor` comes from a session, not a typed name) | Next |
 | Stock levels management | Next |
 | Record a sale / cash-up | Next |
