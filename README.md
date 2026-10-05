@@ -89,6 +89,28 @@ Rules the code and the database both enforce:
   whole book** — it cannot appear on two accounts, and a refusal names the
   customer who already has it.
 
+## Inventory and the product catalogue
+
+`/inventory` lists every product with what each branch is holding, and adds new
+ones. The catalogue lives in `src/lib/stock/catalogue-data.ts` and is seeded by
+`seedCatalogue()`, which is safe to re-run.
+
+- **Three categories** — LPG cylinders, drinking water, accessories and
+  fittings. Only cylinders are weighed: the database refuses a kilogram size on
+  anything that is not a cylinder, and refuses a cylinder with no size.
+- **A brand appears once**, with the sizes it comes in. "MID GAS" and "MIDGAS"
+  are one brand. A new brand can be created in the same step as its first
+  product, because starting to stock a brand is one decision.
+- **An empty cylinder is not a second product.** "13KG AFRIGAS" and "13KG
+  AFRIGAS EMPTY" are the same variant in two states, kept apart by
+  `inventory_positions` — which is what makes an exchange balance instead of
+  inventing stock. Cylinders on hand = refills + empties.
+- **Stock is per location.** Branches and rider vans are both locations; a van
+  must belong to a branch and name the rider responsible for it.
+
+Seeded from the price list: 69 products across 36 brands, in 6, 13, 22.5, 35,
+45 and 50 kg.
+
 ## Invoices, payments and balances
 
 `src/lib/billing/` is the money side of a customer. It is deliberately separate
