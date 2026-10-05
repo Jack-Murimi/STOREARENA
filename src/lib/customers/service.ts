@@ -101,6 +101,24 @@ export class CustomerService {
     return this.repository.findByPhone(normalizeKenyanPhone(phone));
   }
 
+  /**
+   * A phone number belongs to one account. Checked here for a helpful message
+   * naming the account that already has it; the UNIQUE constraint is the real
+   * guard if two people save at the same instant.
+   */
+  private async assertPhoneFree(
+    phone: string,
+    exceptContactId?: string,
+  ): Promise<void> {
+    const owner = await this.repository.phoneOwner(phone);
+    if (!owner) return;
+    if (exceptContactId) {
+      const holder = await this.repository.get(owner.id);
+      if (holder?.contacts.some((c) => c.id === exceptContactId)) return;
+    }
+    throw new DuplicatePhoneError(phone, { code: owner.code, name: owner.name });
+  }
+
   // ----------------------------------------------------------------- create
 
   async create(input: NewCustomerInput): Promise<CustomerRecord> {
@@ -108,6 +126,10 @@ export class CustomerService {
     const notes = optionalText(input.notes, 3);
     const locations = this.prepareLocations(input.locations);
     const contacts = this.prepareContacts(input.contacts);
+
+    for (const contact of contacts) {
+      await this.assertPhoneFree(contact.phone);
+    }
 
     const id = newId("cus");
     const createdAt = nowIso();
@@ -269,9 +291,7 @@ export class CustomerService {
   ): Promise<CustomerRecord> {
     const customer = await this.get(customerId);
     const phone = normalizeKenyanPhone(input.phone);
-    if (customer.contacts.some((c) => c.phone === phone)) {
-      throw new DuplicatePhoneError(customerId, phone);
-    }
+    await this.assertPhoneFree(phone);
 
     const contact: CustomerContact = {
       id: newId("con"),
@@ -309,10 +329,7 @@ export class CustomerService {
     const clean: Partial<CustomerContact> = {};
     if (patch.phone !== undefined) {
       const phone = normalizeKenyanPhone(patch.phone);
-      const clash = customer.contacts.find(
-        (c) => c.id !== contactId && c.phone === phone,
-      );
-      if (clash) throw new DuplicatePhoneError(customerId, phone);
+      await this.assertPhoneFree(phone, contactId);
       clean.phone = phone;
     }
     if (patch.name !== undefined) clean.name = requireText(patch.name, "name");
@@ -393,7 +410,7 @@ export class CustomerService {
 
     const prepared = inputs.map((input) => {
       const phone = normalizeKenyanPhone(input.phone);
-      if (seen.has(phone)) throw new DuplicatePhoneError("new customer", phone);
+      if (seen.has(phone)) throw new DuplicatePhoneError(phone);
       seen.add(phone);
 
       return {

@@ -179,6 +179,22 @@ export class CustomerRepository {
     return found.filter((c): c is CustomerRecord => c !== null);
   }
 
+  /** The account a phone number already belongs to, if any. */
+  async phoneOwner(
+    phone: string,
+  ): Promise<{ id: string; code: string; name: string } | null> {
+    const rows = await this.db.query<Row>(
+      `SELECT c.id, c.code, c.name
+         FROM customer_contacts ct
+         JOIN customers c ON c.id = ct.customer_id
+        WHERE ct.phone = $1
+        LIMIT 1`,
+      [phone],
+    );
+    if (rows.length === 0) return null;
+    return { id: str(rows[0].id), code: str(rows[0].code), name: str(rows[0].name) };
+  }
+
   /** Next free customer reference: CUS-0001, CUS-0002, ... */
   async nextCode(): Promise<string> {
     const rows = await this.db.query<{ next: number | string }>(

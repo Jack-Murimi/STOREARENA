@@ -87,12 +87,15 @@ export class DuplicateLabelError extends CustomerError {
   }
 }
 
+/** A number belongs to one account, so the message says which one has it. */
 export class DuplicatePhoneError extends CustomerError {
-  constructor(customerId: string, phone: string) {
+  constructor(phone: string, heldBy?: { code: string; name: string }) {
     super(
       CustomerErrorCode.DuplicatePhone,
-      `This customer already has ${phone} on file`,
-      { customerId, phone },
+      heldBy
+        ? `${phone} is already on file for ${heldBy.name} (${heldBy.code}). A number can only belong to one customer.`
+        : `${phone} is already on file. A number can only belong to one customer.`,
+      { phone, heldBy: heldBy ?? null },
     );
   }
 }

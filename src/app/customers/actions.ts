@@ -90,7 +90,9 @@ function fail(error: unknown, backTo: string): never {
     error instanceof CustomerError
       ? error.message
       : `Something went wrong: ${(error as Error).message}`;
-  redirect(`${backTo}?error=${encodeURIComponent(message)}`);
+  // The target may already carry a query (?new=1); don't stack a second "?".
+  const joiner = backTo.includes("?") ? "&" : "?";
+  redirect(`${backTo}${joiner}error=${encodeURIComponent(message)}`);
 }
 
 // ------------------------------------------------------------------ customer

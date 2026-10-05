@@ -150,6 +150,52 @@ describe("creating a customer", () => {
   });
 });
 
+describe("one number, one account", () => {
+  it("refuses to reuse a number on a different customer, and says who has it", async () => {
+    await kathomi();
+
+    let caught: unknown;
+    try {
+      await service.create({
+        name: "Neighbouring Family",
+        locations: [{ label: "Home", area: "Syokimau" }],
+        contacts: [{ phone: "0733 900 100", name: "Grace W.", role: "Maid" }],
+      });
+    } catch (error) {
+      caught = error;
+    }
+
+    expect(caught).toBeInstanceOf(DuplicatePhoneError);
+    expect((caught as DuplicatePhoneError).message).toContain("Kathomi Household");
+    expect((caught as DuplicatePhoneError).message).toContain("CUS-0001");
+    expect(await service.list()).toHaveLength(1); // nothing half-written
+  });
+
+  it("refuses to add someone else's number to an existing customer", async () => {
+    const kathomi_ = await kathomi();
+    await service.create({
+      name: "Neighbouring Family",
+      locations: [{ label: "Home" }],
+      contacts: [{ phone: "0700111222", name: "Alice", role: "Manager" }],
+    });
+
+    await expect(
+      service.addContact(kathomi_.id, { phone: "0700111222", name: "Not Alice" }),
+    ).rejects.toThrow(DuplicatePhoneError);
+  });
+
+  it("still lets a customer keep their own number when it is edited", async () => {
+    const created = await kathomi();
+    const grace = created.contacts.find((c) => c.name === "Grace W.")!;
+
+    const updated = await service.updateContact(created.id, grace.id, {
+      phone: "0733900100",
+      role: "Caretaker",
+    });
+    expect(updated.contacts.find((c) => c.id === grace.id)?.role).toBe("Caretaker");
+  });
+});
+
 describe("reading customers", () => {
   it("finds a customer by name, code, contact name or phone number", async () => {
     await kathomi();
@@ -171,18 +217,12 @@ describe("reading customers", () => {
     }
   });
 
-  it("finds every household a shared number belongs to", async () => {
+  it("finds the one customer a number belongs to", async () => {
     await kathomi();
-    await service.create({
-      name: "Neighbouring Family",
-      locations: [{ label: "Home", area: "Syokimau" }],
-      contacts: [{ phone: "0733900100", name: "Grace W.", role: "Maid" }],
-    });
 
-    expect((await service.findByPhone("0733 900 100")).map((c) => c.name).sort()).toEqual([
-      "Kathomi Household",
-      "Neighbouring Family",
-    ]);
+    const found = await service.findByPhone("0733 900 100");
+    expect(found.map((c) => c.name)).toEqual(["Kathomi Household"]);
+    expect(await service.findByPhone("0700000000")).toEqual([]);
   });
 
   it("hides inactive customers unless asked, and refuses an unknown id", async () => {
@@ -416,17 +456,15 @@ describe("database constraints", () => {
     ).toMatch(/customer_location_label_unique/);
   });
 
-  it("allows one caretaker's number at two households, but only one primary", async () => {
+  it("refuses one number on two accounts, and allows only one primary", async () => {
     await insertCustomer("cus-1");
     await insertCustomer("cus-2", "+254799888777");
 
-    await db.exec(`
-      INSERT INTO customer_contacts (id, customer_id, phone, name, role)
-      VALUES ('c3', 'cus-2', '+254712345678', 'Shared Caretaker', 'Caretaker')`);
-    const { rows } = await db.query<{ n: number }>(
-      "SELECT count(*) AS n FROM customer_contacts WHERE phone = '+254712345678'",
-    );
-    expect(Number(rows[0].n)).toBe(2);
+    expect(
+      await expectFailure(`
+        INSERT INTO customer_contacts (id, customer_id, phone, name, role)
+        VALUES ('c3', 'cus-2', '+254712345678', 'Shared Caretaker', 'Caretaker')`),
+    ).toMatch(/customer_contact_phone_unique/);
 
     expect(
       await expectFailure(`

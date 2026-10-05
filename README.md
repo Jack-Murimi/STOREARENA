@@ -85,8 +85,9 @@ Rules the code and the database both enforce:
   last of either cannot be removed.
 - Numbers are stored normalised to `+254…`, so `0712 345 678`, `+254712345678`
   and `712345678` are all the same number. Landlines are refused.
-- A label is unique within a customer, and a number is unique within a customer
-  — but the same caretaker's number may appear at several households.
+- A label is unique within a customer. **A phone number is unique across the
+  whole book** — it cannot appear on two accounts, and a refusal names the
+  customer who already has it.
 - Exactly one place and one number are primary; removing the primary promotes
   the next one.
 - A map pin is both coordinates or neither, and they must be real coordinates —

@@ -67,16 +67,16 @@ CREATE TABLE IF NOT EXISTS customer_contacts (
   is_primary  BOOLEAN NOT NULL DEFAULT false,
   notes       TEXT,
   created_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
-  -- The same person may answer for two households, so uniqueness is per
-  -- customer, not global.
-  CONSTRAINT customer_contact_phone_unique UNIQUE (customer_id, phone)
+  -- One number, one account. A number shared between two customers makes
+  -- "who did we deliver to?" unanswerable, and lets a typo create a second
+  -- record for somebody who is already on the books.
+  CONSTRAINT customer_contact_phone_unique UNIQUE (phone)
 );
 
 CREATE UNIQUE INDEX IF NOT EXISTS uq_customer_primary_contact
   ON customer_contacts (customer_id) WHERE is_primary;
 
--- "Who do we call for this area?" is a delivery-time question.
-CREATE INDEX IF NOT EXISTS idx_customer_contacts_phone ON customer_contacts (phone);
+-- (The UNIQUE constraint above already indexes phone, so no extra index.)
 CREATE INDEX IF NOT EXISTS idx_customer_locations_area ON customer_locations (area);
 
 -- ------------------------------------------------------- business invariants
