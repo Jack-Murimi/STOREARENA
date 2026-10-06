@@ -1,5 +1,6 @@
 import type { Database } from "./products";
 import {
+  BRANCHES,
   CATALOGUE_CATEGORIES,
   GAS_BRANDS,
   OTHER_PRODUCTS,
@@ -13,6 +14,7 @@ export interface CatalogueCounts {
   categories: number;
   brands: number;
   products: number;
+  branches: number;
 }
 
 /**
@@ -81,5 +83,20 @@ export async function seedCatalogue(db: Database): Promise<CatalogueCounts> {
     products += 1;
   }
 
-  return { categories: CATALOGUE_CATEGORIES.length, brands: brands.size, products };
+  // The branches, so a new database is ready to hold stock straight away.
+  for (const branch of BRANCHES) {
+    await db.query(
+      `INSERT INTO stock_locations (id, code, name, kind)
+       VALUES ($1, $2, $3, 'BRANCH')
+       ON CONFLICT DO NOTHING`,
+      [`loc-${branch.code.toLowerCase()}`, branch.code, branch.name],
+    );
+  }
+
+  return {
+    categories: CATALOGUE_CATEGORIES.length,
+    brands: brands.size,
+    products,
+    branches: BRANCHES.length,
+  };
 }

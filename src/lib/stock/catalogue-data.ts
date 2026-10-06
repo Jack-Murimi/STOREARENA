@@ -84,6 +84,19 @@ export const OTHER_PRODUCTS: { brand: string; name: string; categoryId: string }
   { brand: "SAFE GAS", name: "Safe Gas", categoryId: "cat-accessory" },
 ];
 
+/**
+ * The branches Gateway Gas trades from.
+ *
+ * Kept here so a fresh database comes up looking like the business rather than
+ * empty. Re-seeding never removes a branch you have added since.
+ */
+export const BRANCHES: { name: string; code: string }[] = [
+  { name: "Nextgen", code: "NXG" },
+  { name: "Lavington", code: "LAV" },
+  { name: "Jamhuri", code: "JAM" },
+  { name: "Kileleshwa", code: "KIL" },
+];
+
 /** A human brand name from a list code: "K-GAS" -> "K-Gas". */
 export function brandDisplayName(code: string): string {
   if (code === "K-GAS") return "K-Gas";

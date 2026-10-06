@@ -111,6 +111,10 @@ ones. The catalogue lives in `src/lib/stock/catalogue-data.ts` and is seeded by
 Seeded from the price list: 69 products across 36 brands, in 6, 13, 22.5, 35,
 45 and 50 kg.
 
+The branches are seeded too — **Nextgen (NXG), Lavington (LAV), Jamhuri (JAM)
+and Kileleshwa (KIL)** — in `BRANCHES`. Re-seeding adds a branch you have
+created since; it never removes one.
+
 ## Invoices, payments and balances
 
 `src/lib/billing/` is the money side of a customer. It is deliberately separate

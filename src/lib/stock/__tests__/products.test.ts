@@ -4,7 +4,7 @@ import { PGlite } from "@electric-sql/pglite";
 import { pgliteDatabase } from "../../customers/pglite";
 import { ProductService, ProductError } from "../products";
 import { seedCatalogue } from "../catalogue-seed";
-import { GAS_BRANDS, OTHER_PRODUCTS } from "../catalogue-data";
+import { BRANCHES, GAS_BRANDS, OTHER_PRODUCTS } from "../catalogue-data";
 
 const DDL = readFileSync(new URL("../schema.sql", import.meta.url), "utf8");
 
@@ -93,6 +93,16 @@ describe("the price list", () => {
     const before = await products.listInventory();
     await seedCatalogue(adapter);
     expect(await products.listInventory()).toHaveLength(before.length);
+  });
+});
+
+describe("the branches", () => {
+  it("seeds the four the business trades from", async () => {
+    const locations = await products.listLocations();
+    expect(locations.map((l) => l.name).sort()).toEqual(
+      BRANCHES.map((b) => b.name).sort(),
+    );
+    expect(locations.every((l) => l.kind === "BRANCH")).toBe(true);
   });
 });
 
