@@ -4,17 +4,19 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { ProductError } from "@/lib/stock/products";
 import type { ProductService } from "@/lib/stock/products";
+import { StockError } from "@/lib/stock/stock-db";
+import type { StockLedgerService } from "@/lib/stock/stock-db";
 import { LocationKind } from "@/lib/stock/types";
 import { getCustomerContext } from "@/lib/db";
 
 const text = (form: FormData, key: string): string => String(form.get(key) ?? "").trim();
 
-function fail(error: unknown): never {
+function fail(error: unknown, backTo = "/inventory"): never {
   const message =
-    error instanceof ProductError
+    error instanceof ProductError || error instanceof StockError
       ? error.message
       : "That could not be saved. Check the details and try again.";
-  redirect(`/inventory?error=${encodeURIComponent(message)}`);
+  redirect(`${backTo}?error=${encodeURIComponent(message)}`);
 }
 
 async function requireProducts(): Promise<ProductService> {
@@ -68,4 +70,31 @@ export async function createLocation(form: FormData): Promise<void> {
 
   revalidatePath("/inventory");
   redirect(`/inventory?saved=${encodeURIComponent(`${name} added.`)}`);
+}
+
+/** Records a delivery from the depot: a batch of cylinders at a price. */
+export async function receiveStock(form: FormData): Promise<void> {
+  const { stock } = await getCustomerContext();
+  if (!stock) fail(new Error("No database connection. Set DATABASE_URL and redeploy."));
+
+  const variantId = text(form, "variantId");
+  const backTo = `/inventory/${variantId}`;
+
+  try {
+    await (stock as StockLedgerService).recordPurchase({
+      locationId: text(form, "locationId"),
+      variantId,
+      quantity: text(form, "quantity"),
+      unitCostKsh: text(form, "unitCostKsh"),
+      purchasedOn: text(form, "purchasedOn") || null,
+      reference: text(form, "reference") || null,
+      actor: text(form, "actor"),
+    });
+  } catch (error) {
+    fail(error, backTo);
+  }
+
+  revalidatePath(backTo);
+  revalidatePath("/inventory");
+  redirect(`${backTo}?saved=${encodeURIComponent("Delivery received and costed.")}`);
 }

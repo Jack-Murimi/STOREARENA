@@ -75,6 +75,7 @@ describe("schema shape", () => {
       "sale_lines",
       "sales",
       "stock_locations",
+      "stock_lots",
       "stock_movements",
     ]);
   });
@@ -86,6 +87,7 @@ describe("schema shape", () => {
     expect(rows.map((r) => r.viewname)).toEqual([
       "v_cylinder_counts",
       "v_inventory_value",
+      "v_stock_cost",
     ]);
   });
 

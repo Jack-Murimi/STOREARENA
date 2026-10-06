@@ -261,3 +261,56 @@ SELECT p.location_id,
  GROUP BY p.location_id, l.name, p.variant_id, v.name, br.name, v.size_kg;
 
 COMMIT;
+
+-- ------------------------------------------------------------- cost of stock
+--
+-- What a cylinder cost is not one number. Every delivery from the depot arrives
+-- at its own price, so stock is kept in batches and a sale consumes the oldest
+-- batch first — the way an accountant would expect, and the only way the margin
+-- on a sale means anything when the buy price moves.
+--
+-- The stock list shows the *last* purchase price, because that is the useful
+-- number when deciding what to charge. The cost attached to a sale is the
+-- batch it actually came from.
+
+CREATE TABLE IF NOT EXISTS stock_lots (
+  id            BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  location_id   TEXT NOT NULL REFERENCES stock_locations (id),
+  variant_id    TEXT NOT NULL REFERENCES product_variants (id),
+  purchased_on  DATE NOT NULL DEFAULT current_date,
+  unit_cost_ksh NUMERIC(12, 2) NOT NULL CHECK (unit_cost_ksh >= 0),
+  quantity      INTEGER NOT NULL CHECK (quantity > 0),
+  -- What is left of this batch. A sale takes from the oldest batch with any
+  -- left; when it hits zero the next one is used.
+  remaining     INTEGER NOT NULL CHECK (remaining >= 0),
+  reference     TEXT,
+  created_at    TIMESTAMPTZ NOT NULL DEFAULT now(),
+  CONSTRAINT lot_remaining_within_purchase CHECK (remaining <= quantity)
+);
+
+CREATE INDEX IF NOT EXISTS idx_stock_lots_fifo
+  ON stock_lots (location_id, variant_id, purchased_on, id);
+
+-- What a movement cost per unit, when it had a cost. A purchase carries the
+-- price it was bought at; a sale carries the price of the batch it came from.
+ALTER TABLE stock_movements ADD COLUMN IF NOT EXISTS unit_cost_ksh NUMERIC(12, 2);
+
+-- Cost still sitting on the shelf, batch by batch.
+CREATE OR REPLACE VIEW v_stock_cost AS
+SELECT
+  l.location_id,
+  l.variant_id,
+  sum(l.remaining * l.unit_cost_ksh)                       AS cost_on_hand_ksh,
+  sum(l.remaining)                                         AS units_costed,
+  -- The most recent buy price: what the stock list shows as "cost".
+  (SELECT n.unit_cost_ksh
+     FROM stock_lots n
+    WHERE n.location_id = l.location_id AND n.variant_id = l.variant_id
+    ORDER BY n.purchased_on DESC, n.id DESC
+    LIMIT 1)                                               AS last_purchase_ksh,
+  (SELECT max(n.purchased_on)
+     FROM stock_lots n
+    WHERE n.location_id = l.location_id AND n.variant_id = l.variant_id)
+                                                           AS last_purchased_on
+FROM stock_lots l
+GROUP BY l.location_id, l.variant_id;

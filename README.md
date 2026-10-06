@@ -115,6 +115,27 @@ The branches are seeded too — **Nextgen (NXG), Lavington (LAV), Jamhuri (JAM)
 and Kileleshwa (KIL)** — in `BRANCHES`. Re-seeding adds a branch you have
 created since; it never removes one.
 
+## What stock costs
+
+Two different numbers, on purpose:
+
+- The **stock list shows the last purchase price**, because that is the number
+  you set a selling price from. It says the date it was bought, so a price that
+  moved is visible rather than silently averaged away.
+- **A sale consumes the oldest batch first (FIFO)**, so the cost attached to a
+  sale is what those particular cylinders cost. When the buy price rises, the
+  margin on the next sale reflects the cheap stock you are still holding — not
+  an average that flatters or punishes you at random.
+
+Every delivery is a **batch** (`stock_lots`) with its own unit cost. A product
+page shows the batches still on the shelf in the order a sale will take them,
+with "sells next" on the first. `consumeFifo()` refuses to sell more than has
+been costed rather than invent a cost.
+
+`/inventory/[id]` shows the movement history for one product — every delivery,
+sale, transfer and stocktake with its quantity, running balance, unit cost and
+who did it — filterable by branch.
+
 ## Invoices, payments and balances
 
 `src/lib/billing/` is the money side of a customer. It is deliberately separate

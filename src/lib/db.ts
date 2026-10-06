@@ -1,5 +1,6 @@
 import { BillingService } from "@/lib/billing";
 import { ProductService } from "@/lib/stock/products";
+import { StockLedgerService } from "@/lib/stock/stock-db";
 import { CustomerService, seedCustomers } from "@/lib/customers";
 import { BILLING_SCHEMA, CUSTOMER_SCHEMA } from "@/lib/customers/schemaText";
 import { connectPostgres, postgresDatabase } from "@/lib/customers/postgres";
@@ -25,6 +26,8 @@ export interface CustomerContext {
   billing: BillingService | null;
   /** The product catalogue and what each branch holds. Null alongside `service`. */
   products: ProductService | null;
+  /** Stock in and out, and what it cost. Null alongside `service`. */
+  stock: StockLedgerService | null;
   mode: DataSourceMode;
   notice: string | null;
   /** What the function could see of its own configuration. Never a secret. */
@@ -77,6 +80,7 @@ function unavailable(reason: string): CustomerContext {
     service: null,
     billing: null,
     products: null,
+    stock: null,
     mode: "unavailable",
     diagnostic: describeDatabaseConfig(),
     notice: `${reason} Set DATABASE_URL to your Supabase connection string — in .env.local here, or under Site settings → Environment variables on Netlify — then redeploy.`,
@@ -100,6 +104,7 @@ async function tryDatabase(url: string): Promise<CustomerContext | null> {
       service: new CustomerService(db),
       billing: new BillingService(db),
       products: new ProductService(db),
+      stock: new StockLedgerService(db),
       mode: "database",
       notice: null,
       diagnostic: describeDatabaseConfig(),
@@ -131,6 +136,7 @@ async function demoContext(): Promise<CustomerContext | null> {
       service,
       billing: new BillingService(adapter),
       products: new ProductService(adapter),
+      stock: new StockLedgerService(adapter),
       mode: "demo",
       notice:
         "Showing demo customers in a temporary in-memory database. Changes are real but vanish on restart — set DATABASE_URL to use Supabase.",

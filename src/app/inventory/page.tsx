@@ -26,10 +26,11 @@ interface PageProps {
 export default async function InventoryPage({ searchParams }: PageProps) {
   const params = await searchParams;
   const categoryFilter = typeof params.cat === "string" ? params.cat : "";
+  const branchFilter = typeof params.branch === "string" ? params.branch : "";
   const saved = typeof params.saved === "string" ? params.saved : null;
   const error = typeof params.error === "string" ? params.error : null;
 
-  const { products, notice, diagnostic } = await getCustomerContext();
+  const { products, stock, notice, diagnostic } = await getCustomerContext();
 
   if (!products) {
     return (
@@ -50,20 +51,29 @@ export default async function InventoryPage({ searchParams }: PageProps) {
     );
   }
 
+  if (!stock) return null;
+
   const [categories, brands, locations, inventory] = await Promise.all([
     products.listCategories(),
     products.listBrands(),
     products.listLocations(),
-    products.listInventory({ categoryId: categoryFilter || null }),
+    stock.stockRows({ locationId: branchFilter || null }),
   ]);
 
   const activeLocations = locations.filter((l) => l.active);
+  const branch = activeLocations.find((l) => l.id === branchFilter) ?? null;
   const showing = categoryFilter
     ? categories.find((c) => c.id === categoryFilter)
     : null;
 
-  const totalCylinders = inventory.reduce((sum, line) => sum + line.cylinders, 0);
-  const totalRefills = inventory.reduce((sum, line) => sum + line.refills, 0);
+  const rows = categoryFilter
+    ? inventory.filter((line) => line.categoryId === categoryFilter)
+    : inventory;
+
+  const totalFull = rows.reduce((sum, line) => sum + line.refills, 0);
+  const totalEmpty = rows.reduce((sum, line) => sum + line.empties, 0);
+  const stockValue = rows.reduce((sum, line) => sum + line.costOnHand, 0);
+  const money = (amount: number) => `KSh ${amount.toLocaleString("en-KE")}`;
 
   return (
     <>
@@ -89,10 +99,18 @@ export default async function InventoryPage({ searchParams }: PageProps) {
             {/* ---- what is on the shelf, at a glance ---- */}
             <div className="grid gap-3 sm:grid-cols-4">
               {[
-                { label: "Products", value: String(inventory.length), hint: showing ? `in ${showing.name}` : "in the catalogue" },
-                { label: "Brands", value: String(brands.length), hint: "stocked" },
-                { label: "Cylinders", value: totalCylinders.toLocaleString("en-KE"), hint: "refills plus empties" },
-                { label: "Full cylinders", value: totalRefills.toLocaleString("en-KE"), hint: "ready to sell" },
+                { label: "Full", value: totalFull.toLocaleString("en-KE"), hint: "ready to sell" },
+                { label: "Empty", value: totalEmpty.toLocaleString("en-KE"), hint: "back from customers" },
+                {
+                  label: "Stock value",
+                  value: money(stockValue),
+                  hint: "at what each batch cost",
+                },
+                {
+                  label: "Products",
+                  value: String(rows.length),
+                  hint: showing ? `in ${showing.name}` : branch ? `at ${branch.name}` : "in the catalogue",
+                },
               ].map((card) => (
                 <div
                   key={card.label}
@@ -134,6 +152,40 @@ export default async function InventoryPage({ searchParams }: PageProps) {
                   {category.name}
                 </a>
               ))}
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-[11.5px] font-semibold uppercase tracking-wide text-ink-soft">
+                Branch
+              </span>
+              <a
+                href={categoryFilter ? `/inventory?cat=${encodeURIComponent(categoryFilter)}` : "/inventory"}
+                className={`rounded-full px-3 py-1.5 text-[12.5px] font-medium transition ${
+                  branchFilter === ""
+                    ? "bg-flame-600 text-white"
+                    : "bg-white text-ink ring-1 ring-line hover:bg-canvas"
+                }`}
+              >
+                All branches
+              </a>
+              {activeLocations.map((location) => {
+                const query = new URLSearchParams();
+                if (categoryFilter) query.set("cat", categoryFilter);
+                query.set("branch", location.id);
+                return (
+                  <a
+                    key={location.id}
+                    href={`/inventory?${query.toString()}`}
+                    className={`rounded-full px-3 py-1.5 text-[12.5px] font-medium transition ${
+                      branchFilter === location.id
+                        ? "bg-flame-600 text-white"
+                        : "bg-white text-ink ring-1 ring-line hover:bg-canvas"
+                    }`}
+                  >
+                    {location.name}
+                  </a>
+                );
+              })}
               <span className="ml-auto">
                 <NewProductForm
                   categories={categories}
@@ -160,34 +212,44 @@ export default async function InventoryPage({ searchParams }: PageProps) {
                 </p>
               ) : (
                 <div className="overflow-x-auto">
-                  <table className="w-full min-w-[760px] text-left">
+                  <table className="w-full min-w-[980px] text-left">
                     <thead>
                       <tr className="border-b border-line text-[11px] uppercase tracking-[0.08em] text-ink-soft">
                         <th className="px-5 py-2.5 font-semibold">Product</th>
                         <th className="px-3 py-2.5 font-semibold">Category</th>
-                        <th className="px-3 py-2.5 font-semibold">Code</th>
-                        <th className="px-3 py-2.5 text-right font-semibold">List price</th>
-                        {activeLocations.map((location) => (
-                          <th key={location.id} className="px-3 py-2.5 text-right font-semibold">
-                            {location.name}
-                            <span className="block text-[10px] font-medium normal-case tracking-normal text-ink-soft/70">
-                              {location.kind === LocationKind.Van
-                                ? `van · ${location.rider ?? ""}`
-                                : "branch"}
-                            </span>
-                          </th>
-                        ))}
-                        <th className="px-5 py-2.5 text-right font-semibold">Total</th>
+                        <th className="px-3 py-2.5 text-right font-semibold">Full</th>
+                        <th className="px-3 py-2.5 text-right font-semibold">Empty</th>
+                        <th className="px-3 py-2.5 text-right font-semibold">Total</th>
+                        <th className="px-3 py-2.5 text-right font-semibold">
+                          Cost
+                          <span className="block text-[10px] font-medium normal-case tracking-normal text-ink-soft/70">
+                            last buy
+                          </span>
+                        </th>
+                        <th className="px-3 py-2.5 text-right font-semibold">Selling price</th>
+                        {branch
+                          ? null
+                          : activeLocations.map((location) => (
+                              <th key={location.id} className="px-3 py-2.5 text-right font-semibold">
+                                {location.name}
+                              </th>
+                            ))}
+                        <th className="px-5 py-2.5 text-right font-semibold">Stock value</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-line">
-                      {inventory.map((line) => (
-                        <tr key={line.variant.id} className="text-[13px] hover:bg-canvas/60">
+                      {rows.map((line) => (
+                        <tr key={line.variantId} className="text-[13px] hover:bg-canvas/60">
                           <td className="px-5 py-2.5">
-                            <span className="font-medium text-ink">{line.variant.name}</span>
+                            <a
+                              href={`/inventory/${line.variantId}`}
+                              className="font-medium text-ink hover:text-flame-600"
+                            >
+                              {line.variantName}
+                            </a>
                             <span className="block text-[11.5px] text-ink-soft/80">
                               {line.brandName}
-                              {line.variant.sizeKg ? ` · ${line.variant.sizeKg} kg` : ""}
+                              {line.sizeKg ? ` · ${line.sizeKg} kg` : ""}
                             </span>
                           </td>
                           <td className="px-3 py-2.5">
@@ -195,44 +257,57 @@ export default async function InventoryPage({ searchParams }: PageProps) {
                               {line.categoryName}
                             </Pill>
                           </td>
-                          <td className="px-3 py-2.5 font-mono text-[11.5px] text-ink-soft">
-                            {line.variant.code}
+                          <td className="px-3 py-2.5 text-right font-semibold tabular-nums text-ink">
+                            {line.refills}
                           </td>
                           <td className="px-3 py-2.5 text-right tabular-nums text-ink-soft">
-                            {line.variant.listPriceKsh
-                              ? `KSh ${line.variant.listPriceKsh.toLocaleString("en-KE")}`
-                              : "—"}
+                            {line.empties}
                           </td>
-                          {activeLocations.map((location) => {
-                            const at = line.byLocation.find((b) => b.locationId === location.id);
-                            return (
-                              <td key={location.id} className="px-3 py-2.5 text-right">
-                                {at ? (
-                                  <>
-                                    <span className="font-semibold tabular-nums text-ink">
-                                      {at.refills}
-                                    </span>
-                                    {at.empties > 0 ? (
-                                      <span className="block text-[11px] tabular-nums text-ink-soft/80">
-                                        {at.empties} empty
-                                      </span>
-                                    ) : null}
-                                  </>
-                                ) : (
-                                  <span className="text-ink-soft/50">—</span>
-                                )}
-                              </td>
-                            );
-                          })}
-                          <td className="px-5 py-2.5 text-right">
-                            <span className="font-semibold tabular-nums text-ink">
-                              {line.refills}
-                            </span>
-                            {line.empties > 0 ? (
-                              <span className="block text-[11px] tabular-nums text-ink-soft/80">
-                                + {line.empties} empty
-                              </span>
-                            ) : null}
+                          <td className="px-3 py-2.5 text-right tabular-nums text-ink-soft">
+                            {line.total}
+                          </td>
+                          <td className="px-3 py-2.5 text-right tabular-nums text-ink-soft">
+                            {line.lastCost === null ? (
+                              <span className="text-ink-soft/50">not bought yet</span>
+                            ) : (
+                              <>
+                                {money(line.lastCost)}
+                                {line.lastPurchasedOn ? (
+                                  <span className="block text-[11px] text-ink-soft/70">
+                                    {line.lastPurchasedOn}
+                                  </span>
+                                ) : null}
+                              </>
+                            )}
+                          </td>
+                          <td className="px-3 py-2.5 text-right tabular-nums text-ink-soft">
+                            {line.sellingPrice === null ? "—" : money(line.sellingPrice)}
+                          </td>
+                          {branch
+                            ? null
+                            : activeLocations.map((location) => {
+                                const at = line.byLocation.find(
+                                  (b) => b.locationId === location.id,
+                                );
+                                return (
+                                  <td key={location.id} className="px-3 py-2.5 text-right">
+                                    {at ? (
+                                      <>
+                                        <span className="tabular-nums text-ink">{at.refills}</span>
+                                        {at.empties > 0 ? (
+                                          <span className="block text-[11px] tabular-nums text-ink-soft/70">
+                                            {at.empties} e
+                                          </span>
+                                        ) : null}
+                                      </>
+                                    ) : (
+                                      <span className="text-ink-soft/50">—</span>
+                                    )}
+                                  </td>
+                                );
+                              })}
+                          <td className="px-5 py-2.5 text-right font-semibold tabular-nums text-ink">
+                            {line.costOnHand === 0 ? "—" : money(line.costOnHand)}
                           </td>
                         </tr>
                       ))}
