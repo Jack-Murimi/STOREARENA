@@ -239,7 +239,7 @@ export function SoonBadge({ className }: { className?: string }) {
     <span
       className={
         className ??
-        "rounded-full border border-current/25 px-1.5 py-px text-[10px] font-medium uppercase tracking-wide opacity-70"
+        "rounded-full border border-current/25 px-1.5 py-px text-xs font-medium uppercase tracking-wide opacity-70"
       }
     >
       soon

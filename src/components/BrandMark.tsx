@@ -16,14 +16,14 @@ export function BrandMark({ tone = "light", className }: BrandMarkProps) {
       </span>
       <span className="leading-tight">
         <span
-          className={`block text-[15px] font-semibold tracking-tight ${
+          className={`block text-base font-semibold tracking-tight ${
             isLight ? "text-white" : "text-ink"
           }`}
         >
           Gateway Gas
         </span>
         <span
-          className={`block text-[10px] font-medium uppercase tracking-[0.16em] ${
+          className={`block text-xs font-medium uppercase tracking-[0.16em] ${
             isLight ? "text-white/55" : "text-ink-faint"
           }`}
         >

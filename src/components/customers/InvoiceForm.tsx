@@ -62,7 +62,7 @@ export function InvoiceForm({ customerId }: { customerId: string }) {
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="inline-flex items-center rounded-lg bg-flame-600 px-3 py-1.5 text-[12.5px] font-semibold text-white transition hover:bg-flame-700"
+        className="inline-flex items-center rounded-lg bg-flame-600 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-flame-700"
       >
         + Raise an invoice
       </button>
@@ -82,7 +82,7 @@ export function InvoiceForm({ customerId }: { customerId: string }) {
             list="invoice-catalog"
             required={index === 0}
             placeholder="Afri Gas 13 kg refill"
-            className="rounded-lg border border-line bg-white px-3 py-2 text-[13px] outline-none focus:border-flame-500"
+            className="rounded-lg border border-line bg-white px-3 py-2 text-sm outline-none focus:border-flame-500"
           />
           <input
             name={`line_quantity_${index}`}
@@ -90,7 +90,7 @@ export function InvoiceForm({ customerId }: { customerId: string }) {
             onChange={(e) => patch(row.key, "quantity", e.target.value)}
             inputMode="decimal"
             placeholder="Qty"
-            className="rounded-lg border border-line bg-white px-3 py-2 text-[13px] outline-none focus:border-flame-500"
+            className="rounded-lg border border-line bg-white px-3 py-2 text-sm outline-none focus:border-flame-500"
           />
           <input
             name={`line_price_${index}`}
@@ -98,13 +98,13 @@ export function InvoiceForm({ customerId }: { customerId: string }) {
             onChange={(e) => patch(row.key, "price", e.target.value)}
             inputMode="decimal"
             placeholder="Unit price"
-            className="rounded-lg border border-line bg-white px-3 py-2 text-[13px] outline-none focus:border-flame-500"
+            className="rounded-lg border border-line bg-white px-3 py-2 text-sm outline-none focus:border-flame-500"
           />
           <button
             type="button"
             onClick={() => removeRow(row.key)}
             aria-label="Remove this line"
-            className="rounded-lg border border-line text-[15px] leading-none text-ink-soft transition hover:border-bad/40 hover:text-bad"
+            className="rounded-lg border border-line text-base leading-none text-ink-soft transition hover:border-bad/40 hover:text-bad"
           >
             ×
           </button>
@@ -121,7 +121,7 @@ export function InvoiceForm({ customerId }: { customerId: string }) {
         <button
           type="button"
           onClick={addRow}
-          className="text-[12.5px] font-semibold text-flame-700 hover:underline"
+          className="text-xs font-semibold text-flame-700 hover:underline"
         >
           + Add a line
         </button>
@@ -139,12 +139,12 @@ export function InvoiceForm({ customerId }: { customerId: string }) {
                 ),
               );
             }}
-            className="text-[12.5px] font-semibold text-ink-soft hover:text-ink"
+            className="text-xs font-semibold text-ink-soft hover:text-ink"
           >
             Use a common item
           </button>
         ) : null}
-        <span className="ml-auto text-[13px] text-ink-soft">
+        <span className="ml-auto text-sm text-ink-soft">
           Total{" "}
           <strong className="font-semibold tabular-nums text-ink">
             KSh {total.toLocaleString("en-KE")}
@@ -157,18 +157,18 @@ export function InvoiceForm({ customerId }: { customerId: string }) {
           type="date"
           name="issuedOn"
           defaultValue={new Date().toISOString().slice(0, 10)}
-          className="rounded-lg border border-line bg-white px-3 py-2 text-[13px] outline-none focus:border-flame-500"
+          className="rounded-lg border border-line bg-white px-3 py-2 text-sm outline-none focus:border-flame-500"
         />
         <input
           name="notes"
           placeholder="Note on the invoice (optional)"
-          className="min-w-[180px] flex-1 rounded-lg border border-line bg-white px-3 py-2 text-[13px] outline-none focus:border-flame-500"
+          className="min-w-[180px] flex-1 rounded-lg border border-line bg-white px-3 py-2 text-sm outline-none focus:border-flame-500"
         />
         <SubmitButton pendingLabel="Raising…">Raise invoice</SubmitButton>
         <button
           type="button"
           onClick={() => setOpen(false)}
-          className="text-[12.5px] font-medium text-ink-soft hover:text-ink"
+          className="text-xs font-medium text-ink-soft hover:text-ink"
         >
           Cancel
         </button>

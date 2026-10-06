@@ -3,7 +3,7 @@
 import { useId, useRef, useState } from "react";
 
 const controlClass =
-  "w-full rounded-lg border border-line bg-white px-3 py-2 text-[13px] text-ink outline-none transition placeholder:text-ink-soft/50 focus:border-flame-400 focus:ring-2 focus:ring-flame-400/20";
+  "w-full rounded-lg border border-line bg-white px-3 py-2 text-sm text-ink outline-none transition placeholder:text-ink-soft/50 focus:border-flame-400 focus:ring-2 focus:ring-flame-400/20";
 
 /**
  * An optional map pin.
@@ -75,7 +75,7 @@ export function PinField({
     <div className="space-y-2">
       <div className="flex flex-wrap items-end gap-2">
         <label className="min-w-[110px] flex-1">
-          <span className="mb-1 block text-[11.5px] font-medium text-ink-soft">
+          <span className="mb-1 block text-xs font-medium text-ink-soft">
             Pin latitude
           </span>
           <input
@@ -91,7 +91,7 @@ export function PinField({
           />
         </label>
         <label className="min-w-[110px] flex-1">
-          <span className="mb-1 block text-[11.5px] font-medium text-ink-soft">
+          <span className="mb-1 block text-xs font-medium text-ink-soft">
             Pin longitude
           </span>
           <input
@@ -108,7 +108,7 @@ export function PinField({
         <button
           type="button"
           onClick={useMyLocation}
-          className="rounded-lg bg-white px-3 py-2 text-[12.5px] font-semibold text-ink ring-1 ring-line transition hover:bg-canvas"
+          className="rounded-lg bg-white px-3 py-2 text-xs font-semibold text-ink ring-1 ring-line transition hover:bg-canvas"
         >
           Use my location
         </button>
@@ -117,15 +117,15 @@ export function PinField({
             href={`https://www.google.com/maps?q=${coords.lat},${coords.lng}`}
             target="_blank"
             rel="noreferrer"
-            className="rounded-lg bg-white px-3 py-2 text-[12.5px] font-semibold text-info ring-1 ring-info/25 transition hover:bg-info-soft"
+            className="rounded-lg bg-white px-3 py-2 text-xs font-semibold text-info ring-1 ring-info/25 transition hover:bg-info-soft"
           >
             View on map
           </a>
         ) : null}
       </div>
-      {status ? <p className="text-[11.5px] text-ink-soft">{status}</p> : null}
+      {status ? <p className="text-xs text-ink-soft">{status}</p> : null}
       {!status ? (
-        <p className="text-[11.5px] text-ink-soft/80">
+        <p className="text-xs text-ink-soft/80">
           Optional. Both coordinates together, or leave both blank.
         </p>
       ) : null}

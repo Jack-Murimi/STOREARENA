@@ -13,3 +13,4 @@ export { Skeleton, SkeletonRows } from "./Skeleton";
 export { Card } from "./Card";
 export { Tabs } from "./Tabs";
 export { SearchInput } from "./SearchInput";
+export { PageSkeleton } from "./PageSkeleton";

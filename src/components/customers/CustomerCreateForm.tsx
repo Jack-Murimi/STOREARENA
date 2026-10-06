@@ -5,7 +5,7 @@ import { createCustomer } from "@/app/customers/actions";
 import { SubmitButton } from "./SubmitButton";
 
 const controlClass =
-  "w-full rounded-lg border border-line bg-white px-3 py-2 text-[13.5px] text-ink outline-none transition placeholder:text-ink-soft/50 focus:border-flame-400 focus:ring-2 focus:ring-flame-400/20";
+  "w-full rounded-lg border border-line bg-white px-3 py-2 text-sm text-ink outline-none transition placeholder:text-ink-soft/50 focus:border-flame-400 focus:ring-2 focus:ring-flame-400/20";
 
 const ROLES = [
   "",
@@ -63,7 +63,7 @@ export function CustomerCreateForm() {
     <form action={createCustomer} className="space-y-5">
       <div className="grid gap-4 sm:grid-cols-[2fr_1fr]">
         <label>
-          <span className="mb-1 block text-[11.5px] font-medium text-ink-soft">
+          <span className="mb-1 block text-xs font-medium text-ink-soft">
             Customer name
           </span>
           <input
@@ -74,7 +74,7 @@ export function CustomerCreateForm() {
           />
         </label>
         <label>
-          <span className="mb-1 block text-[11.5px] font-medium text-ink-soft">
+          <span className="mb-1 block text-xs font-medium text-ink-soft">
             Type
           </span>
           <select className={controlClass} name="kind" defaultValue="HOUSEHOLD">
@@ -87,7 +87,7 @@ export function CustomerCreateForm() {
       {/* ------------------------------------------------------- locations */}
       <fieldset className="rounded-lg border border-line bg-white p-4">
         <div className="mb-3 flex items-center justify-between gap-3">
-          <legend className="float-left text-[12.5px] font-semibold text-ink">
+          <legend className="float-left text-xs font-semibold text-ink">
             Where do we deliver?
           </legend>
           <button
@@ -98,7 +98,7 @@ export function CustomerCreateForm() {
                 { key: nextKey, label: "", address: "", details: "" },
               ])
             }
-            className="rounded-lg bg-white px-2.5 py-1.5 text-[12px] font-semibold text-flame-600 ring-1 ring-flame-500/30 transition hover:bg-flame-500/10"
+            className="rounded-lg bg-white px-2.5 py-1.5 text-xs font-semibold text-flame-600 ring-1 ring-flame-500/30 transition hover:bg-flame-500/10"
           >
             + Add location
           </button>
@@ -111,7 +111,7 @@ export function CustomerCreateForm() {
               className="rounded-lg border border-line bg-canvas/60 p-3"
             >
               <div className="mb-2 flex items-center justify-between">
-                <span className="text-[11.5px] font-medium text-ink-soft">
+                <span className="text-xs font-medium text-ink-soft">
                   Location {index + 1}
                 </span>
                 {locations.length > 1 ? (
@@ -122,7 +122,7 @@ export function CustomerCreateForm() {
                         rows.filter((r) => r.key !== row.key),
                       )
                     }
-                    className="text-[11.5px] font-semibold text-bad hover:underline"
+                    className="text-xs font-semibold text-bad hover:underline"
                   >
                     Remove
                   </button>
@@ -131,7 +131,7 @@ export function CustomerCreateForm() {
 
               <div className="grid gap-3 sm:grid-cols-3">
                 <label>
-                  <span className="mb-1 block text-[11px] text-ink-soft">
+                  <span className="mb-1 block text-xs text-ink-soft">
                     Name for it
                   </span>
                   <input
@@ -143,7 +143,7 @@ export function CustomerCreateForm() {
                   />
                 </label>
                 <label className="sm:col-span-2">
-                  <span className="mb-1 block text-[11px] text-ink-soft">
+                  <span className="mb-1 block text-xs text-ink-soft">
                     Address
                   </span>
                   <input
@@ -154,7 +154,7 @@ export function CustomerCreateForm() {
                   />
                 </label>
                 <label className="sm:col-span-3">
-                  <span className="mb-1 block text-[11px] text-ink-soft">
+                  <span className="mb-1 block text-xs text-ink-soft">
                     Additional details
                   </span>
                   <input
@@ -173,7 +173,7 @@ export function CustomerCreateForm() {
       {/* -------------------------------------------------------- contacts */}
       <fieldset className="rounded-lg border border-line bg-white p-4">
         <div className="mb-3 flex items-center justify-between gap-3">
-          <legend className="float-left text-[12.5px] font-semibold text-ink">
+          <legend className="float-left text-xs font-semibold text-ink">
             Who do we call?
           </legend>
           <button
@@ -184,7 +184,7 @@ export function CustomerCreateForm() {
                 { key: nextKey, name: "", phone: "", role: "" },
               ])
             }
-            className="rounded-lg bg-white px-2.5 py-1.5 text-[12px] font-semibold text-flame-600 ring-1 ring-flame-500/30 transition hover:bg-flame-500/10"
+            className="rounded-lg bg-white px-2.5 py-1.5 text-xs font-semibold text-flame-600 ring-1 ring-flame-500/30 transition hover:bg-flame-500/10"
           >
             + Add number
           </button>
@@ -197,7 +197,7 @@ export function CustomerCreateForm() {
               className="rounded-lg border border-line bg-canvas/60 p-3"
             >
               <div className="mb-2 flex items-center justify-between">
-                <span className="text-[11.5px] font-medium text-ink-soft">
+                <span className="text-xs font-medium text-ink-soft">
                   Number {index + 1}
                 </span>
                 {contacts.length > 1 ? (
@@ -206,7 +206,7 @@ export function CustomerCreateForm() {
                     onClick={() =>
                       setContacts((rows) => rows.filter((r) => r.key !== row.key))
                     }
-                    className="text-[11.5px] font-semibold text-bad hover:underline"
+                    className="text-xs font-semibold text-bad hover:underline"
                   >
                     Remove
                   </button>
@@ -215,7 +215,7 @@ export function CustomerCreateForm() {
 
               <div className="grid gap-3 sm:grid-cols-3">
                 <label>
-                  <span className="mb-1 block text-[11px] text-ink-soft">
+                  <span className="mb-1 block text-xs text-ink-soft">
                     Name
                   </span>
                   <input
@@ -227,7 +227,7 @@ export function CustomerCreateForm() {
                   />
                 </label>
                 <label>
-                  <span className="mb-1 block text-[11px] text-ink-soft">
+                  <span className="mb-1 block text-xs text-ink-soft">
                     Phone number
                   </span>
                   <input
@@ -239,7 +239,7 @@ export function CustomerCreateForm() {
                   />
                 </label>
                 <label>
-                  <span className="mb-1 block text-[11px] text-ink-soft">
+                  <span className="mb-1 block text-xs text-ink-soft">
                     Role (optional)
                   </span>
                   <select
@@ -264,11 +264,11 @@ export function CustomerCreateForm() {
         <SubmitButton pendingLabel="Saving customer…">Save customer</SubmitButton>
         <a
           href="/customers"
-          className="inline-flex items-center rounded-lg bg-white px-3 py-2 text-[12.5px] font-semibold text-ink ring-1 ring-line transition hover:bg-canvas"
+          className="inline-flex items-center rounded-lg bg-white px-3 py-2 text-xs font-semibold text-ink ring-1 ring-line transition hover:bg-canvas"
         >
           Cancel
         </a>
-        <span className="text-[11.5px] text-ink-soft">
+        <span className="text-xs text-ink-soft">
           Pin, area, town and notes can be added on the next screen.
         </span>
       </div>

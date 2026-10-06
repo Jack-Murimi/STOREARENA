@@ -63,7 +63,7 @@ export default async function ProductStockPage({ params, searchParams }: PagePro
   const product = await stock.product(id);
   if (!product) {
     return shell(
-      <p className="rounded-xl border border-line bg-card px-5 py-8 text-center text-[13px] text-ink-soft">
+      <p className="rounded-xl border border-line bg-card px-5 py-8 text-center text-sm text-ink-soft">
         There is no product with that id.{" "}
         <Link href="/inventory" className="font-semibold text-flame-700 hover:underline">
           Back to the inventory
@@ -97,7 +97,7 @@ export default async function ProductStockPage({ params, searchParams }: PagePro
       {shell(
         <>
           {notice ? (
-            <p className="rounded-xl border border-warn/25 bg-warn-soft px-4 py-3 text-[13px] text-warn">
+            <p className="rounded-xl border border-warn/25 bg-warn-soft px-4 py-3 text-sm text-warn">
               {notice}
             </p>
           ) : null}
@@ -105,18 +105,18 @@ export default async function ProductStockPage({ params, searchParams }: PagePro
           <div>
             <Link
               href="/inventory"
-              className="text-[12.5px] font-medium text-ink-soft hover:text-ink"
+              className="text-xs font-medium text-ink-soft hover:text-ink"
             >
               ← Inventory
             </Link>
-            <h1 className="mt-1 text-[20px] font-semibold tracking-tight text-ink">
+            <h1 className="mt-1 text-lg font-semibold tracking-tight text-ink">
               {product.name}
             </h1>
             <div className="mt-1 flex flex-wrap items-center gap-2">
               <StatusBadge tone={product.categoryName === "LPG cylinders" ? "info" : "neutral"}>
                 {product.categoryName}
               </StatusBadge>
-              <span className="text-[12.5px] text-ink-soft">
+              <span className="text-xs text-ink-soft">
                 {product.brandName}
                 {product.sizeKg ? ` · ${product.sizeKg} kg` : ""} · {product.code}
               </span>
@@ -145,27 +145,27 @@ export default async function ProductStockPage({ params, searchParams }: PagePro
             ].map((card) => (
               <div
                 key={card.label}
-                className="rounded-xl border border-line bg-card px-4 py-3 shadow-[0_1px_2px_rgba(15,23,42,0.04)]"
+                className="rounded-xl border border-line bg-card px-4 py-3 shadow-card"
               >
-                <div className="text-[11px] uppercase tracking-[0.08em] text-ink-soft">
+                <div className="text-xs uppercase tracking-wide text-ink-soft">
                   {card.label}
                 </div>
-                <div className="mt-1 text-[19px] font-semibold tabular-nums text-ink">
+                <div className="mt-1 text-lg font-semibold tabular-nums text-ink">
                   {card.value}
                 </div>
-                <div className="text-[11.5px] text-ink-soft/80">{card.hint}</div>
+                <div className="text-xs text-ink-soft/80">{card.hint}</div>
               </div>
             ))}
           </div>
 
           {/* ---- branch filter ---- */}
           <div className="flex flex-wrap items-center gap-2">
-            <span className="text-[11.5px] font-semibold uppercase tracking-wide text-ink-soft">
+            <span className="text-xs font-semibold uppercase tracking-wide text-ink-soft">
               Branch
             </span>
             <a
               href={`/inventory/${id}`}
-              className={`rounded-full px-3 py-1.5 text-[12.5px] font-medium transition ${
+              className={`rounded-full px-3 py-1.5 text-xs font-medium transition ${
                 branchFilter === ""
                   ? "bg-flame-600 text-white"
                   : "bg-white text-ink ring-1 ring-line hover:bg-canvas"
@@ -177,7 +177,7 @@ export default async function ProductStockPage({ params, searchParams }: PagePro
               <a
                 key={location.id}
                 href={queryFor(location.id)}
-                className={`rounded-full px-3 py-1.5 text-[12.5px] font-medium transition ${
+                className={`rounded-full px-3 py-1.5 text-xs font-medium transition ${
                   branchFilter === location.id
                     ? "bg-flame-600 text-white"
                     : "bg-white text-ink ring-1 ring-line hover:bg-canvas"
@@ -189,24 +189,24 @@ export default async function ProductStockPage({ params, searchParams }: PagePro
           </div>
 
           {/* ---- the batches a sale will consume, oldest first ---- */}
-          <section className="overflow-hidden rounded-xl border border-line bg-card shadow-[0_1px_2px_rgba(15,23,42,0.04)]">
+          <section className="overflow-hidden rounded-xl border border-line bg-card shadow-card">
             <div className="border-b border-line px-5 py-3">
-              <h2 className="text-[14.5px] font-semibold tracking-tight text-ink">
+              <h2 className="text-base font-semibold tracking-tight text-ink">
                 Batches still on the shelf
               </h2>
-              <p className="text-[12px] text-ink-soft">
+              <p className="text-xs text-ink-soft">
                 A sale takes from the top of this list first, so its cost is what those cylinders
                 actually cost.
               </p>
             </div>
             {lots.length === 0 ? (
-              <p className="px-5 py-8 text-center text-[13px] text-ink-soft">
+              <p className="px-5 py-8 text-center text-sm text-ink-soft">
                 Nothing costed here yet. Record a delivery below.
               </p>
             ) : (
               <table className="w-full text-left">
                 <thead>
-                  <tr className="border-b border-line text-[11px] uppercase tracking-[0.08em] text-ink-soft">
+                  <tr className="border-b border-line text-xs uppercase tracking-wide text-ink-soft">
                     <th className="px-5 py-2.5 font-semibold">Next to go</th>
                     <th className="px-3 py-2.5 font-semibold">Bought</th>
                     <th className="px-3 py-2.5 font-semibold">Branch</th>
@@ -217,10 +217,10 @@ export default async function ProductStockPage({ params, searchParams }: PagePro
                 </thead>
                 <tbody className="divide-y divide-line">
                   {lots.map((lot, index) => (
-                    <tr key={lot.lotId} className="text-[13px] hover:bg-canvas/60">
+                    <tr key={lot.lotId} className="text-sm hover:bg-canvas/60">
                       <td className="px-5 py-2.5 text-ink-soft">
                         {index === 0 ? (
-                          <span className="rounded-full bg-flame-600 px-2 py-0.5 text-[10.5px] font-semibold uppercase tracking-wide text-white">
+                          <span className="rounded-full bg-flame-600 px-2 py-0.5 text-xs font-semibold uppercase tracking-wide text-white">
                             sells next
                           </span>
                         ) : (
@@ -246,12 +246,12 @@ export default async function ProductStockPage({ params, searchParams }: PagePro
           </section>
 
           {/* ---- receive stock ---- */}
-          <section className="overflow-hidden rounded-xl border border-line bg-card shadow-[0_1px_2px_rgba(15,23,42,0.04)]">
+          <section className="overflow-hidden rounded-xl border border-line bg-card shadow-card">
             <div className="border-b border-line px-5 py-3">
-              <h2 className="text-[14.5px] font-semibold tracking-tight text-ink">
+              <h2 className="text-base font-semibold tracking-tight text-ink">
                 Receive a delivery
               </h2>
-              <p className="text-[12px] text-ink-soft">
+              <p className="text-xs text-ink-soft">
                 Adds a batch at the price you paid, which is what the cost column and the margin
                 are worked from.
               </p>
@@ -264,7 +264,7 @@ export default async function ProductStockPage({ params, searchParams }: PagePro
               <select
                 name="locationId"
                 required
-                className="rounded-lg border border-line bg-white px-3 py-2 text-[13px] outline-none focus:border-flame-500"
+                className="rounded-lg border border-line bg-white px-3 py-2 text-sm outline-none focus:border-flame-500"
               >
                 <option value="">Branch…</option>
                 {branches.map((location) => (
@@ -278,55 +278,55 @@ export default async function ProductStockPage({ params, searchParams }: PagePro
                 required
                 inputMode="numeric"
                 placeholder="Qty"
-                className="rounded-lg border border-line bg-white px-3 py-2 text-[13px] outline-none focus:border-flame-500"
+                className="rounded-lg border border-line bg-white px-3 py-2 text-sm outline-none focus:border-flame-500"
               />
               <input
                 name="unitCostKsh"
                 required
                 inputMode="decimal"
                 placeholder="Unit cost"
-                className="rounded-lg border border-line bg-white px-3 py-2 text-[13px] outline-none focus:border-flame-500"
+                className="rounded-lg border border-line bg-white px-3 py-2 text-sm outline-none focus:border-flame-500"
               />
               <input
                 type="date"
                 name="purchasedOn"
                 defaultValue={new Date().toISOString().slice(0, 10)}
-                className="rounded-lg border border-line bg-white px-3 py-2 text-[13px] outline-none focus:border-flame-500"
+                className="rounded-lg border border-line bg-white px-3 py-2 text-sm outline-none focus:border-flame-500"
               />
               <input
                 name="reference"
                 placeholder="Delivery note / depot ref"
-                className="rounded-lg border border-line bg-white px-3 py-2 text-[13px] outline-none focus:border-flame-500"
+                className="rounded-lg border border-line bg-white px-3 py-2 text-sm outline-none focus:border-flame-500"
               />
               <input
                 name="actor"
                 required
                 placeholder="Who received it"
-                className="rounded-lg border border-line bg-white px-3 py-2 text-[13px] outline-none focus:border-flame-500"
+                className="rounded-lg border border-line bg-white px-3 py-2 text-sm outline-none focus:border-flame-500"
               />
               <SubmitButton pendingLabel="Saving…">Receive</SubmitButton>
             </form>
           </section>
 
           {/* ---- the movement trail ---- */}
-          <section className="overflow-hidden rounded-xl border border-line bg-card shadow-[0_1px_2px_rgba(15,23,42,0.04)]">
+          <section className="overflow-hidden rounded-xl border border-line bg-card shadow-card">
             <div className="flex flex-wrap items-center justify-between gap-2 border-b border-line px-5 py-3">
-              <h2 className="text-[14.5px] font-semibold tracking-tight text-ink">
+              <h2 className="text-base font-semibold tracking-tight text-ink">
                 Stock movements
               </h2>
-              <span className="text-[12px] text-ink-soft">
+              <span className="text-xs text-ink-soft">
                 {branch ? `at ${branch.name}` : "every branch"} · {movements.length} shown
               </span>
             </div>
             {movements.length === 0 ? (
-              <p className="px-5 py-10 text-center text-[13px] text-ink-soft">
+              <p className="px-5 py-10 text-center text-sm text-ink-soft">
                 Nothing has moved yet.
               </p>
             ) : (
               <div className="overflow-x-auto">
                 <table className="w-full min-w-[760px] text-left">
                   <thead>
-                    <tr className="border-b border-line text-[11px] uppercase tracking-[0.08em] text-ink-soft">
+                    <tr className="border-b border-line text-xs uppercase tracking-wide text-ink-soft">
                       <th className="px-5 py-2.5 font-semibold">When</th>
                       <th className="px-3 py-2.5 font-semibold">What</th>
                       <th className="px-3 py-2.5 font-semibold">Branch</th>
@@ -339,10 +339,10 @@ export default async function ProductStockPage({ params, searchParams }: PagePro
                   </thead>
                   <tbody className="divide-y divide-line">
                     {movements.map((movement) => (
-                      <tr key={`${movement.id}-${movement.custody ?? movement.state}`} className="text-[13px] hover:bg-canvas/60">
+                      <tr key={`${movement.id}-${movement.custody ?? movement.state}`} className="text-sm hover:bg-canvas/60">
                         <td className="px-5 py-2.5 text-ink-soft">
                           {movement.occurredAt.slice(0, 10)}
-                          <span className="block text-[11px] text-ink-soft/70">
+                          <span className="block text-xs text-ink-soft/70">
                             {movement.occurredAt.slice(11, 16)}
                           </span>
                         </td>
@@ -350,7 +350,7 @@ export default async function ProductStockPage({ params, searchParams }: PagePro
                           <span className="font-medium text-ink">
                             {LABELS[movement.operation] ?? movement.operation}
                           </span>
-                          <span className="block text-[11px] text-ink-soft/70">
+                          <span className="block text-xs text-ink-soft/70">
                             {movement.state ? movement.state.toLowerCase() : movement.custody?.toLowerCase()}
                             {movement.counterpartyName ? ` · ${movement.counterpartyName}` : ""}
                           </span>
@@ -372,7 +372,7 @@ export default async function ProductStockPage({ params, searchParams }: PagePro
                         <td className="px-3 py-2.5 text-ink-soft">
                           {movement.reason}
                           {movement.reference ? (
-                            <span className="block font-mono text-[11px] text-ink-soft/70">
+                            <span className="block font-mono text-xs text-ink-soft/70">
                               {movement.reference}
                             </span>
                           ) : null}

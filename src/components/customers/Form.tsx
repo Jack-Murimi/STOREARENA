@@ -6,7 +6,7 @@ import type { ReactNode } from "react";
  */
 
 const controlClass =
-  "w-full rounded-lg border border-line bg-white px-3 py-2 text-[13.5px] text-ink outline-none transition placeholder:text-ink-soft/50 focus:border-flame-400 focus:ring-2 focus:ring-flame-400/20";
+  "w-full rounded-lg border border-line bg-white px-3 py-2 text-sm text-ink outline-none transition placeholder:text-ink-soft/50 focus:border-flame-400 focus:ring-2 focus:ring-flame-400/20";
 
 export function Field({
   label,
@@ -21,12 +21,12 @@ export function Field({
 }) {
   return (
     <label className={`block ${className ?? ""}`}>
-      <span className="mb-1 block text-[11.5px] font-medium text-ink-soft">
+      <span className="mb-1 block text-xs font-medium text-ink-soft">
         {label}
       </span>
       {children}
       {hint ? (
-        <span className="mt-1 block text-[11px] text-ink-soft/80">{hint}</span>
+        <span className="mt-1 block text-xs text-ink-soft/80">{hint}</span>
       ) : null}
     </label>
   );
@@ -87,7 +87,7 @@ export function Checkbox({
   label: string;
 }) {
   return (
-    <label className="flex cursor-pointer items-center gap-2 text-[12.5px] text-ink">
+    <label className="flex cursor-pointer items-center gap-2 text-xs text-ink">
       <input
         type="checkbox"
         name={name}
@@ -116,7 +116,7 @@ export function SubmitButton({
   return (
     <button
       type="submit"
-      className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-2 text-[12.5px] font-semibold transition ${tones[tone]}`}
+      className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-2 text-xs font-semibold transition ${tones[tone]}`}
     >
       {children}
     </button>
@@ -139,7 +139,7 @@ export function Banner({
 
   return (
     <div
-      className={`rounded-lg border px-4 py-3 text-[12.5px] leading-relaxed ${tones[tone]}`}
+      className={`rounded-lg border px-4 py-3 text-xs leading-relaxed ${tones[tone]}`}
     >
       {children}
     </div>

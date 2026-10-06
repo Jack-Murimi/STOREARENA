@@ -108,7 +108,7 @@ export default async function CustomerPage({ params, searchParams }: PageProps) 
           <div className="flex flex-wrap items-center justify-between gap-3">
             <Link
               href="/customers"
-              className="text-[12.5px] font-medium text-ink-soft transition hover:text-ink"
+              className="text-xs font-medium text-ink-soft transition hover:text-ink"
             >
               ← All customers
             </Link>
@@ -127,12 +127,12 @@ export default async function CustomerPage({ params, searchParams }: PageProps) 
           {saved ? <Banner tone="good">{saved}.</Banner> : null}
 
           {/* ---------------------------------------------------- customer */}
-          <section className="overflow-hidden rounded-xl border border-line bg-card shadow-[0_1px_2px_rgba(15,23,42,0.04)]">
+          <section className="overflow-hidden rounded-xl border border-line bg-card shadow-card">
             <div className="border-b border-line px-5 py-4">
-              <h2 className="text-[14.5px] font-semibold tracking-tight text-ink">
+              <h2 className="text-base font-semibold tracking-tight text-ink">
                 Customer details
               </h2>
-              <p className="mt-0.5 text-[12.5px] text-ink-soft">
+              <p className="mt-0.5 text-xs text-ink-soft">
                 Added {new Date(customer.createdAt).toLocaleDateString("en-KE")}
               </p>
             </div>
@@ -165,12 +165,12 @@ export default async function CustomerPage({ params, searchParams }: PageProps) 
           </section>
 
           {/* --------------------------------------------------- locations */}
-          <section className="overflow-hidden rounded-xl border border-line bg-card shadow-[0_1px_2px_rgba(15,23,42,0.04)]">
+          <section className="overflow-hidden rounded-xl border border-line bg-card shadow-card">
             <div className="border-b border-line px-5 py-4">
-              <h2 className="text-[14.5px] font-semibold tracking-tight text-ink">
+              <h2 className="text-base font-semibold tracking-tight text-ink">
                 Delivery places
               </h2>
-              <p className="mt-0.5 text-[12.5px] text-ink-soft">
+              <p className="mt-0.5 text-xs text-ink-soft">
                 One customer can have a main house, an annex and a shop.
               </p>
             </div>
@@ -181,21 +181,21 @@ export default async function CustomerPage({ params, searchParams }: PageProps) 
                   <div className="flex flex-wrap items-start justify-between gap-3">
                     <div className="min-w-0">
                       <div className="flex flex-wrap items-center gap-2">
-                        <span className="text-[13.5px] font-semibold text-ink">
+                        <span className="text-sm font-semibold text-ink">
                           {location.label}
                         </span>
                         {location.isPrimary ? <StatusBadge tone="ok">Main</StatusBadge> : null}
                         {location.active ? null : <StatusBadge tone="critical">Inactive</StatusBadge>}
                       </div>
-                      <p className="mt-1 text-[12.5px] text-ink-soft">
+                      <p className="mt-1 text-xs text-ink-soft">
                         {location.addressLine || "No address recorded"}
                       </p>
                       {location.details ? (
-                        <p className="mt-0.5 text-[12.5px] text-ink-soft/85">
+                        <p className="mt-0.5 text-xs text-ink-soft/85">
                           {location.details}
                         </p>
                       ) : null}
-                      <p className="mt-0.5 flex flex-wrap items-center gap-2 text-[11.5px] text-ink-soft/75">
+                      <p className="mt-0.5 flex flex-wrap items-center gap-2 text-xs text-ink-soft/75">
                         {[location.area, location.town].filter(Boolean).join(" · ")}
                         {location.pinLat !== null && location.pinLng !== null ? (
                           <a
@@ -214,7 +214,7 @@ export default async function CustomerPage({ params, searchParams }: PageProps) 
 
                     <div className="flex flex-wrap items-center gap-2">
                       <details className="rounded-lg ring-1 ring-line">
-                        <summary className="cursor-pointer list-none rounded-lg bg-white px-3 py-1.5 text-[12px] font-semibold text-ink transition hover:bg-canvas">
+                        <summary className="cursor-pointer list-none rounded-lg bg-white px-3 py-1.5 text-xs font-semibold text-ink transition hover:bg-canvas">
                           Edit
                         </summary>
                         <form
@@ -251,7 +251,7 @@ export default async function CustomerPage({ params, searchParams }: PageProps) 
                             <TextInput name="town" defaultValue={location.town ?? ""} />
                           </Field>
                           <div className="sm:col-span-2">
-                            <span className="mb-1 block text-[11.5px] font-medium text-ink-soft">
+                            <span className="mb-1 block text-xs font-medium text-ink-soft">
                               Map pin
                             </span>
                             <PinField
@@ -319,7 +319,7 @@ export default async function CustomerPage({ params, searchParams }: PageProps) 
                 <Checkbox name="isPrimary" label="Make this the main place" />
               </div>
               <div className="sm:col-span-2">
-                <span className="mb-1 block text-[11.5px] font-medium text-ink-soft">
+                <span className="mb-1 block text-xs font-medium text-ink-soft">
                   Map pin (optional)
                 </span>
                 <PinField latName="pinLat" lngName="pinLng" />
@@ -331,12 +331,12 @@ export default async function CustomerPage({ params, searchParams }: PageProps) 
           </section>
 
           {/* ------------------------------------------------------------ contacts */}
-          <section className="overflow-hidden rounded-xl border border-line bg-card shadow-[0_1px_2px_rgba(15,23,42,0.04)]">
+          <section className="overflow-hidden rounded-xl border border-line bg-card shadow-card">
             <div className="border-b border-line px-5 py-4">
-              <h2 className="text-[14.5px] font-semibold tracking-tight text-ink">
+              <h2 className="text-base font-semibold tracking-tight text-ink">
                 People to call
               </h2>
-              <p className="mt-0.5 text-[12.5px] text-ink-soft">
+              <p className="mt-0.5 text-xs text-ink-soft">
                 Every number says whose it is. The role is optional — wife, father,
                 children, maid, caretaker.
               </p>
@@ -348,23 +348,23 @@ export default async function CustomerPage({ params, searchParams }: PageProps) 
                   <div className="flex flex-wrap items-start justify-between gap-3">
                     <div className="min-w-0">
                       <div className="flex flex-wrap items-center gap-2">
-                        <span className="text-[13.5px] font-semibold text-ink">
+                        <span className="text-sm font-semibold text-ink">
                           {contact.name}
                         </span>
                         {contact.role ? <StatusBadge tone="info">{contact.role}</StatusBadge> : null}
                         {contact.isPrimary ? <StatusBadge tone="ok">Main</StatusBadge> : null}
                       </div>
-                      <p className="mt-1 font-mono text-[12.5px] text-ink-soft">
+                      <p className="mt-1 font-mono text-xs text-ink-soft">
                         {formatKenyanPhone(contact.phone)}
                       </p>
                       {contact.notes ? (
-                        <p className="mt-1 text-[12px] text-ink-soft/80">{contact.notes}</p>
+                        <p className="mt-1 text-xs text-ink-soft/80">{contact.notes}</p>
                       ) : null}
                     </div>
 
                     <div className="flex flex-wrap items-center gap-2">
                       <details className="rounded-lg ring-1 ring-line">
-                        <summary className="cursor-pointer list-none rounded-lg bg-white px-3 py-1.5 text-[12px] font-semibold text-ink transition hover:bg-canvas">
+                        <summary className="cursor-pointer list-none rounded-lg bg-white px-3 py-1.5 text-xs font-semibold text-ink transition hover:bg-canvas">
                           Edit
                         </summary>
                         <form
@@ -437,7 +437,7 @@ export default async function CustomerPage({ params, searchParams }: PageProps) 
 
           {/* ------------------------------------------------------- danger */}
           <section className="space-y-3">
-            <h2 className="text-[14.5px] font-semibold tracking-tight text-ink">
+            <h2 className="text-base font-semibold tracking-tight text-ink">
               Account — invoices and payments
             </h2>
             {billing ? (
@@ -448,7 +448,7 @@ export default async function CustomerPage({ params, searchParams }: PageProps) 
                 balance={statement.balance}
               />
             ) : (
-              <p className="rounded-xl border border-line bg-card px-5 py-4 text-[13px] text-ink-soft">
+              <p className="rounded-xl border border-line bg-card px-5 py-4 text-sm text-ink-soft">
                 Billing is unavailable without a database connection.
               </p>
             )}
@@ -457,10 +457,10 @@ export default async function CustomerPage({ params, searchParams }: PageProps) 
           <section className="overflow-hidden rounded-xl border border-bad/25 bg-bad-soft/40">
             <div className="flex flex-wrap items-center justify-between gap-4 p-5">
               <div>
-                <h2 className="text-[13.5px] font-semibold text-bad">
+                <h2 className="text-sm font-semibold text-bad">
                   Delete this customer
                 </h2>
-                <p className="mt-0.5 text-[12.5px] text-ink-soft">
+                <p className="mt-0.5 text-xs text-ink-soft">
                   Removes {customer.locations.length} delivery place
                   {customer.locations.length === 1 ? "" : "s"} and{" "}
                   {customer.contacts.length} phone number

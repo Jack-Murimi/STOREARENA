@@ -48,28 +48,28 @@ export function AccountPanel({
         ].map((card) => (
           <div
             key={card.label}
-            className="rounded-xl border border-line bg-card px-4 py-3 shadow-[0_1px_2px_rgba(15,23,42,0.04)]"
+            className="rounded-xl border border-line bg-card px-4 py-3 shadow-card"
           >
-            <div className="text-[11px] uppercase tracking-[0.08em] text-ink-soft">
+            <div className="text-xs uppercase tracking-wide text-ink-soft">
               {card.label}
             </div>
-            <div className={`mt-1 text-[19px] font-semibold tabular-nums ${card.tone ?? "text-ink"}`}>
+            <div className={`mt-1 text-lg font-semibold tabular-nums ${card.tone ?? "text-ink"}`}>
               {card.value}
             </div>
-            <div className="text-[11.5px] text-ink-soft/80">{card.hint}</div>
+            <div className="text-xs text-ink-soft/80">{card.hint}</div>
           </div>
         ))}
       </div>
 
       {/* ---- invoices ---- */}
-      <div className="overflow-hidden rounded-xl border border-line bg-card shadow-[0_1px_2px_rgba(15,23,42,0.04)]">
+      <div className="overflow-hidden rounded-xl border border-line bg-card shadow-card">
         <div className="flex flex-wrap items-center justify-between gap-2 border-b border-line px-5 py-3">
-          <h2 className="text-[14.5px] font-semibold tracking-tight text-ink">Invoices</h2>
+          <h2 className="text-base font-semibold tracking-tight text-ink">Invoices</h2>
           <InvoiceForm customerId={customerId} />
         </div>
 
         {invoices.length === 0 ? (
-          <p className="px-5 py-8 text-center text-[13px] text-ink-soft">
+          <p className="px-5 py-8 text-center text-sm text-ink-soft">
             Nothing invoiced yet. Raise an invoice when gas goes out — or let a recorded sale
             raise one automatically.
           </p>
@@ -77,7 +77,7 @@ export function AccountPanel({
           <div className="overflow-x-auto">
             <table className="w-full min-w-[620px] text-left">
               <thead>
-                <tr className="border-b border-line text-[11px] uppercase tracking-[0.08em] text-ink-soft">
+                <tr className="border-b border-line text-xs uppercase tracking-wide text-ink-soft">
                   <th className="px-5 py-2.5 font-semibold">Invoice</th>
                   <th className="px-3 py-2.5 font-semibold">Issued</th>
                   <th className="px-3 py-2.5 font-semibold">Items</th>
@@ -90,13 +90,13 @@ export function AccountPanel({
                 {invoices.map((invoice) => {
                   const status = statusOf(invoice);
                   return (
-                    <tr key={invoice.id} className="text-[13px] hover:bg-canvas/60">
+                    <tr key={invoice.id} className="text-sm hover:bg-canvas/60">
                       <td className="px-5 py-3">
-                        <span className="font-mono text-[12px] text-ink-soft">
+                        <span className="font-mono text-xs text-ink-soft">
                           {invoice.reference}
                         </span>
                         <span
-                          className={`ml-2 rounded-full px-2 py-0.5 text-[10.5px] font-semibold uppercase tracking-wide ${status.tone}`}
+                          className={`ml-2 rounded-full px-2 py-0.5 text-xs font-semibold uppercase tracking-wide ${status.tone}`}
                         >
                           {status.label}
                         </span>
@@ -128,9 +128,9 @@ export function AccountPanel({
       </div>
 
       {/* ---- payments ---- */}
-      <div className="overflow-hidden rounded-xl border border-line bg-card shadow-[0_1px_2px_rgba(15,23,42,0.04)]">
+      <div className="overflow-hidden rounded-xl border border-line bg-card shadow-card">
         <div className="border-b border-line px-5 py-3">
-          <h2 className="text-[14.5px] font-semibold tracking-tight text-ink">Payments</h2>
+          <h2 className="text-base font-semibold tracking-tight text-ink">Payments</h2>
         </div>
 
         <form action={recordPayment} className="grid gap-2 border-b border-line px-5 py-4 sm:grid-cols-[130px_1fr_150px_150px_auto]">
@@ -140,17 +140,17 @@ export function AccountPanel({
             inputMode="decimal"
             required
             placeholder="Amount"
-            className="rounded-lg border border-line bg-white px-3 py-2 text-[13px] outline-none focus:border-flame-500"
+            className="rounded-lg border border-line bg-white px-3 py-2 text-sm outline-none focus:border-flame-500"
           />
           <input
             name="reference"
             placeholder="M-Pesa code / cheque no."
-            className="rounded-lg border border-line bg-white px-3 py-2 text-[13px] outline-none focus:border-flame-500"
+            className="rounded-lg border border-line bg-white px-3 py-2 text-sm outline-none focus:border-flame-500"
           />
           <select
             name="method"
             defaultValue="MPESA"
-            className="rounded-lg border border-line bg-white px-3 py-2 text-[13px] outline-none focus:border-flame-500"
+            className="rounded-lg border border-line bg-white px-3 py-2 text-sm outline-none focus:border-flame-500"
           >
             {PAYMENT_METHODS.map((method) => (
               <option key={method} value={method}>
@@ -162,20 +162,20 @@ export function AccountPanel({
             type="date"
             name="receivedOn"
             defaultValue={new Date().toISOString().slice(0, 10)}
-            className="rounded-lg border border-line bg-white px-3 py-2 text-[13px] outline-none focus:border-flame-500"
+            className="rounded-lg border border-line bg-white px-3 py-2 text-sm outline-none focus:border-flame-500"
           />
           <SubmitButton pendingLabel="Saving…">Record payment</SubmitButton>
         </form>
 
         {payments.length === 0 ? (
-          <p className="px-5 py-8 text-center text-[13px] text-ink-soft">
+          <p className="px-5 py-8 text-center text-sm text-ink-soft">
             No payments recorded yet.
           </p>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full min-w-[560px] text-left">
               <thead>
-                <tr className="border-b border-line text-[11px] uppercase tracking-[0.08em] text-ink-soft">
+                <tr className="border-b border-line text-xs uppercase tracking-wide text-ink-soft">
                   <th className="px-5 py-2.5 font-semibold">Date</th>
                   <th className="px-3 py-2.5 font-semibold">Method</th>
                   <th className="px-3 py-2.5 font-semibold">Reference</th>
@@ -185,10 +185,10 @@ export function AccountPanel({
               </thead>
               <tbody className="divide-y divide-line">
                 {payments.map((payment) => (
-                  <tr key={payment.id} className="text-[13px] hover:bg-canvas/60">
+                  <tr key={payment.id} className="text-sm hover:bg-canvas/60">
                     <td className="px-5 py-3 text-ink-soft">{payment.receivedOn}</td>
                     <td className="px-3 py-3">{PAYMENT_METHOD_LABELS[payment.method]}</td>
-                    <td className="px-3 py-3 font-mono text-[12px] text-ink-soft">
+                    <td className="px-3 py-3 font-mono text-xs text-ink-soft">
                       {payment.reference ?? "—"}
                     </td>
                     <td className="px-3 py-3 text-ink-soft">

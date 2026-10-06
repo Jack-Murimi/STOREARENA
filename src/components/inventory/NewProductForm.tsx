@@ -34,7 +34,7 @@ export function NewProductForm({
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="inline-flex items-center rounded-lg bg-flame-600 px-3.5 py-2 text-[13px] font-semibold text-white transition hover:bg-flame-700"
+        className="inline-flex items-center rounded-lg bg-flame-600 px-3.5 py-2 text-sm font-semibold text-white transition hover:bg-flame-700"
       >
         + New product
       </button>
@@ -44,30 +44,30 @@ export function NewProductForm({
   return (
     <form
       action={createProduct}
-      className="space-y-3 rounded-xl border border-line bg-card p-4 shadow-[0_1px_2px_rgba(15,23,42,0.04)]"
+      className="space-y-3 rounded-xl border border-line bg-card p-4 shadow-card"
     >
       <div className="grid gap-3 sm:grid-cols-2">
         <label className="space-y-1">
-          <span className="text-[11.5px] font-semibold uppercase tracking-wide text-ink-soft">
+          <span className="text-xs font-semibold uppercase tracking-wide text-ink-soft">
             Product name
           </span>
           <input
             name="name"
             required
             placeholder="Afri Gas 13 kg"
-            className="w-full rounded-lg border border-line bg-white px-3 py-2 text-[13px] outline-none focus:border-flame-500"
+            className="w-full rounded-lg border border-line bg-white px-3 py-2 text-sm outline-none focus:border-flame-500"
           />
         </label>
 
         <label className="space-y-1">
-          <span className="text-[11.5px] font-semibold uppercase tracking-wide text-ink-soft">
+          <span className="text-xs font-semibold uppercase tracking-wide text-ink-soft">
             Category
           </span>
           <select
             name="categoryId"
             value={categoryId}
             onChange={(e) => setCategoryId(e.target.value)}
-            className="w-full rounded-lg border border-line bg-white px-3 py-2 text-[13px] outline-none focus:border-flame-500"
+            className="w-full rounded-lg border border-line bg-white px-3 py-2 text-sm outline-none focus:border-flame-500"
           >
             {categories.map((c) => (
               <option key={c.id} value={c.id}>
@@ -79,7 +79,7 @@ export function NewProductForm({
 
         {isCylinder ? (
           <label className="space-y-1">
-            <span className="text-[11.5px] font-semibold uppercase tracking-wide text-ink-soft">
+            <span className="text-xs font-semibold uppercase tracking-wide text-ink-soft">
               Cylinder size (kg)
             </span>
             <input
@@ -87,31 +87,31 @@ export function NewProductForm({
               inputMode="decimal"
               required
               placeholder="13"
-              className="w-full rounded-lg border border-line bg-white px-3 py-2 text-[13px] outline-none focus:border-flame-500"
+              className="w-full rounded-lg border border-line bg-white px-3 py-2 text-sm outline-none focus:border-flame-500"
             />
           </label>
         ) : (
-          <p className="self-end rounded-lg bg-canvas px-3 py-2 text-[12px] text-ink-soft">
+          <p className="self-end rounded-lg bg-canvas px-3 py-2 text-xs text-ink-soft">
             {category?.name} are counted as plain stock, so there is no cylinder size.
           </p>
         )}
 
         <label className="space-y-1">
-          <span className="text-[11.5px] font-semibold uppercase tracking-wide text-ink-soft">
+          <span className="text-xs font-semibold uppercase tracking-wide text-ink-soft">
             List price (KSh)
           </span>
           <input
             name="listPriceKsh"
             inputMode="decimal"
             placeholder="Optional — what a refill usually costs"
-            className="w-full rounded-lg border border-line bg-white px-3 py-2 text-[13px] outline-none focus:border-flame-500"
+            className="w-full rounded-lg border border-line bg-white px-3 py-2 text-sm outline-none focus:border-flame-500"
           />
         </label>
       </div>
 
       <div className="space-y-2 rounded-lg bg-canvas p-3">
         <div className="flex flex-wrap gap-4">
-          <label className="flex items-center gap-2 text-[12.5px] text-ink">
+          <label className="flex items-center gap-2 text-xs text-ink">
             <input
               type="radio"
               checked={brandMode === "existing"}
@@ -119,7 +119,7 @@ export function NewProductForm({
             />
             Existing brand
           </label>
-          <label className="flex items-center gap-2 text-[12.5px] text-ink">
+          <label className="flex items-center gap-2 text-xs text-ink">
             <input
               type="radio"
               checked={brandMode === "new"}
@@ -132,7 +132,7 @@ export function NewProductForm({
         {brandMode === "existing" ? (
           <select
             name="brandId"
-            className="w-full rounded-lg border border-line bg-white px-3 py-2 text-[13px] outline-none focus:border-flame-500 sm:max-w-xs"
+            className="w-full rounded-lg border border-line bg-white px-3 py-2 text-sm outline-none focus:border-flame-500 sm:max-w-xs"
           >
             <option value="">Choose a brand…</option>
             {brands.map((b) => (
@@ -145,7 +145,7 @@ export function NewProductForm({
           <input
             name="newBrandName"
             placeholder="Brand name, e.g. Mengas"
-            className="w-full rounded-lg border border-line bg-white px-3 py-2 text-[13px] outline-none focus:border-flame-500 sm:max-w-xs"
+            className="w-full rounded-lg border border-line bg-white px-3 py-2 text-sm outline-none focus:border-flame-500 sm:max-w-xs"
           />
         )}
       </div>
@@ -155,7 +155,7 @@ export function NewProductForm({
         <button
           type="button"
           onClick={() => setOpen(false)}
-          className="text-[12.5px] font-medium text-ink-soft hover:text-ink"
+          className="text-xs font-medium text-ink-soft hover:text-ink"
         >
           Cancel
         </button>
