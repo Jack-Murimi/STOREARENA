@@ -132,13 +132,21 @@ function Cards<T>({
     <ul className="divide-line divide-y md:hidden">
       {rows.map((row) => {
         const href = rowHref?.(row);
-        const Shell = href ? "a" : "div";
         return (
           <li key={rowKey(row)}>
-            <Shell
-              {...(href ? { href } : {})}
-              className="block px-4 py-3 hover:bg-surface-sunken"
-            >
+            {/* A div with a stretched overlay link, not an <a> wrapping the
+                card: cells may hold their own links (a phone number, say) and
+                nesting anchors is invalid, so the browser discards one. */}
+            <div className="relative block px-4 py-3 hover:bg-surface-sunken">
+              {href ? (
+                <a
+                  href={href}
+                  className="absolute inset-0 z-10"
+                  aria-label={`Open ${rowKey(row)}`}
+                >
+                  <span className="sr-only">Open</span>
+                </a>
+              ) : null}
               <dl className="grid grid-cols-2 gap-x-3 gap-y-1">
                 {primary.map((column) => (
                   <div
@@ -173,7 +181,7 @@ function Cards<T>({
                   </dl>
                 </details>
               ) : null}
-            </Shell>
+            </div>
           </li>
         );
       })}

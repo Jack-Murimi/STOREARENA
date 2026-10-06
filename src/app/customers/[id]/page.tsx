@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { AppShell } from "@/components/AppShell";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { DatabaseUnavailable } from "@/components/customers/DatabaseUnavailable";
@@ -11,8 +12,6 @@ import {
   SubmitButton,
   TextInput,
 } from "@/components/customers/Form";
-import { Sidebar } from "@/components/Sidebar";
-import { Topbar } from "@/components/Topbar";
 import { StatusBadge } from "@/components/ui";
 import {
   CustomerKind,
@@ -57,20 +56,15 @@ export default async function CustomerPage({ params, searchParams }: PageProps) 
 
   if (!service) {
     return (
-      <div className="flex min-h-screen bg-canvas">
-        <Sidebar staff={currentStaff} station={stationName} activeHref="/customers" />
-        <div className="flex min-w-0 flex-1 flex-col">
-          <Topbar
-            title="Customer"
-            subtitle="Customer records"
-            staff={currentStaff}
-            activeHref="/customers"
-          />
-          <main className="flex-1 space-y-5 px-4 py-5 sm:px-6 lg:px-8">
-            <DatabaseUnavailable notice={notice} diagnostic={diagnostic} />
-          </main>
-        </div>
-      </div>
+      <AppShell
+        title="Customer"
+        subtitle="Customer records"
+        staff={currentStaff}
+        branch={stationName}
+        activeHref="/customers"
+      >
+        <DatabaseUnavailable notice={notice} diagnostic={diagnostic} />
+      </AppShell>
     );
   }
 
@@ -98,12 +92,8 @@ export default async function CustomerPage({ params, searchParams }: PageProps) 
   return (
     <>
       <SavedToast key={saved ?? error ?? "none"} message={saved ?? error} tone={error ? "bad" : "good"} />
-      <div className="flex min-h-screen bg-canvas">
-      <Sidebar staff={currentStaff} station={stationName} activeHref="/customers" />
-
-      <div className="flex min-w-0 flex-1 flex-col">
-        <Topbar
-          title={customer.name}
+      <AppShell
+        title={customer.name}
           subtitle={`${customer.code} · ${
             customer.kind === CustomerKind.Business ? "Business" : "Household"
           } · ${customer.locations.length} place${
@@ -111,11 +101,10 @@ export default async function CustomerPage({ params, searchParams }: PageProps) 
           } · ${customer.contacts.length} number${
             customer.contacts.length === 1 ? "" : "s"
           }`}
-          staff={currentStaff}
-          activeHref="/customers"
-        />
-
-        <main className="flex-1 space-y-5 px-4 py-5 sm:px-6 lg:px-8">
+        staff={currentStaff}
+        branch={stationName}
+        activeHref="/customers"
+      >
           <div className="flex flex-wrap items-center justify-between gap-3">
             <Link
               href="/customers"
@@ -485,9 +474,7 @@ export default async function CustomerPage({ params, searchParams }: PageProps) 
               </form>
             </div>
           </section>
-        </main>
-      </div>
-    </div>
+      </AppShell>
     </>
   );
 }

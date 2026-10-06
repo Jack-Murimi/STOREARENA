@@ -17,16 +17,12 @@ export function Topbar({
   subtitle,
   staff,
   branch,
-  /** Transitional: older pages pass this; the nav highlight lives in the sidebar. */
-  activeHref,
 }: {
   title: string;
   subtitle?: string;
   staff: StaffMember;
   branch?: string;
-  activeHref?: string;
 }) {
-  void activeHref;
   return (
     <header className="sticky top-0 z-20 border-b border-border bg-surface">
       <div className="flex min-h-[var(--header-page)] items-center gap-3 px-4 sm:px-6">

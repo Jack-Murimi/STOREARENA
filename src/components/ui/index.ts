@@ -12,3 +12,4 @@ export type { DataColumn, DataGroup } from "./DataTable";
 export { Skeleton, SkeletonRows } from "./Skeleton";
 export { Card } from "./Card";
 export { Tabs } from "./Tabs";
+export { SearchInput } from "./SearchInput";

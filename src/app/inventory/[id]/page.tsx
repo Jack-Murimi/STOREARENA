@@ -1,11 +1,10 @@
 import type { Metadata } from "next";
+import { AppShell } from "@/components/AppShell";
 import Link from "next/link";
 import { receiveStock } from "../actions";
 import { DatabaseUnavailable } from "@/components/customers/DatabaseUnavailable";
 import { SavedToast } from "@/components/customers/SavedToast";
 import { SubmitButton } from "@/components/customers/SubmitButton";
-import { Sidebar } from "@/components/Sidebar";
-import { Topbar } from "@/components/Topbar";
 import { StatusBadge } from "@/components/ui";
 import { currentStaff, stationName } from "@/lib/data";
 import { getCustomerContext } from "@/lib/db";
@@ -46,18 +45,15 @@ export default async function ProductStockPage({ params, searchParams }: PagePro
   const { products, stock, notice, diagnostic } = await getCustomerContext();
 
   const shell = (body: React.ReactNode) => (
-    <div className="flex min-h-screen bg-canvas">
-      <Sidebar staff={currentStaff} station={stationName} activeHref="/inventory" />
-      <div className="flex min-w-0 flex-1 flex-col">
-        <Topbar
-          title="Stock"
-          subtitle="Movements"
-          staff={currentStaff}
-          activeHref="/inventory"
-        />
-        <main className="flex-1 space-y-5 px-4 py-5 sm:px-6 lg:px-8">{body}</main>
-      </div>
-    </div>
+    <AppShell
+      title="Stock"
+      subtitle="Movements"
+      staff={currentStaff}
+      branch={stationName}
+      activeHref="/inventory"
+    >
+      {body}
+    </AppShell>
   );
 
   if (!products || !stock) {

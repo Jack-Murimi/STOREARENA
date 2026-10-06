@@ -8,22 +8,7 @@ import { navItems } from "./nav";
  * A "Signed in" block at the bottom of the sidebar duplicated the top bar's
  * avatar and gave the branch two homes.
  */
-export function Sidebar({
-  activeHref = "/",
-  /**
-   * Transitional: older pages still pass the signed-in user and the station to
-   * the sidebar. Neither is rendered — both live in the top bar now — so the
-   * props are accepted and ignored until those pages move to `AppShell`.
-   */
-  staff,
-  station,
-}: {
-  activeHref?: string;
-  staff?: unknown;
-  station?: unknown;
-}) {
-  void staff;
-  void station;
+export function Sidebar({ activeHref = "/" }: { activeHref?: string }) {
   return (
     <aside className="hidden w-[var(--sidebar-width)] shrink-0 flex-col border-r border-nav-hover bg-nav-bg md:flex">
       <div className="flex h-[var(--header-page)] items-center border-b border-nav-hover px-4">

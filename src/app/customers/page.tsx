@@ -1,16 +1,25 @@
 import type { Metadata } from "next";
-import Link from "next/link";
+import { AppShell } from "@/components/AppShell";
 import { CustomerCreateForm } from "@/components/customers/CustomerCreateForm";
 import { DatabaseUnavailable } from "@/components/customers/DatabaseUnavailable";
 import { Banner } from "@/components/customers/Form";
-import { SubmitButton } from "@/components/customers/SubmitButton";
-import { Sidebar } from "@/components/Sidebar";
-import { Topbar } from "@/components/Topbar";
-import { StatusBadge } from "@/components/ui";
 import { SavedToast } from "@/components/customers/SavedToast";
-import { CustomerKind, formatKenyanPhone } from "@/lib/customers";
+import { UsersIcon } from "@/components/icons";
+import {
+  ButtonLink,
+  Card,
+  DataTable,
+  EmptyState,
+  FilterBar,
+  PageHeader,
+  SearchInput,
+  StatusBadge,
+} from "@/components/ui";
+import type { DataColumn } from "@/components/ui";
+import { CustomerKind, formatKenyanPhone, type CustomerRecord } from "@/lib/customers";
 import { currentStaff, stationName } from "@/lib/data";
 import { getCustomerContext } from "@/lib/db";
+import { formatKsh } from "@/lib/format";
 
 export const metadata: Metadata = {
   title: "Customers",
@@ -35,30 +44,124 @@ export default async function CustomersPage({ searchParams }: PageProps) {
 
   if (!service) {
     return (
-      <div className="flex min-h-screen bg-canvas">
-        <Sidebar staff={currentStaff} station={stationName} activeHref="/customers" />
-        <div className="flex min-w-0 flex-1 flex-col">
-          <Topbar
-            title="Customers"
-            subtitle="Customer records"
-            staff={currentStaff}
-            activeHref="/customers"
-          />
-          <main className="flex-1 space-y-5 px-4 py-5 sm:px-6 lg:px-8">
-            <DatabaseUnavailable notice={notice} diagnostic={diagnostic} />
-          </main>
-        </div>
-      </div>
+      <AppShell
+        title="Customers"
+        subtitle="Customer records"
+        staff={currentStaff}
+        branch={stationName}
+        activeHref="/customers"
+      >
+        <DatabaseUnavailable notice={notice} diagnostic={diagnostic} />
+      </AppShell>
     );
   }
 
-  const customers = await service.list({
-    includeInactive: true,
-    search: query || undefined,
-  });
-
+  const customers = await service.list(query ? { search: query } : undefined);
   const balances = billing ? await billing.balances() : {};
   const activeCount = customers.filter((c) => c.active).length;
+
+  const columns: DataColumn<CustomerRecord>[] = [
+    {
+      key: "customer",
+      header: "Customer",
+      priority: 1,
+      cell: (customer) => (
+        <span className="block min-w-0">
+          <span className="flex items-center gap-2">
+            <span className="truncate font-medium text-ink">{customer.name}</span>
+            {customer.active ? null : <StatusBadge tone="critical">Inactive</StatusBadge>}
+          </span>
+          {/* The code is an identifier, so it is the one thing here in mono. */}
+          <span className="code block truncate text-xs text-ink-subtle">
+            {customer.code} ·{" "}
+            {customer.kind === CustomerKind.Business ? "Business" : "Household"}
+          </span>
+        </span>
+      ),
+    },
+    {
+      key: "places",
+      header: "Places",
+      align: "right",
+      num: true,
+      cell: (customer) => {
+        const primary =
+          customer.locations.find((l) => l.isPrimary) ?? customer.locations[0];
+        return (
+          <span className="block">
+            {customer.locations.length}
+            <span className="block text-xs text-ink-subtle">
+              {primary?.area ?? primary?.label ?? "—"}
+            </span>
+          </span>
+        );
+      },
+    },
+    {
+      key: "contacts",
+      header: "Contacts",
+      priority: 2,
+      /* One column instead of a count plus a separate "main number" column.
+         The count on its own told you nothing you could act on. */
+      cell: (customer) => {
+        const ordered = [
+          ...customer.contacts.filter((c) => c.isPrimary),
+          ...customer.contacts.filter((c) => !c.isPrimary),
+        ];
+        const primary = ordered[0];
+        if (!primary) return <span className="text-ink-subtle">—</span>;
+        const rest = ordered.length - 1;
+        return (
+          <span className="block min-w-0">
+            <span className="flex items-baseline gap-2">
+              <span className="truncate text-sm text-ink">{primary.name}</span>
+              {/* The only tappable number in the row. Two numbers in one row
+                  means two targets close together on a phone, and dialling the
+                  wrong one is worse than tapping twice. */}
+              <a
+                href={`tel:${primary.phone}`}
+                className="num relative z-20 shrink-0 font-medium text-orange-700 hover:underline"
+              >
+                {formatKenyanPhone(primary.phone)}
+              </a>
+            </span>
+            {primary.role || rest > 0 ? (
+              <span className="block truncate text-xs text-ink-subtle">
+                {[primary.role, rest > 0 ? `+${rest} more` : null]
+                  .filter(Boolean)
+                  .join(" · ")}
+              </span>
+            ) : null}
+          </span>
+        );
+      },
+    },
+    {
+      key: "balance",
+      header: "Balance",
+      align: "right",
+      num: true,
+      priority: 3,
+      /* Only money that is owed gets a chip. A screen full of red "Settled"
+         badges makes the ones that matter invisible. */
+      cell: (customer) => {
+        const owed = balances[customer.id]?.balance ?? 0;
+        if (owed > 0) {
+          return (
+            <StatusBadge tone="critical">
+              {formatKsh(owed)} owed
+            </StatusBadge>
+          );
+        }
+        if (owed < 0) {
+          return (
+            <span className="text-sm text-ink-subtle">{formatKsh(Math.abs(owed))} credit</span>
+          );
+        }
+        return <span className="text-ink-subtle">—</span>;
+      },
+    },
+  ];
 
   return (
     <>
@@ -66,181 +169,89 @@ export default async function CustomersPage({ searchParams }: PageProps) {
         key={saved ?? (justDeleted ? "deleted" : "none")}
         message={saved ?? (justDeleted ? "Customer deleted." : null)}
       />
-    <div className="flex min-h-screen bg-canvas">
-      <Sidebar staff={currentStaff} station={stationName} activeHref="/customers" />
-
-      <div className="flex min-w-0 flex-1 flex-col">
-        <Topbar
+      <AppShell
+        title="Customers"
+        subtitle={`${customers.length} of ${activeCount} active`}
+        staff={currentStaff}
+        branch={stationName}
+        activeHref="/customers"
+      >
+        <PageHeader
           title="Customers"
-          subtitle="Households and businesses we deliver to, with every place and every person to call"
-          staff={currentStaff}
-          activeHref="/customers"
+          subtitle={`Households and businesses we deliver to${
+            mode === "database" ? " · live Supabase data" : " · demo data"
+          }`}
+          action={
+            <ButtonLink href={showNewForm ? "/customers" : "/customers?new=1"} variant="primary">
+              {showNewForm ? "Close" : "New customer"}
+            </ButtonLink>
+          }
         />
 
-        <main className="flex-1 space-y-5 px-4 py-5 sm:px-6 lg:px-8">
-          {notice ? <Banner tone="warn">{notice}</Banner> : null}
-          {error ? <Banner tone="bad">{error}</Banner> : null}
-          {justDeleted ? (
-            <Banner tone="good">Customer deleted, with all of their locations and numbers.</Banner>
-          ) : null}
+        {notice ? <Banner tone="warn">{notice}</Banner> : null}
+        {error ? <Banner tone="bad">{error}</Banner> : null}
+        {justDeleted ? (
+          <Banner tone="good">
+            Customer deleted, with all of their locations and numbers.
+          </Banner>
+        ) : null}
 
-          <section className="overflow-hidden rounded-xl border border-line bg-card shadow-[0_1px_2px_rgba(15,23,42,0.04)]">
-            <div className="flex flex-wrap items-start justify-between gap-4 border-b border-line px-5 py-4">
-              <div className="min-w-0">
-                <h1 className="text-[15px] font-semibold tracking-tight text-ink">
-                  Customer directory
-                </h1>
-                <p className="mt-0.5 text-[12.5px] text-ink-soft">
-                  {customers.length} of {activeCount} active
-                  {mode === "database" ? " · live Supabase data" : " · demo data"}
-                </p>
-              </div>
+        {showNewForm ? (
+          <Card title="New customer">
+            <CustomerCreateForm />
+          </Card>
+        ) : null}
 
-              <div className="flex flex-wrap items-end gap-2">
-                <form className="flex items-end gap-2" action="/customers" method="get">
-                  <input
-                    className="w-56 rounded-lg border border-line bg-white px-3 py-2 text-[13px] text-ink outline-none transition placeholder:text-ink-soft/50 focus:border-flame-400 focus:ring-2 focus:ring-flame-400/20"
-                    type="search"
-                    name="q"
-                    defaultValue={query}
-                    placeholder="Name, code, person or number"
-                  />
-                  <SubmitButton tone="ghost">Search</SubmitButton>
-                </form>
-                <Link
-                  href={showNewForm ? "/customers" : "/customers?new=1"}
-                  className="inline-flex items-center gap-1.5 rounded-lg bg-flame-500 px-3 py-2 text-[12.5px] font-semibold text-white ring-1 ring-flame-600/20 transition hover:bg-flame-600"
-                >
-                  {showNewForm ? "Close" : "New customer"}
-                </Link>
-              </div>
-            </div>
+        {/* One toolbar: search and the counts. The "Open" button that used to
+            end every row is gone — the whole row is the link now. */}
+        <FilterBar
+          search={
+            <form action="/customers" method="get" role="search">
+              <SearchInput
+                name="q"
+                defaultValue={query}
+                placeholder="Name, code, person or number"
+                label="Search customers"
+              />
+            </form>
+          }
+          filters={
+            <p className="num text-sm text-ink-subtle">
+              {customers.length} shown
+              {query ? ` for “${query}”` : ""} · {activeCount} active
+            </p>
+          }
+        />
 
-            {showNewForm ? (
-              <div className="border-b border-line bg-canvas/60 px-5 py-5">
-                <CustomerCreateForm />
-              </div>
-            ) : null}
-
-            <div className="overflow-x-auto">
-              <table className="w-full min-w-[720px] text-left">
-                <thead>
-                  <tr className="border-b border-line text-[11px] uppercase tracking-[0.08em] text-ink-soft">
-                    <th className="px-5 py-3 font-semibold">Code</th>
-                    <th className="px-3 py-3 font-semibold">Customer</th>
-                    <th className="px-3 py-3 font-semibold">Places</th>
-                    <th className="px-3 py-3 font-semibold">People to call</th>
-                    <th className="px-3 py-3 font-semibold">Main number</th>
-                    <th className="px-3 py-3 text-right font-semibold">Balance</th>
-                    <th className="px-5 py-3 text-right font-semibold"> </th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-line">
-                  {customers.map((customer) => {
-                    const primaryLocation =
-                      customer.locations.find((l) => l.isPrimary) ??
-                      customer.locations[0];
-                    const primaryContact =
-                      customer.contacts.find((c) => c.isPrimary) ??
-                      customer.contacts[0];
-
-                    return (
-                      <tr key={customer.id} className="text-[13px] hover:bg-canvas/60">
-                        <td className="px-5 py-3 font-mono text-[12px] text-ink-soft">
-                          {customer.code}
-                        </td>
-                        <td className="px-3 py-3">
-                          <Link
-                            href={`/customers/${customer.id}`}
-                            className="font-medium text-ink hover:text-flame-600"
-                          >
-                            {customer.name}
-                          </Link>
-                          <div className="mt-0.5 flex items-center gap-2">
-                            <StatusBadge
-                              tone={
-                                customer.kind === CustomerKind.Business
-                                  ? "info"
-                                  : "neutral"
-                              }
-                            >
-                              {customer.kind === CustomerKind.Business
-                                ? "Business"
-                                : "Household"}
-                            </StatusBadge>
-                            {customer.active ? null : <StatusBadge tone="critical">Inactive</StatusBadge>}
-                          </div>
-                        </td>
-                        <td className="px-3 py-3 text-ink-soft">
-                          {customer.locations.length}
-                          <span className="block text-[11.5px] text-ink-soft/80">
-                            {primaryLocation?.area ?? primaryLocation?.label ?? "—"}
-                          </span>
-                        </td>
-                        <td className="px-3 py-3 text-ink-soft">
-                          {customer.contacts.length}
-                        </td>
-                        <td className="px-3 py-3">
-                          <span className="font-medium text-ink">
-                            {primaryContact ? formatKenyanPhone(primaryContact.phone) : "—"}
-                          </span>
-                          <span className="block text-[11.5px] text-ink-soft/80">
-                            {primaryContact
-                              ? [primaryContact.name, primaryContact.role]
-                                  .filter(Boolean)
-                                  .join(" · ")
-                              : ""}
-                          </span>
-                        </td>
-                        {(() => {
-                          const owed = balances[customer.id]?.balance ?? 0;
-                          const tone =
-                            owed > 0 ? "text-bad" : owed < 0 ? "text-good" : "text-ink-soft";
-                          return (
-                            <td className="px-3 py-3 text-right">
-                              <span className={`font-semibold tabular-nums ${tone}`}>
-                                {owed === 0
-                                  ? "Settled"
-                                  : `KSh ${Math.abs(owed).toLocaleString("en-KE")}`}
-                              </span>
-                              <span className="block text-[11.5px] text-ink-soft/80">
-                                {owed > 0
-                                  ? "owes you"
-                                  : owed < 0
-                                    ? "in credit"
-                                    : "nothing outstanding"}
-                              </span>
-                            </td>
-                          );
-                        })()}
-                        <td className="px-5 py-3 text-right">
-                          <Link
-                            href={`/customers/${customer.id}`}
-                            className="inline-flex items-center rounded-lg bg-white px-3 py-1.5 text-[12px] font-semibold text-ink ring-1 ring-line transition hover:bg-canvas"
-                          >
-                            Open
-                          </Link>
-                        </td>
-                      </tr>
-                    );
-                  })}
-
-                  {customers.length === 0 ? (
-                    <tr>
-                      <td colSpan={7} className="px-5 py-10 text-center text-[13px] text-ink-soft">
-                        {query
-                          ? `No customer matches “${query}”.`
-                          : "No customers yet — add the first one."}
-                      </td>
-                    </tr>
-                  ) : null}
-                </tbody>
-              </table>
-            </div>
-          </section>
-        </main>
-      </div>
-    </div>
+        <Card flush>
+          <DataTable
+            rows={customers}
+            columns={columns}
+            rowKey={(customer) => customer.id}
+            rowHref={(customer) => `/customers/${customer.id}`}
+            empty={
+              <EmptyState
+                icon={UsersIcon}
+                title={query ? `No customer matches “${query}”` : "No customers yet"}
+                description={
+                  query
+                    ? "Check the spelling, or search by code or phone number."
+                    : "Add the first customer to start recording deliveries and balances."
+                }
+                action={
+                  query ? (
+                    <ButtonLink href="/customers">Clear the search</ButtonLink>
+                  ) : (
+                    <ButtonLink href="/customers?new=1" variant="primary">
+                      New customer
+                    </ButtonLink>
+                  )
+                }
+              />
+            }
+          />
+        </Card>
+      </AppShell>
     </>
   );
 }
