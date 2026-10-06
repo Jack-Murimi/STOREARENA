@@ -5,7 +5,7 @@ import { DatabaseUnavailable } from "@/components/customers/DatabaseUnavailable"
 import { SavedToast } from "@/components/customers/SavedToast";
 import { Sidebar } from "@/components/Sidebar";
 import { Topbar } from "@/components/Topbar";
-import { Pill } from "@/components/dashboard/Panel";
+import { StatusBadge } from "@/components/ui";
 import { NewProductForm } from "@/components/inventory/NewProductForm";
 import { currentStaff, stationName } from "@/lib/data";
 import { getCustomerContext } from "@/lib/db";
@@ -253,9 +253,9 @@ export default async function InventoryPage({ searchParams }: PageProps) {
                             </span>
                           </td>
                           <td className="px-3 py-2.5">
-                            <Pill tone={line.categoryName === "LPG cylinders" ? "info" : "neutral"}>
+                            <StatusBadge tone={line.categoryName === "LPG cylinders" ? "info" : "neutral"}>
                               {line.categoryName}
-                            </Pill>
+                            </StatusBadge>
                           </td>
                           <td className="px-3 py-2.5 text-right font-semibold tabular-nums text-ink">
                             {line.refills}

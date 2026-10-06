@@ -1,3 +1,4 @@
+import { stockStatus as sharedStockStatus } from "./status";
 import type { CylinderStock, SaleRecord, StockStatus } from "./types";
 
 /** Value of a single sale line, in Kenya Shillings. */
@@ -51,13 +52,13 @@ export function fillPercent(item: CylinderStock): number {
 }
 
 /**
- * Replenishment status. `critical` sits at or below half the reorder level so
- * the dashboard can distinguish "order today" from "order soon".
+ * Replenishment status for a stock row.
+ *
+ * This used to be a second copy of the rule with its own thresholds; it now
+ * delegates to `lib/status`, which is the only place the rule lives.
  */
 export function stockStatus(item: CylinderStock): StockStatus {
-  if (item.onHand <= item.reorderLevel / 2) return "critical";
-  if (item.onHand <= item.reorderLevel) return "low";
-  return "ok";
+  return sharedStockStatus(item.onHand, item.reorderLevel);
 }
 
 /** Sizes that need a replenishment request, worst first. */

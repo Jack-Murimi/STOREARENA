@@ -6,7 +6,7 @@ import { SavedToast } from "@/components/customers/SavedToast";
 import { SubmitButton } from "@/components/customers/SubmitButton";
 import { Sidebar } from "@/components/Sidebar";
 import { Topbar } from "@/components/Topbar";
-import { Pill } from "@/components/dashboard/Panel";
+import { StatusBadge } from "@/components/ui";
 import { currentStaff, stationName } from "@/lib/data";
 import { getCustomerContext } from "@/lib/db";
 import { LocationKind } from "@/lib/stock/types";
@@ -117,9 +117,9 @@ export default async function ProductStockPage({ params, searchParams }: PagePro
               {product.name}
             </h1>
             <div className="mt-1 flex flex-wrap items-center gap-2">
-              <Pill tone={product.categoryName === "LPG cylinders" ? "info" : "neutral"}>
+              <StatusBadge tone={product.categoryName === "LPG cylinders" ? "info" : "neutral"}>
                 {product.categoryName}
-              </Pill>
+              </StatusBadge>
               <span className="text-[12.5px] text-ink-soft">
                 {product.brandName}
                 {product.sizeKg ? ` · ${product.sizeKg} kg` : ""} · {product.code}

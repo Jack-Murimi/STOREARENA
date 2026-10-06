@@ -1,101 +1,93 @@
-import type { DailyTotals } from "@/lib/types";
-import { formatKsh, formatKshCompact } from "@/lib/format";
-
-interface SalesTrendChartProps {
-  data: DailyTotals[];
+interface TrendPoint {
+  label: string;
+  cylinders: number;
+  revenueKsh: number;
 }
 
-const CHART_HEIGHT = 192;
+/** KSh 25,000 -> "25K". The only place an abbreviation is allowed. */
+function axisLabel(value: number): string {
+  if (value === 0) return "0";
+  return `${Math.round(value / 1000)}K`;
+}
+
+/** Rounds the axis up to a readable step: 0, 25K, 50K, 75K, 100K. */
+function niceCeiling(max: number): number {
+  if (max <= 0) return 25_000;
+  const step = 25_000;
+  return Math.ceil(max / step) * step;
+}
 
 /**
- * Seven-day takings chart. Rendered with CSS bars rather than an SVG path so
- * it stays crisp and responsive without a charting dependency.
+ * Takings over the last seven days, about 200px tall.
+ *
+ * Past days are pale orange, today is solid orange and marked "in progress" —
+ * a part-finished day next to six complete ones reads as a collapse unless it
+ * says otherwise.
  */
-export function SalesTrendChart({ data }: SalesTrendChartProps) {
-  const maxRevenue = Math.max(...data.map((day) => day.revenueKsh), 1);
-  const axisValues = [1, 0.75, 0.5, 0.25, 0].map((step) => maxRevenue * step);
+export function SalesTrendChart({ data }: { data: TrendPoint[] }) {
+  const height = 200;
+  const plotHeight = height - 34; // room for the labels underneath
+  const ceiling = niceCeiling(Math.max(...data.map((d) => d.revenueKsh), 0));
+  const ticks = [0, 0.25, 0.5, 0.75, 1].map((f) => ceiling * f);
+  const todayIndex = data.length - 1;
 
   return (
-    <div>
-      <div className="flex gap-3">
-        {/* Value axis */}
-        <div
-          className="flex w-12 shrink-0 flex-col justify-between text-right font-mono text-[10.5px] text-ink-faint tabular-nums"
-          style={{ height: CHART_HEIGHT }}
-          aria-hidden="true"
-        >
-          {axisValues.map((value, index) => (
-            <span key={index}>{formatKshCompact(value)}</span>
+    <div className="px-4 py-3">
+      <div className="relative" style={{ height }}>
+        {/* gridlines and y labels */}
+        {ticks.map((tick) => {
+          const y = plotHeight - (tick / ceiling) * plotHeight;
+          return (
+            <div key={tick} className="absolute inset-x-0" style={{ top: y }}>
+              <div className="border-t border-border" />
+              <span className="num absolute -top-2 right-0 translate-y-[-100%] text-xs text-ink-subtle">
+                {axisLabel(tick)}
+              </span>
+            </div>
+          );
+        })}
+
+        <div className="absolute inset-x-0 top-0 flex items-end gap-1.5 pr-8" style={{ height: plotHeight }}>
+          {data.map((point, index) => {
+            const isToday = index === todayIndex;
+            const barHeight = ceiling === 0 ? 0 : (point.revenueKsh / ceiling) * plotHeight;
+            return (
+              <div key={point.label} className="flex min-w-0 flex-1 flex-col items-center justify-end gap-1">
+                <span className="num text-xs text-ink-muted">
+                  {axisLabel(point.revenueKsh)}
+                </span>
+                <div
+                  title={`${point.label}: KSh ${point.revenueKsh.toLocaleString("en-KE")} · ${point.cylinders} cylinders`}
+                  className={`w-full max-w-[42px] rounded-t-sm ${
+                    isToday ? "bg-orange-500" : "bg-orange-200"
+                  }`}
+                  style={{ height: Math.max(barHeight, 2) }}
+                />
+              </div>
+            );
+          })}
+        </div>
+
+        {/* x labels: weekday with the date under it */}
+        <div className="absolute inset-x-0 flex gap-1.5 pr-8" style={{ top: plotHeight + 6 }}>
+          {data.map((point, index) => (
+            <div key={point.label} className="min-w-0 flex-1 text-center">
+              <span
+                className={`block truncate text-xs ${
+                  index === todayIndex ? "font-semibold text-orange-700" : "text-ink-muted"
+                }`}
+              >
+                {point.label}
+              </span>
+            </div>
           ))}
         </div>
-
-        <div className="relative min-w-0 flex-1">
-          {/* Gridlines */}
-          <div
-            className="absolute inset-x-0 top-0 flex flex-col justify-between"
-            style={{ height: CHART_HEIGHT }}
-            aria-hidden="true"
-          >
-            {axisValues.map((_, index) => (
-              <span
-                key={index}
-                className={`border-t ${
-                  index === axisValues.length - 1
-                    ? "border-line"
-                    : "border-dashed border-line/80"
-                }`}
-              />
-            ))}
-          </div>
-
-          {/* Bars */}
-          <ul className="relative flex items-end gap-1.5 sm:gap-3" style={{ height: CHART_HEIGHT }}>
-            {data.map((day, index) => {
-              const isToday = index === data.length - 1;
-              const heightPercent = Math.max(
-                3,
-                Math.round((day.revenueKsh / maxRevenue) * 100),
-              );
-              return (
-                <li
-                  key={day.label}
-                  className="group flex h-full flex-1 items-end"
-                  title={`${day.label} · ${day.cylinders} cylinders · ${formatKsh(day.revenueKsh)}`}
-                >
-                  <div
-                    className={`relative w-full rounded-t-[5px] transition-[opacity] group-hover:opacity-85 ${
-                      isToday
-                        ? "bg-gradient-to-t from-flame-600 to-flame-400"
-                        : "bg-gradient-to-t from-navy-800 to-navy-600"
-                    }`}
-                    style={{ height: `${heightPercent}%` }}
-                  >
-                    <span className="pointer-events-none absolute -top-5 left-1/2 -translate-x-1/2 font-mono text-[10px] whitespace-nowrap text-ink opacity-0 transition-opacity group-hover:opacity-100">
-                      {formatKshCompact(day.revenueKsh)}
-                    </span>
-                  </div>
-                </li>
-              );
-            })}
-          </ul>
-        </div>
       </div>
 
-      {/* Category axis */}
-      <div className="mt-2 flex gap-3 pl-15">
-        {data.map((day, index) => (
-          <span
-            key={day.label}
-            className={`flex-1 text-center text-[11.5px] ${
-              index === data.length - 1
-                ? "font-semibold text-flame-700"
-                : "text-ink-soft"
-            }`}
-          >
-            {day.label}
-          </span>
-        ))}
-      </div>
+      <p className="mt-1 flex items-center gap-1.5 text-xs text-ink-subtle">
+        <span className="inline-block h-2 w-2 rounded-sm bg-orange-500" aria-hidden="true" />
+        Today, in progress — the day is not over, so it is not comparable to a full day.
+      </p>
     </div>
   );
 }

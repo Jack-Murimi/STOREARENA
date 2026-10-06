@@ -6,7 +6,7 @@ import { Banner } from "@/components/customers/Form";
 import { SubmitButton } from "@/components/customers/SubmitButton";
 import { Sidebar } from "@/components/Sidebar";
 import { Topbar } from "@/components/Topbar";
-import { Pill } from "@/components/dashboard/Panel";
+import { StatusBadge } from "@/components/ui";
 import { SavedToast } from "@/components/customers/SavedToast";
 import { CustomerKind, formatKenyanPhone } from "@/lib/customers";
 import { currentStaff, stationName } from "@/lib/data";
@@ -157,7 +157,7 @@ export default async function CustomersPage({ searchParams }: PageProps) {
                             {customer.name}
                           </Link>
                           <div className="mt-0.5 flex items-center gap-2">
-                            <Pill
+                            <StatusBadge
                               tone={
                                 customer.kind === CustomerKind.Business
                                   ? "info"
@@ -167,8 +167,8 @@ export default async function CustomersPage({ searchParams }: PageProps) {
                               {customer.kind === CustomerKind.Business
                                 ? "Business"
                                 : "Household"}
-                            </Pill>
-                            {customer.active ? null : <Pill tone="bad">Inactive</Pill>}
+                            </StatusBadge>
+                            {customer.active ? null : <StatusBadge tone="critical">Inactive</StatusBadge>}
                           </div>
                         </td>
                         <td className="px-3 py-3 text-ink-soft">

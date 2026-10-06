@@ -1,76 +1,44 @@
-import type { SaleRecord, PaymentMethod } from "@/lib/types";
-import { saleValueKsh } from "@/lib/metrics";
+import type { SaleRecord } from "@/lib/types";
 import { formatCylinder, formatKsh } from "@/lib/format";
-import { CardIcon, CashIcon, PhoneIcon } from "@/components/icons";
-import { Pill } from "./Panel";
+import * as metrics from "@/lib/metrics";
 
-interface RecentSalesProps {
-  sales: SaleRecord[];
-  limit?: number;
-}
+/**
+ * The latest few sales, and a link to the rest.
+ *
+ * No inner scrollbar: a scrolling list inside a scrolling page means two
+ * scrollbars fighting over the same gesture, and on a phone you cannot tell
+ * which one you are moving.
+ */
+export function RecentSales({ sales, limit = 6 }: { sales: SaleRecord[]; limit?: number }) {
+  const shown = sales.slice(0, limit);
 
-const paymentIcons: Record<PaymentMethod, typeof CashIcon> = {
-  "M-Pesa": PhoneIcon,
-  Cash: CashIcon,
-  Card: CardIcon,
-  "Bank Transfer": CardIcon,
-};
-
-export function RecentSales({ sales, limit = 6 }: RecentSalesProps) {
-  const rows = sales.slice(0, limit);
-
-  if (rows.length === 0) {
-    return (
-      <p className="py-8 text-center text-[13px] text-ink-soft">
-        No sales recorded yet today.
-      </p>
-    );
+  if (shown.length === 0) {
+    return <p className="px-4 py-8 text-center text-sm text-ink-subtle">No sales yet today.</p>;
   }
 
   return (
-    <ul className="divide-line">
-      {rows.map((sale) => {
-        const PaymentIcon = paymentIcons[sale.payment];
-        return (
-          <li key={sale.id} className="flex items-center gap-3 px-5 py-3.5">
-            <span className="hidden w-11 shrink-0 font-mono text-[11.5px] text-ink-faint tabular-nums sm:block">
-              {sale.time}
-            </span>
-
-            <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-canvas font-mono text-[11px] font-semibold text-navy-800">
-              {sale.sizeKg}kg
-            </span>
-
-            <span className="min-w-0 flex-1">
-              <span className="block truncate text-[13.5px] font-medium text-ink">
-                {sale.customer}
-              </span>
-              <span className="mt-0.5 flex flex-wrap items-center gap-x-1.5 gap-y-1 text-[11.5px] text-ink-faint">
-                <span className="sm:hidden">{sale.time} · </span>
-                <span>
-                  {sale.type} · {sale.quantity} × {formatCylinder(sale.sizeKg)}
-                </span>
-                <span aria-hidden="true">·</span>
-                <span className="inline-flex items-center gap-1">
-                  <PaymentIcon className="h-3.5 w-3.5" />
-                  {sale.payment}
-                </span>
-                <span aria-hidden="true">·</span>
-                <span>{sale.staff}</span>
-              </span>
-            </span>
-
-            <span className="shrink-0 text-right">
-              <span className="block font-mono text-[13.5px] font-semibold text-ink tabular-nums">
-                {formatKsh(saleValueKsh(sale))}
-              </span>
-              <Pill tone={sale.type === "Delivery" ? "info" : "neutral"} className="mt-1">
-                {sale.id}
-              </Pill>
-            </span>
-          </li>
-        );
-      })}
+    <ul className="divide-line divide-y">
+      {shown.map((sale) => (
+        <li key={sale.id} className="flex items-center gap-3 px-4 py-2.5">
+          <div className="min-w-0 flex-1">
+            <p className="truncate text-sm font-medium text-ink">{sale.customer}</p>
+            <p className="truncate text-xs text-ink-subtle">
+              {sale.time} · {sale.quantity} × {formatCylinder(sale.sizeKg)} ·{" "}
+              {sale.payment.replace("_", " ")}
+            </p>
+          </div>
+          <span className="num shrink-0 text-sm font-semibold text-ink">
+            {formatKsh(metrics.saleValueKsh(sale))}
+          </span>
+        </li>
+      ))}
+      {sales.length > shown.length ? (
+        <li className="px-4 py-2">
+          <span className="text-sm text-ink-subtle">
+            {sales.length - shown.length} earlier today
+          </span>
+        </li>
+      ) : null}
     </ul>
   );
 }

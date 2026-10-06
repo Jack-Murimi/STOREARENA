@@ -13,7 +13,7 @@ import {
 } from "@/components/customers/Form";
 import { Sidebar } from "@/components/Sidebar";
 import { Topbar } from "@/components/Topbar";
-import { Pill } from "@/components/dashboard/Panel";
+import { StatusBadge } from "@/components/ui";
 import {
   CustomerKind,
   ROLE_SUGGESTIONS,
@@ -124,12 +124,12 @@ export default async function CustomerPage({ params, searchParams }: PageProps) 
               ← All customers
             </Link>
             <div className="flex items-center gap-2">
-              <Pill tone={customer.kind === CustomerKind.Business ? "info" : "neutral"}>
+              <StatusBadge tone={customer.kind === CustomerKind.Business ? "info" : "neutral"}>
                 {customer.kind === CustomerKind.Business ? "Business" : "Household"}
-              </Pill>
-              <Pill tone={customer.active ? "good" : "bad"}>
+              </StatusBadge>
+              <StatusBadge tone={customer.active ? "ok" : "critical"}>
                 {customer.active ? "Active" : "Inactive"}
-              </Pill>
+              </StatusBadge>
             </div>
           </div>
 
@@ -195,8 +195,8 @@ export default async function CustomerPage({ params, searchParams }: PageProps) 
                         <span className="text-[13.5px] font-semibold text-ink">
                           {location.label}
                         </span>
-                        {location.isPrimary ? <Pill tone="good">Main</Pill> : null}
-                        {location.active ? null : <Pill tone="bad">Inactive</Pill>}
+                        {location.isPrimary ? <StatusBadge tone="ok">Main</StatusBadge> : null}
+                        {location.active ? null : <StatusBadge tone="critical">Inactive</StatusBadge>}
                       </div>
                       <p className="mt-1 text-[12.5px] text-ink-soft">
                         {location.addressLine || "No address recorded"}
@@ -362,8 +362,8 @@ export default async function CustomerPage({ params, searchParams }: PageProps) 
                         <span className="text-[13.5px] font-semibold text-ink">
                           {contact.name}
                         </span>
-                        {contact.role ? <Pill tone="info">{contact.role}</Pill> : null}
-                        {contact.isPrimary ? <Pill tone="good">Main</Pill> : null}
+                        {contact.role ? <StatusBadge tone="info">{contact.role}</StatusBadge> : null}
+                        {contact.isPrimary ? <StatusBadge tone="ok">Main</StatusBadge> : null}
                       </div>
                       <p className="mt-1 font-mono text-[12.5px] text-ink-soft">
                         {formatKenyanPhone(contact.phone)}
