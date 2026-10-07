@@ -5,7 +5,7 @@
  * a .sql file; a test fails if the two drift apart.
  *
  * They are embedded because a deployed server has no source tree to read
- * from: Netlify ships the build output, not `src/`.
+ * from: a serverless host ships the build output, not `src/`.
  */
 export const CUSTOMER_SCHEMA = `-- ============================================================================
 --  Gateway Gas Enterprises — Customers (PostgreSQL 14+ / Supabase)

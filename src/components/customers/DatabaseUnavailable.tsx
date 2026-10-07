@@ -45,7 +45,7 @@ export function DatabaseUnavailable({
             </code>
           </li>
           <li>
-            On Netlify: <strong>Site configuration → Environment variables</strong>,
+            On Vercel: <strong>Project → Settings → Environment Variables</strong>,
             add <code className="rounded bg-canvas px-1.5 py-0.5 font-mono text-xs">DATABASE_URL</code>{" "}
             with that URI plus <code className="rounded bg-canvas px-1.5 py-0.5 font-mono text-xs">?sslmode=require</code>,
             then <strong>redeploy</strong>. Locally it goes in{" "}

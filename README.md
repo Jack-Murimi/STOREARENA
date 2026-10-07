@@ -181,12 +181,23 @@ DATABASE_URL=postgresql://postgres:YOUR_PASSWORD@db.YOUR_PROJECT.supabase.co:543
 Then create the tables once — paste `src/lib/customers/schema.sql` into
 Supabase → SQL Editor and run it.
 
-### Deploying (Netlify, Vercel, anywhere serverless)
+### Deploying on Vercel
 
-Set `DATABASE_URL` in the host's environment variables — **Site configuration →
-Environment variables** on Netlify — then redeploy. Use the **transaction
-pooler** URI from Supabase → Connect, not the direct `db.<ref>.supabase.co`
-host: serverless functions are short-lived and the pooler is built for them.
+Import the repository at [vercel.com/new](https://vercel.com/new) — Vercel
+detects Next.js and needs no build settings of its own. Then set one
+environment variable before the first deploy:
+
+**Project → Settings → Environment Variables → `DATABASE_URL`**, applied to
+Production, Preview *and* Development. Use the **transaction pooler** URI from
+Supabase → Connect, not the direct `db.<ref>.supabase.co` host — that host
+only resolves over IPv6, and serverless functions are short-lived, so the
+pooler is what they need.
+
+Then set **Project → Settings → General → Function Region** to `fra1`
+(Frankfurt). This project's Supabase instance is in `eu-central-1`, and
+Vercel defaults its functions to `iad1` in US East. A save makes several
+sequential round trips to the database, so every one of them would otherwise
+cross the Atlantic.
 
 ```
 DATABASE_URL=postgresql://postgres.<project-ref>:<password>@aws-1-<region>.pooler.supabase.com:6543/postgres?sslmode=require

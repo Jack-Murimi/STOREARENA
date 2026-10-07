@@ -45,7 +45,7 @@ declare global {
  * What the running function can see, without ever echoing the password.
  *
  * "Is the variable actually there?" is the first question when a host like
- * Netlify serves this page, and guessing wastes a deploy cycle.
+ * Vercel serves this page, and guessing wastes a deploy cycle.
  */
 export function describeDatabaseConfig(): string {
   const raw = process.env.DATABASE_URL;
@@ -83,7 +83,7 @@ function unavailable(reason: string): CustomerContext {
     stock: null,
     mode: "unavailable",
     diagnostic: describeDatabaseConfig(),
-    notice: `${reason} Set DATABASE_URL to your Supabase connection string — in .env.local here, or under Site settings → Environment variables on Netlify — then redeploy.`,
+    notice: `${reason} Set DATABASE_URL to your Supabase connection string — in .env.local here, or under Project → Settings → Environment Variables on Vercel — then redeploy.`,
   };
 }
 
