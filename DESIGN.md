@@ -128,7 +128,9 @@ is "Low" is worse than either threshold being slightly wrong.
 ## 6. Don't
 
 - Don't use orange for status, alerts or errors.
-- Don't put a second search box on a page — the top bar already has one.
+- Don't put a search box in the global header. Search belongs to the page that
+  has something to search: the customer list searches customers, the stock list
+  searches products, and the dashboard has nothing to search at all.
 - Don't repeat the same data in two panels. Merge them.
 - Don't ship a nav item, card or button for something that does not exist yet.
 - Don't hardcode a colour, size or radius in a component.

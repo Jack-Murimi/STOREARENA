@@ -4,14 +4,25 @@ interface BrandMarkProps {
   /** Text colour for the wordmark. */
   tone?: "light" | "dark";
   className?: string;
+  /** Where the lockup goes. Defaults to the dashboard. */
+  href?: string;
 }
 
-/** Gateway Gas Enterprises lockup: flame tile + wordmark. */
-export function BrandMark({ tone = "light", className }: BrandMarkProps) {
+/**
+ * Gateway Gas Enterprises lockup: flame tile + wordmark.
+ *
+ * It is a link home. A brand mark in the corner that does nothing reads as a
+ * broken control, and "click the logo to go home" is the one shortcut nobody
+ * has to be taught.
+ */
+export function BrandMark({ tone = "light", className, href = "/" }: BrandMarkProps) {
   const isLight = tone === "light";
   return (
-    <div className={`flex items-center gap-3 ${className ?? ""}`}>
-      <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-gradient-to-br from-flame-400 to-flame-600 text-navy-950 shadow-sm">
+    <a
+      href={href}
+      className={`flex min-h-[var(--touch-target)] items-center gap-3 rounded-md transition-opacity duration-150 hover:opacity-85 ${className ?? ""}`}
+    >
+      <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-gradient-to-br from-flame-400 to-flame-600 text-navy-950 shadow-card">
         <FlameIcon className="h-5 w-5" />
       </span>
       <span className="leading-tight">
@@ -23,13 +34,14 @@ export function BrandMark({ tone = "light", className }: BrandMarkProps) {
           Gateway Gas
         </span>
         <span
-          className={`block text-xs font-medium uppercase tracking-[0.16em] ${
-            isLight ? "text-white/55" : "text-ink-faint"
+          className={`block text-xs font-medium uppercase tracking-widest ${
+            isLight ? "text-nav-text" : "text-ink-subtle"
           }`}
         >
           Enterprises
         </span>
       </span>
-    </div>
+      <span className="sr-only">Go to the dashboard</span>
+    </a>
   );
 }

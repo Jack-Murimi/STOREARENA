@@ -1,12 +1,17 @@
 import { UserMenu } from "./UserMenu";
-import { SearchIcon } from "./icons";
 import type { StaffMember } from "@/lib/types";
 
 /**
- * The top bar: one search, the branch, and the signed-in person. Nothing else.
+ * The top bar: the page title, the branch, and the signed-in person. Nothing
+ * else.
  *
- * The notification bell is gone — there is no notification system behind it,
- * and a badge that is always lit trains people to ignore badges.
+ * It used to carry a search box, on every page. That was wrong twice over: on
+ * /customers it duplicated the page's own search, and on the dashboard it
+ * searched records that were not on screen. Search belongs to the page that
+ * has something to search, so each list screen has its own in the FilterBar.
+ *
+ * The notification bell is gone too — there is no notification system behind
+ * it, and a badge that is always lit trains people to ignore badges.
  *
  * The branch is shown here and nowhere else. It is not yet a switcher: making
  * it one means the data layer has to accept a branch parameter, which is a
@@ -32,27 +37,6 @@ export function Topbar({
             <p className="hidden truncate text-xs text-ink-subtle sm:block">{subtitle}</p>
           ) : null}
         </div>
-
-        {/* The only search box in the app. It searches customers, because that
-            is the only search that exists; the placeholder says so rather than
-            promising a global search it cannot deliver. */}
-        <form
-          action="/customers"
-          method="get"
-          role="search"
-          className="hidden min-w-0 flex-1 sm:block sm:max-w-xs"
-        >
-          <label className="relative block">
-            <span className="sr-only">Search customers by name, code or phone</span>
-            <SearchIcon className="pointer-events-none absolute top-1/2 left-2.5 h-4 w-4 -translate-y-1/2 text-ink-subtle" />
-            <input
-              type="search"
-              name="q"
-              placeholder="Search customers…"
-              className="h-9 w-full rounded-md border border-border bg-surface pl-8 pr-2 text-sm text-ink placeholder:text-ink-subtle focus:border-orange-500 focus:outline-none"
-            />
-          </label>
-        </form>
 
         <div className="flex shrink-0 items-center gap-1">
           {branch ? (
