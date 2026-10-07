@@ -293,3 +293,113 @@ export async function supplierStatement(db: Database, id: string): Promise<State
     status: String(r.status),
   }));
 }
+
+export interface PurchaseDetail {
+  id: string; supplierId: string; supplierName: string; branchName: string;
+  invoiceNo: string; invoiceDate: string; dueDate: string;
+  status: string; subtotal: number; vatAmount: number; total: number;
+  paid: number; due: number; paymentStatus: string;
+  notes: string | null; voidReason: string | null; version: number; createdAt: string;
+}
+
+export async function purchaseById(db: Database, id: string): Promise<PurchaseDetail | null> {
+  const rows = await db.query<Record<string, unknown>>(
+    `select i.id, i.supplier_id, s.name as supplier_name, l.name as branch_name,
+            i.invoice_no, i.invoice_date, i.due_date, i.status,
+            i.subtotal, i.vat_amount, i.total, i.notes, i.void_reason,
+            i.version, i.created_at,
+            coalesce(p.amount_paid,0) as amount_paid,
+            coalesce(p.amount_due,0)  as amount_due,
+            coalesce(p.payment_status, i.status) as payment_status
+       from purchase_invoices i
+       join suppliers s          on s.id = i.supplier_id
+       join stock_locations l    on l.id = i.branch_id
+  left join invoice_payment_status p on p.id = i.id
+      where i.id = $1`,
+    [id],
+  );
+  const r = rows[0];
+  if (!r) return null;
+  return {
+    id: String(r.id), supplierId: String(r.supplier_id),
+    supplierName: String(r.supplier_name), branchName: String(r.branch_name),
+    invoiceNo: String(r.invoice_no),
+    invoiceDate: dateOnly(r.invoice_date) ?? "", dueDate: dateOnly(r.due_date) ?? "",
+    status: String(r.status),
+    subtotal: Number(r.subtotal), vatAmount: Number(r.vat_amount), total: Number(r.total),
+    paid: Number(r.amount_paid), due: Number(r.amount_due),
+    paymentStatus: String(r.payment_status),
+    notes: r.notes ? String(r.notes) : null,
+    voidReason: r.void_reason ? String(r.void_reason) : null,
+    version: Number(r.version ?? 1),
+    createdAt: String(r.created_at).slice(0, 16).replace("T", " "),
+  };
+}
+
+export interface PurchaseLine {
+  id: number; productName: string; categoryName: string; purchaseType: string;
+  quantity: number; unitCost: number; lineTotal: number;
+}
+
+/** Lines with the product name attached. purchase_type is returned verbatim -
+ *  the page owns turning it into words, because "refill" and "new_cylinder"
+ *  must never be shown as the same thing. */
+export async function purchaseLines(db: Database, id: string): Promise<PurchaseLine[]> {
+  const rows = await db.query<Record<string, unknown>>(
+    `select ln.id, v.name as product_name, c.name as category_name,
+            ln.purchase_type, ln.quantity, ln.unit_cost, ln.line_total
+       from purchase_invoice_lines ln
+       join product_variants v on v.id = ln.product_id
+       join categories c       on c.id = v.category_id
+      where ln.invoice_id = $1
+      order by ln.id`,
+    [id],
+  );
+  return rows.map((r) => ({
+    id: Number(r.id), productName: String(r.product_name), categoryName: String(r.category_name),
+    purchaseType: String(r.purchase_type),
+    quantity: Number(r.quantity), unitCost: Number(r.unit_cost), lineTotal: Number(r.line_total),
+  }));
+}
+
+export interface PurchasePayment {
+  id: string; paidOn: string; amount: number; method: string;
+  reference: string | null; status: string; voidReason: string | null;
+}
+
+export async function purchasePayments(db: Database, id: string): Promise<PurchasePayment[]> {
+  const rows = await db.query<Record<string, unknown>>(
+    `select id, paid_on, amount, method, reference, status, void_reason
+       from supplier_payments where invoice_id = $1 order by paid_on, id`,
+    [id],
+  );
+  return rows.map((r) => ({
+    id: String(r.id), paidOn: dateOnly(r.paid_on) ?? "", amount: Number(r.amount),
+    method: String(r.method), reference: r.reference ? String(r.reference) : null,
+    status: String(r.status), voidReason: r.void_reason ? String(r.void_reason) : null,
+  }));
+}
+
+export interface HistoryEntry {
+  id: string; occurredAt: string; actor: string; role: string | null;
+  action: string; reason: string | null; changedFields: string[];
+}
+
+export async function purchaseHistory(db: Database, id: string): Promise<HistoryEntry[]> {
+  const rows = await db.query<Record<string, unknown>>(
+    `select id, occurred_at, actor_email, actor_role, action, reason, changed_fields
+       from audit_log
+      where record_id = $1::text
+      order by occurred_at desc, id desc`,
+    [id],
+  );
+  return rows.map((r) => ({
+    id: String(r.id),
+    occurredAt: String(r.occurred_at).slice(0, 16).replace("T", " "),
+    actor: r.actor_email ? String(r.actor_email) : "system",
+    role: r.actor_role ? String(r.actor_role) : null,
+    action: String(r.action),
+    reason: r.reason ? String(r.reason) : null,
+    changedFields: Array.isArray(r.changed_fields) ? r.changed_fields.map(String) : [],
+  }));
+}
