@@ -118,8 +118,11 @@ security definer
 set search_path = public
 as $$
 declare
-  r record;
-  v_bal integer;
+  r    record;
+  lot  record;
+  v_bal  integer;
+  v_need integer;
+  v_take integer;
 begin
   for r in
     select l.product_id, l.purchase_type, l.quantity, l.unit_cost, i.branch_id, i.invoice_date
@@ -129,21 +132,32 @@ begin
   loop
     if r.purchase_type not in ('refill','new_cylinder') then continue; end if;
 
-    select coalesce(remaining,0) into v_bal
-      from public.stock_lots
-     where reference = p_invoice_id::text
-       and variant_id = r.product_id
-       and location_id = r.branch_id;
-    if coalesce(v_bal,0) < r.quantity then
-      raise exception 'cannot reverse invoice %: % unit(s) of % have already been sold',
-        p_invoice_id, r.quantity, r.product_id;
-    end if;
+    -- Draw the quantity back out of the lots this invoice created, oldest
+    -- first, taking from as many as needed. A single SELECT INTO cannot be
+    -- used here: one line creates one lot, so an invoice with two lines for
+    -- the same product has two lots sharing the reference, and picking one
+    -- arbitrarily both under-counts what is left and over-subtracts from the
+    -- rest.
+    v_need := r.quantity::integer;
+    for lot in
+      select id, remaining
+        from public.stock_lots
+       where reference   = p_invoice_id::text
+         and variant_id  = r.product_id
+         and location_id = r.branch_id
+         and remaining   > 0
+       order by purchased_on, id
+    loop
+      exit when v_need <= 0;
+      v_take := least(lot.remaining, v_need);
+      update public.stock_lots set remaining = remaining - v_take where id = lot.id;
+      v_need := v_need - v_take;
+    end loop;
 
-    -- Draw the lot back down first, so FIFO stays honest.
-    update public.stock_lots
-       set remaining = remaining - r.quantity::integer
-     where reference = p_invoice_id::text and variant_id = r.product_id
-       and location_id = r.branch_id;
+    if v_need > 0 then
+      raise exception 'cannot reverse invoice %: % unit(s) of % have already been sold',
+        p_invoice_id, v_need, r.product_id;
+    end if;
 
     -- Compensating movements, written directly. The posting helper cannot be
     -- reused with a negative quantity: it would insert a stock_lots row, and
@@ -240,29 +254,23 @@ begin
   end loop;
   v_vat := round(v_subtotal * v_vat_rate / 100, 2);
 
-  begin
-    insert into public.purchase_invoices (
-      supplier_id, branch_id, invoice_no, invoice_date, due_date,
-      status, subtotal, vat_amount, total, notes, attachment_path, created_by
-    ) values (
-      (p_payload ->> 'supplier_id')::uuid, v_branch, p_payload ->> 'invoice_no',
-      coalesce((p_payload ->> 'invoice_date')::date, current_date),
-      (p_payload ->> 'due_date')::date,
-      coalesce(p_payload ->> 'status', 'posted'),
-      v_subtotal, v_vat, v_subtotal + v_vat,
-      p_payload ->> 'notes', p_payload ->> 'attachment_path', auth.uid()
-    )
-    -- The unique constraint is the real duplicate guard; this just gives a
-    -- better message than a constraint-violation stack.
-    on conflict on constraint purchase_invoices_supplier_no_unique
-    do nothing;
-  exception when others then
-    raise exception 'could not save the invoice: %', sqlerrm;
-  end;
-
-  select id into v_invoice from public.purchase_invoices
-   where supplier_id = (p_payload ->> 'supplier_id')::uuid
-     and invoice_no  = p_payload ->> 'invoice_no';
+  -- RETURNING is the duplicate test. A conflicted insert returns no row, so
+  -- v_invoice stays null. Reading the row back afterwards cannot work: it
+  -- finds the pre-existing invoice and the function would return that id and
+  -- post a second set of lines against someone else's document.
+  insert into public.purchase_invoices (
+    supplier_id, branch_id, invoice_no, invoice_date, due_date,
+    status, subtotal, vat_amount, total, notes, attachment_path, created_by
+  ) values (
+    (p_payload ->> 'supplier_id')::uuid, v_branch, p_payload ->> 'invoice_no',
+    coalesce((p_payload ->> 'invoice_date')::date, current_date),
+    (p_payload ->> 'due_date')::date,
+    coalesce(p_payload ->> 'status', 'posted'),
+    v_subtotal, v_vat, v_subtotal + v_vat,
+    p_payload ->> 'notes', p_payload ->> 'attachment_path', auth.uid()
+  )
+  on conflict on constraint purchase_invoices_supplier_no_unique do nothing
+  returning id into v_invoice;
 
   if v_invoice is null then
     raise exception 'supplier % already has an invoice numbered %',

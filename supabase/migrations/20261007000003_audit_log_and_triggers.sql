@@ -70,10 +70,13 @@ begin
     v_id  := (to_jsonb(new) ->> 'id')::text;
     -- The list of columns whose value actually changed, ignoring the audit
     -- columns themselves so a touched_at update does not look like an edit.
-    select array_agg(k order by k) into v_fields
-      from jsonb_each(v_new) as kv(k, val)
-     where kv.val is distinct from v_old -> kv.k
-       and kv.k not in ('updated_at','updated_by');
+    -- Use jsonb_each's real column names. Aliasing them to (k, val) made the
+    -- reference ambiguous and every UPDATE through this trigger failed with
+    -- "column reference k is ambiguous" - which is every void and every edit.
+    select array_agg(x.key order by x.key) into v_fields
+      from jsonb_each(v_new) as x
+     where x.value is distinct from v_old -> x.key
+       and x.key not in ('updated_at','updated_by');
   end if;
 
   insert into public.audit_log (
