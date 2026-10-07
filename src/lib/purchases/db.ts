@@ -295,7 +295,7 @@ export async function supplierStatement(db: Database, id: string): Promise<State
 }
 
 export interface PurchaseDetail {
-  id: string; supplierId: string; supplierName: string; branchName: string;
+  id: string; supplierId: string; supplierName: string; branchId: string; branchName: string;
   invoiceNo: string; invoiceDate: string; dueDate: string;
   status: string; subtotal: number; vatAmount: number; total: number;
   paid: number; due: number; paymentStatus: string;
@@ -304,7 +304,7 @@ export interface PurchaseDetail {
 
 export async function purchaseById(db: Database, id: string): Promise<PurchaseDetail | null> {
   const rows = await db.query<Record<string, unknown>>(
-    `select i.id, i.supplier_id, s.name as supplier_name, l.name as branch_name,
+    `select i.id, i.supplier_id, s.name as supplier_name, i.branch_id, l.name as branch_name,
             i.invoice_no, i.invoice_date, i.due_date, i.status,
             i.subtotal, i.vat_amount, i.total, i.notes, i.void_reason,
             i.version, i.created_at,
@@ -322,7 +322,7 @@ export async function purchaseById(db: Database, id: string): Promise<PurchaseDe
   if (!r) return null;
   return {
     id: String(r.id), supplierId: String(r.supplier_id),
-    supplierName: String(r.supplier_name), branchName: String(r.branch_name),
+    supplierName: String(r.supplier_name), branchId: String(r.branch_id), branchName: String(r.branch_name),
     invoiceNo: String(r.invoice_no),
     invoiceDate: dateOnly(r.invoice_date) ?? "", dueDate: dateOnly(r.due_date) ?? "",
     status: String(r.status),

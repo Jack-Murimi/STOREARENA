@@ -10,6 +10,7 @@ import type { DataColumn } from "@/components/ui";
 import { currentStaff, stationName } from "@/lib/data";
 import { getCustomerContext } from "@/lib/db";
 import { formatKsh } from "@/lib/format";
+import { PaymentForm } from "./PaymentForm";
 import {
   purchaseById, purchaseHistory, purchaseLines, purchasePayments,
   type HistoryEntry, type PurchaseLine, type PurchasePayment,
@@ -250,18 +251,28 @@ export default async function PurchaseDetailPage({ params }: Props) {
             id: "payments",
             label: `Payments (${payments.length})`,
             content: (
-              <DataTable
-                columns={paymentColumns}
-                rows={payments}
-                rowKey={(r) => r.id}
-                caption={`Payments against ${invoice.invoiceNo}`}
-                empty={
-                  <EmptyState
-                    title="No payments yet"
-                    description="Payments recorded against this invoice will appear here."
+              <div className="space-y-4">
+                <DataTable
+                  columns={paymentColumns}
+                  rows={payments}
+                  rowKey={(r) => r.id}
+                  caption={`Payments against ${invoice.invoiceNo}`}
+                  empty={
+                    <EmptyState
+                      title="No payments yet"
+                      description="Payments recorded against this invoice will appear here."
+                    />
+                  }
+                />
+                {!voided && invoice.due > 0 ? (
+                  <PaymentForm
+                    invoiceId={invoice.id}
+                    supplierId={invoice.supplierId}
+                    branchId={invoice.branchId}
+                    outstanding={invoice.due}
                   />
-                }
-              />
+                ) : null}
+              </div>
             ),
           },
           {
