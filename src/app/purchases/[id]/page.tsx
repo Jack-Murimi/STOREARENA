@@ -215,6 +215,15 @@ export default async function PurchaseDetailPage({ params }: Props) {
         </div>
       </div>
 
+      {!voided && invoice.due > 0 ? (
+        <PaymentForm
+          invoiceId={invoice.id}
+          supplierId={invoice.supplierId}
+          branchId={invoice.branchId}
+          outstanding={invoice.due}
+        />
+      ) : null}
+
       <Tabs
         label="Invoice"
         tabs={[
@@ -251,28 +260,18 @@ export default async function PurchaseDetailPage({ params }: Props) {
             id: "payments",
             label: `Payments (${payments.length})`,
             content: (
-              <div className="space-y-4">
-                <DataTable
-                  columns={paymentColumns}
-                  rows={payments}
-                  rowKey={(r) => r.id}
-                  caption={`Payments against ${invoice.invoiceNo}`}
-                  empty={
-                    <EmptyState
-                      title="No payments yet"
-                      description="Payments recorded against this invoice will appear here."
-                    />
-                  }
-                />
-                {!voided && invoice.due > 0 ? (
-                  <PaymentForm
-                    invoiceId={invoice.id}
-                    supplierId={invoice.supplierId}
-                    branchId={invoice.branchId}
-                    outstanding={invoice.due}
+              <DataTable
+                columns={paymentColumns}
+                rows={payments}
+                rowKey={(r) => r.id}
+                caption={`Payments against ${invoice.invoiceNo}`}
+                empty={
+                  <EmptyState
+                    title="No payments yet"
+                    description="Payments recorded against this invoice will appear here."
                   />
-                ) : null}
-              </div>
+                }
+              />
             ),
           },
           {
