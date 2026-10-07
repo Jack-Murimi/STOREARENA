@@ -16,9 +16,9 @@ on conflict (id) do update
 
 insert into public.riders (id, name, phone, branch_id, stock_location_id, is_active)
 values
-  ('rdr-rom', 'Romano Sifuna', '0700 000 001', 'loc-jam', 'van-rom', true),
-  ('rdr-sos', 'Sospeter',      '0700 000 002', 'loc-kil', 'van-sos', true),
-  ('rdr-jos', 'Jose',          '0700 000 003', 'loc-lav', 'van-jos', true)
+  ('a1000000-0000-4000-8000-000000000001', 'Romano Sifuna', '0700 000 001', 'loc-jam', 'van-rom', true),
+  ('a1000000-0000-4000-8000-000000000002', 'Sospeter',      '0700 000 002', 'loc-kil', 'van-sos', true),
+  ('a1000000-0000-4000-8000-000000000003', 'Jose',          '0700 000 003', 'loc-lav', 'van-jos', true)
 on conflict (id) do update
   set name = excluded.name, branch_id = excluded.branch_id,
       stock_location_id = excluded.stock_location_id, is_active = excluded.is_active;
