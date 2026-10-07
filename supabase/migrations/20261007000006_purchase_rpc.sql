@@ -63,10 +63,10 @@ begin
   -- A refill tops up gas in cylinders we already own. A new cylinder brings a
   -- cylinder with it, so it also moves custody.
   insert into public.stock_movements (
-    ledger_kind, operation, channel, location_id, variant_id, state, custody,
+    ledger_kind, operation, channel, occurred_at, location_id, variant_id, state, custody,
     quantity, balance_before, balance_after, reason, reference, actor, unit_cost_ksh
   ) values (
-    'GAS', 'PURCHASE', 'INTERNAL', p_branch_id, p_product_id, 'REFILL', null,
+    'GAS', 'PURCHASE', 'INTERNAL', now(), p_branch_id, p_product_id, 'REFILL', null,
     v_qty, v_bal_refill, v_bal_refill + v_qty, v_reason, p_invoice_id::text,
     p_actor, p_unit_cost
   );
@@ -158,10 +158,10 @@ begin
     end if;
 
     insert into public.stock_movements (
-      ledger_kind, operation, channel, location_id, variant_id, state, custody,
+      ledger_kind, operation, channel, occurred_at, location_id, variant_id, state, custody,
       quantity, balance_before, balance_after, reason, reference, actor, unit_cost_ksh
     ) values (
-      'GAS', 'PURCHASE', 'INTERNAL', r.branch_id, r.product_id, 'REFILL', null,
+      'GAS', 'PURCHASE', 'INTERNAL', now(), r.branch_id, r.product_id, 'REFILL', null,
       -r.quantity::integer, v_bal, v_bal - r.quantity::integer,
       'reverse purchase ' || p_invoice_id::text, p_invoice_id::text,
       p_actor, r.unit_cost
@@ -178,10 +178,10 @@ begin
       v_bal := coalesce(v_bal, 0);
 
       insert into public.stock_movements (
-        ledger_kind, operation, channel, location_id, variant_id, state, custody,
+        ledger_kind, operation, channel, occurred_at, location_id, variant_id, state, custody,
         quantity, balance_before, balance_after, reason, reference, actor, unit_cost_ksh
       ) values (
-        'CYLINDER', 'PURCHASE', 'INTERNAL', r.branch_id, r.product_id, null, 'BRANCH',
+        'CYLINDER', 'PURCHASE', 'INTERNAL', now(), r.branch_id, r.product_id, null, 'BRANCH',
         -r.quantity::integer, v_bal, v_bal - r.quantity::integer,
         'reverse purchase ' || p_invoice_id::text, p_invoice_id::text,
         p_actor, r.unit_cost
