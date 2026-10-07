@@ -69,7 +69,7 @@ const slug = (value: string): string =>
  * ever moves through a recorded movement, so the two can never disagree.
  */
 export class ProductService {
-  constructor(private readonly db: Database) {}
+  constructor(readonly db: Database) {}
 
   // ------------------------------------------------------------- reference
 
