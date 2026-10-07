@@ -403,3 +403,53 @@ export async function purchaseHistory(db: Database, id: string): Promise<History
     changedFields: Array.isArray(r.changed_fields) ? r.changed_fields.map(String) : [],
   }));
 }
+
+export interface PaymentRow {
+  id: string; supplierId: string; supplierName: string; paidOn: string;
+  amount: number; allocated: number; unallocated: number;
+  method: string; reference: string | null; status: string; invoiceCount: number;
+}
+
+export async function listAllPayments(db: Database): Promise<PaymentRow[]> {
+  const rows = await db.query<Record<string, unknown>>(
+    `select p.id, p.supplier_id, s.name as supplier_name, p.paid_on, p.amount,
+            coalesce(c.allocated, 0)   as allocated,
+            coalesce(c.unallocated, 0) as unallocated,
+            p.method, p.reference, p.status,
+            (select count(*)::int from supplier_payment_allocations a where a.payment_id = p.id) as invoice_count
+       from supplier_payments p
+       join suppliers s on s.id = p.supplier_id
+  left join supplier_credit c on c.payment_id = p.id
+      order by p.paid_on desc, p.id desc`,
+    [],
+  );
+  return rows.map((r) => ({
+    id: String(r.id), supplierId: String(r.supplier_id), supplierName: String(r.supplier_name),
+    paidOn: dateOnly(r.paid_on) ?? "",
+    amount: Number(r.amount), allocated: Number(r.allocated), unallocated: Number(r.unallocated),
+    method: String(r.method), reference: r.reference ? String(r.reference) : null,
+    status: String(r.status), invoiceCount: Number(r.invoice_count),
+  }));
+}
+
+/** Invoices still owing money on one supplier, oldest first, for allocating a
+ *  payment against. */
+export async function pendingInvoices(
+  db: Database, supplierId: string,
+): Promise<{ id: string; invoiceNo: string; invoiceDate: string; dueDate: string; total: number; paid: number; due: number }[]> {
+  const rows = await db.query<Record<string, unknown>>(
+    `select i.id, i.invoice_no, i.invoice_date, i.due_date, i.total,
+            coalesce(p.amount_paid,0) as amount_paid, coalesce(p.amount_due,0) as amount_due
+       from purchase_invoices i
+  left join invoice_payment_status p on p.id = i.id
+      where i.supplier_id = $1 and i.status <> 'void'
+        and coalesce(p.amount_due, i.total) > 0
+      order by i.invoice_date, i.invoice_no`,
+    [supplierId],
+  );
+  return rows.map((r) => ({
+    id: String(r.id), invoiceNo: String(r.invoice_no),
+    invoiceDate: dateOnly(r.invoice_date) ?? "", dueDate: dateOnly(r.due_date) ?? "",
+    total: Number(r.total), paid: Number(r.amount_paid), due: Number(r.amount_due),
+  }));
+}
