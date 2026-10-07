@@ -125,3 +125,70 @@ export async function listSuppliers(db: Database): Promise<{ id: string; name: s
   );
   return rows.map((r: Record<string, unknown>) => ({ id: String(r.id), name: String(r.name) }));
 }
+
+export interface Supplier {
+  id: string;
+  name: string;
+  kraPin: string | null;
+  email: string | null;
+  phone: string | null;
+  paymentTermsDays: number;
+  isActive: boolean;
+  invoices: number;
+  balance: number;
+  totalBilled: number;
+  totalPaid: number;
+  overdueAmount: number;
+  oldestOpenDays: number | null;
+}
+
+/**
+ * Every supplier with the money side attached. The figures come from the
+ * `supplier_balances` view and a count off `purchase_invoices` - the view has
+ * no invoice count of its own.
+ */
+export async function listSupplierDirectory(
+  db: Database,
+  search?: string,
+  showInactive = false,
+): Promise<Supplier[]> {
+  const rows = await db.query<Record<string, unknown>>(
+    `select s.id, s.name, s.kra_pin, s.email, s.phone, s.payment_terms_days,
+            s.is_active,
+            coalesce(b.total_billed, 0)      as total_billed,
+            coalesce(b.total_paid, 0)        as total_paid,
+            coalesce(b.balance, 0)           as balance,
+            coalesce(b.overdue_amount, 0)    as overdue_amount,
+            coalesce(
+              (select count(*)::int from purchase_invoices i
+                where i.supplier_id = s.id and i.status <> 'void'), 0) as invoice_count,
+            (select (current_date - min(i.invoice_date))::int
+               from purchase_invoices i
+              where i.supplier_id = s.id and i.status <> 'void'
+                and i.status <> 'paid') as oldest_open_days
+       from suppliers s
+  left join supplier_balances b on b.supplier_id = s.id
+      where ($1::text is null
+             or s.name  ilike '%' || $1::text || '%'
+             or s.email ilike '%' || $1::text || '%'
+             or s.phone like '%' || $1::text || '%')
+        and ($2::boolean or s.is_active)
+   order by s.name`,
+    [search || null, showInactive],
+  );
+  return rows.map((r) => ({
+    id: String(r.id),
+    name: String(r.name),
+    kraPin: r.kra_pin ? String(r.kra_pin) : null,
+    email: r.email ? String(r.email) : null,
+    phone: r.phone ? String(r.phone) : null,
+    paymentTermsDays: Number(r.payment_terms_days ?? 0),
+    isActive: Boolean(r.is_active),
+    invoices: Number(r.invoice_count ?? 0),
+    balance: Number(r.balance ?? 0),
+    totalBilled: Number(r.total_billed ?? 0),
+    totalPaid: Number(r.total_paid ?? 0),
+    overdueAmount: Number(r.overdue_amount ?? 0),
+    oldestOpenDays: r.oldest_open_days === null ? null : Number(r.oldest_open_days),
+  }));
+}
