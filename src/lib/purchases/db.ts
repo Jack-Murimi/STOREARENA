@@ -192,3 +192,104 @@ export async function listSupplierDirectory(
     oldestOpenDays: r.oldest_open_days === null ? null : Number(r.oldest_open_days),
   }));
 }
+
+export interface SupplierDetail {
+  id: string;
+  name: string;
+  kraPin: string | null;
+  email: string | null;
+  phone: string | null;
+  paymentTermsDays: number;
+  isActive: boolean;
+  totalBilled: number;
+  totalPaid: number;
+  balance: number;
+  overdueAmount: number;
+  ageing: { current: number; d1_30: number; d31_60: number; d61_90: number; d90Plus: number };
+  lastInvoiceDate: string | null;
+  lastPaymentDate: string | null;
+}
+
+export async function supplierById(db: Database, id: string): Promise<SupplierDetail | null> {
+  const rows = await db.query<Record<string, unknown>>(
+    `select s.id, s.name, s.kra_pin, s.email, s.phone, s.payment_terms_days, s.is_active,
+            coalesce(b.total_billed,0)   as total_billed,
+            coalesce(b.total_paid,0)     as total_paid,
+            coalesce(b.balance,0)        as balance,
+            coalesce(b.overdue_amount,0) as overdue_amount,
+            coalesce(b.ageing_current,0) as ageing_current,
+            coalesce(b.ageing_1_30,0)    as ageing_1_30,
+            coalesce(b.ageing_31_60,0)   as ageing_31_60,
+            coalesce(b.ageing_61_90,0)   as ageing_61_90,
+            coalesce(b.ageing_90_plus,0) as ageing_90_plus,
+            b.last_invoice_date, b.last_payment_date
+       from suppliers s
+  left join supplier_balances b on b.supplier_id = s.id
+      where s.id = $1`,
+    [id],
+  );
+  const r = rows[0];
+  if (!r) return null;
+  return {
+    id: String(r.id), name: String(r.name),
+    kraPin: r.kra_pin ? String(r.kra_pin) : null,
+    email: r.email ? String(r.email) : null,
+    phone: r.phone ? String(r.phone) : null,
+    paymentTermsDays: Number(r.payment_terms_days ?? 0),
+    isActive: Boolean(r.is_active),
+    totalBilled: Number(r.total_billed ?? 0),
+    totalPaid: Number(r.total_paid ?? 0),
+    balance: Number(r.balance ?? 0),
+    overdueAmount: Number(r.overdue_amount ?? 0),
+    ageing: {
+      current: Number(r.ageing_current ?? 0), d1_30: Number(r.ageing_1_30 ?? 0),
+      d31_60: Number(r.ageing_31_60 ?? 0), d61_90: Number(r.ageing_61_90 ?? 0),
+      d90Plus: Number(r.ageing_90_plus ?? 0),
+    },
+    lastInvoiceDate: r.last_invoice_date ? dateOnly(r.last_invoice_date) : null,
+    lastPaymentDate: r.last_payment_date ? dateOnly(r.last_payment_date) : null,
+  };
+}
+
+export interface StatementLine {
+  date: string; reference: string; kind: "invoice" | "payment";
+  debit: number; credit: number; running: number; status: string;
+}
+
+/**
+ * The account as the supplier sees it: every invoice debits, every payment
+ * credits, and the running column is what we owe at that point. The running
+ * balance is a window over the whole set, so it is computed in the database
+ * rather than accumulated in a loop here.
+ */
+export async function supplierStatement(db: Database, id: string): Promise<StatementLine[]> {
+  const rows = await db.query<Record<string, unknown>>(
+    `with entries as (
+       select i.invoice_date as entry_date, i.invoice_no as ref, 'invoice' as kind,
+              i.total as debit, 0::numeric(14,2) as credit, i.status
+         from public.purchase_invoices i
+        where i.supplier_id = $1 and i.status <> 'void'
+       union all
+       select p.paid_on, coalesce(nullif(p.reference,''), p.id::text), 'payment',
+              0::numeric(14,2), p.amount, p.status
+         from public.supplier_payments p
+        where p.supplier_id = $1 and p.status <> 'void'
+     )
+     select entry_date, ref, kind, debit, credit, status,
+            sum(debit - credit) over (order by entry_date, ref
+                                      rows between unbounded preceding and current row) as running
+       from entries
+      order by entry_date, ref`,
+    [id],
+  );
+  return rows.map((r) => ({
+    // invoice_date and paid_on are NOT NULL, but dateOnly() cannot know that.
+    date: dateOnly(r.entry_date) ?? "",
+    reference: String(r.ref),
+    kind: r.kind === "payment" ? "payment" : "invoice",
+    debit: Number(r.debit ?? 0),
+    credit: Number(r.credit ?? 0),
+    running: Number(r.running ?? 0),
+    status: String(r.status),
+  }));
+}
