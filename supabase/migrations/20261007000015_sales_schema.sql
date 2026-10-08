@@ -188,10 +188,10 @@ alter table public.sale_lines
   add constraint sale_lines_refill_needs_empties check (
     line_type <> 'refill' or (empties_returned >= 0 and empty_brand_id is not null)
   );
-alter table public.sale_lines drop constraint if exists sale_lines_total_consistent;
-alter table public.sale_lines
-  add constraint sale_lines_total_consistent
-  check (line_total = (quantity * unit_price) - discount_amount);
+-- line_total is GENERATED from quantity * unit_price, so it cannot also carry
+-- the discount: a CHECK demanding line_total = quantity*unit_price - discount
+-- would reject every discounted line. The discount lives in discount_amount
+-- and the sale totals are reconciled by create_sale instead.
 -- a price override without a recorded reason is not an override, it is a typo
 alter table public.sale_lines drop constraint if exists sale_lines_override_needs_reason;
 alter table public.sale_lines
