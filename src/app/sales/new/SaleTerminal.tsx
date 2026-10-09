@@ -140,12 +140,6 @@ export function SaleTerminal({ data }: { data: PosData }) {
     () => new Map(data.catalogue.map((item) => [item.id, item])),
     [data.catalogue],
   );
-  const quickItems = useMemo(() => {
-    const fromHistory = data.quickAddIds
-      .map((id) => itemById.get(id))
-      .filter((item): item is PosCatalogueItem => Boolean(item));
-    return (fromHistory.length > 0 ? fromHistory : data.catalogue).slice(0, 8);
-  }, [data.catalogue, data.quickAddIds, itemById]);
   const selectedCustomer = data.customers.find((customer) => customer.id === customerId);
   const isDelivery = saleType === "delivery";
 
@@ -441,10 +435,10 @@ export function SaleTerminal({ data }: { data: PosData }) {
   const filteredCatalogue = data.catalogue.filter((item) => {
     const term = search.trim().toLowerCase();
     return (
-      term === "" ||
-      item.name.toLowerCase().includes(term) ||
+      term !== "" &&
+      (item.name.toLowerCase().includes(term) ||
       item.brandName.toLowerCase().includes(term) ||
-      item.categoryName.toLowerCase().includes(term)
+      item.categoryName.toLowerCase().includes(term))
     );
   });
 
@@ -538,8 +532,8 @@ export function SaleTerminal({ data }: { data: PosData }) {
       {checkoutStep === "sale" ? (
       <section aria-labelledby="product-lines-title" className="space-y-4">
         <div className="flex items-end justify-between gap-3">
-          <div><p className="text-xs font-semibold uppercase tracking-wide text-ink-subtle">Product lines</p><h2 id="product-lines-title" className="text-lg font-semibold text-ink">Add products and returned cylinders</h2></div>
-          <p className="text-sm text-ink-muted">Search adds a new line; returned empties stay on that refill line.</p>
+          <div><p className="text-xs font-semibold uppercase tracking-wide text-ink-subtle">Product lines</p><h2 id="product-lines-title" className="text-lg font-semibold text-ink">Search products and record returned cylinders</h2></div>
+          <p className="text-sm text-ink-muted">Only explicit search results can be added to a sale.</p>
         </div>
       <div className="space-y-4">
         <section className="space-y-3">
@@ -558,26 +552,10 @@ export function SaleTerminal({ data }: { data: PosData }) {
             <p className="mt-2 text-xs text-ink-subtle"><kbd className="rounded border border-border bg-surface-muted px-1 py-0.5">/</kbd> or <kbd className="rounded border border-border bg-surface-muted px-1 py-0.5">F2</kbd> to search</p>
           </div>
 
-          {search.trim() === "" ? (
-            <section className="rounded-lg border border-border bg-surface p-3 shadow-card">
-              <div className="mb-2 flex items-center justify-between gap-2">
-                <h2 className="text-base font-semibold text-ink">Quick add</h2>
-                <span className="text-xs text-ink-subtle">Top sold in the last 30 days</span>
-              </div>
-              <div className="flex flex-wrap gap-2">
-                {quickItems.map((item) => (
-                  <button key={item.id} type="button" onClick={() => addItem(item)} className={secondaryChip} disabled={item.available === 0}>
-                    {item.name} {item.available !== null ? <span className="num text-ink-subtle">· {item.available} left</span> : null}
-                  </button>
-                ))}
-              </div>
-            </section>
-          ) : null}
-
           <section className="overflow-hidden rounded-lg border border-border bg-surface shadow-card">
             <header className="flex items-center justify-between border-b border-border px-3 py-2">
-              <h2 className="text-base font-semibold text-ink">Add product line</h2>
-              <span className="text-xs text-ink-subtle">{filteredCatalogue.length} items</span>
+              <h2 className="text-base font-semibold text-ink">Search results</h2>
+              <span className="text-xs text-ink-subtle">{search.trim() ? `${filteredCatalogue.length} match${filteredCatalogue.length === 1 ? "" : "es"}` : "Start typing to find a product"}</span>
             </header>
             <div className="grid gap-px bg-border sm:grid-cols-2 xl:grid-cols-3">
               {filteredCatalogue.slice(0, 12).map((item) => (
@@ -598,7 +576,8 @@ export function SaleTerminal({ data }: { data: PosData }) {
                   </span>
                 </button>
               ))}
-              {filteredCatalogue.length === 0 ? <p className="px-3 py-6 text-center text-sm text-ink-muted">No matching product.</p> : null}
+              {search.trim() === "" ? <p className="px-3 py-6 text-center text-sm text-ink-muted">Type a product name, brand or category above to add it.</p> : null}
+              {search.trim() !== "" && filteredCatalogue.length === 0 ? <p className="px-3 py-6 text-center text-sm text-ink-muted">No matching product.</p> : null}
             </div>
           </section>
         </section>

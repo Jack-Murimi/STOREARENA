@@ -36,7 +36,6 @@ export interface PosRider {
 export interface PosData {
   branch: { id: string; name: string; code: string };
   catalogue: PosCatalogueItem[];
-  quickAddIds: string[];
   brands: PosBrand[];
   customers: PosCustomer[];
   riders: PosRider[];
@@ -55,7 +54,7 @@ const number = (value: unknown): number => Number(value ?? 0);
  * stock and totals again on the server when completing the transaction.
  */
 export async function getPosData(db: Database, branchId: string): Promise<PosData | null> {
-  const [branchRows, catalogueRows, topRows, brandRows, customerRows, locationRows, riderRows] =
+  const [branchRows, catalogueRows, brandRows, customerRows, locationRows, riderRows] =
     await Promise.all([
       db.query<Record<string, unknown>>(
         "select id, name, code from stock_locations where id = $1 and kind = 'BRANCH' and active",
@@ -75,17 +74,6 @@ export async function getPosData(db: Database, branchId: string): Promise<PosDat
           group by pv.id, pv.name, pv.size_kg, pv.list_price_ksh,
                    b.id, b.name, c.code, c.name
           order by c.name, pv.size_kg nulls last, b.name, pv.name`,
-        [branchId],
-      ),
-      db.query<Record<string, unknown>>(
-        `select l.variant_id, sum(l.quantity)::integer as units
-           from sale_lines l
-           join sales s on s.id = l.sale_id
-          where s.branch_id = $1 and s.status = 'posted'
-            and s.sale_date >= now() - interval '30 days'
-          group by l.variant_id
-          order by units desc, l.variant_id
-          limit 8`,
         [branchId],
       ),
       db.query<Record<string, unknown>>("select id, name from brands order by name"),
@@ -130,7 +118,6 @@ export async function getPosData(db: Database, branchId: string): Promise<PosDat
       available: text(row.category_code) === "LPG" ? number(row.available) : null,
       sizeKg: row.size_kg === null || row.size_kg === undefined ? null : number(row.size_kg),
     })),
-    quickAddIds: topRows.map((row) => text(row.variant_id)),
     brands: brandRows.map((row) => ({ id: text(row.id), name: text(row.name) })),
     customers: customerRows.map((customer) => ({
       id: text(customer.id),
