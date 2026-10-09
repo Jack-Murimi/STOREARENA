@@ -339,20 +339,38 @@ begin
        where ip.location_id = v_stock_loc and ip.variant_id = v_variant.id
          and ip.state = 'EMPTY';
 
-      if v_type = 'new_cylinder' then
-        -- A complete gas: the cylinder itself leaves the branch and goes to
-        -- the customer. No deposit is charged; custody records where it is.
-        update public.cylinder_custody
-           set quantity = greatest(quantity - v_qty, 0), updated_at = now()
-         where location_id = v_stock_loc and variant_id = v_variant.id
-           and custody = 'BRANCH';
+    end if;
 
-        insert into public.cylinder_custody (location_id, variant_id, custody, quantity)
-        values (v_stock_loc, v_variant.id, 'CUSTOMER', v_qty)
-        on conflict (location_id, variant_id, custody)
-        do update set quantity = cylinder_custody.quantity + excluded.quantity,
-                      updated_at = now();
-      end if;
+    -- A new cylinder is a complete gas: the cylinder itself leaves the branch
+    -- and goes to the customer, whether or not any empties came back. This
+    -- used to sit inside the empties block, so it never ran - a new-cylinder
+    -- sale returns zero empties by definition.
+    if v_type = 'new_cylinder' then
+      update public.cylinder_custody
+         set quantity = greatest(quantity - v_qty, 0), updated_at = now()
+       where location_id = v_stock_loc and variant_id = v_variant.id
+         and custody = 'BRANCH';
+
+      insert into public.cylinder_custody (location_id, variant_id, custody, quantity)
+      values (v_stock_loc, v_variant.id, 'CUSTOMER', v_qty)
+      on conflict (location_id, variant_id, custody)
+      do update set quantity = cylinder_custody.quantity + excluded.quantity,
+                    updated_at = now();
+
+      insert into public.stock_movements (
+        ledger_kind, operation, channel, occurred_at, location_id, variant_id,
+        state, custody, quantity, balance_before, balance_after, reason,
+        reference, actor, idempotency_key
+      )
+      select 'CYLINDER', 'NEW_CYLINDER_SALE',
+             case when v_sale_type = 'delivery' then 'DELIVERY' else 'WALK_IN' end,
+             now(), v_stock_loc, v_variant.id, null, 'BRANCH',
+             -v_qty, coalesce(cc.quantity,0) + v_qty, cc.quantity,
+             'new cylinder on ' || v_receipt, v_sale_id::text, v_actor, v_idem
+        from (select coalesce(sum(quantity),0)::integer as quantity
+                from public.cylinder_custody
+               where location_id = v_stock_loc and variant_id = v_variant.id
+                 and custody = 'BRANCH') cc;
     end if;
 
     -- line_total is a GENERATED column in the legacy schema, so it is not
