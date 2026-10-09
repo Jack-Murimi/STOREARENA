@@ -209,3 +209,46 @@ body {
     background-position: 0 50%;
   }
 }
+
+/* Sale receipts are deliberately a single printable document, not a screenshot
+   of the POS. The staff member chooses 58/80 mm thermal width or an A5 PDF
+   before opening the browser print dialog. */
+.sale-receipt-58 {
+  max-width: 58mm;
+}
+
+.sale-receipt-80 {
+  max-width: 80mm;
+}
+
+.sale-receipt-a5 {
+  max-width: 148mm;
+}
+
+@media print {
+  @page {
+    size: A5 portrait;
+    margin: 12mm;
+  }
+
+  body * {
+    visibility: hidden;
+  }
+
+  .sale-receipt,
+  .sale-receipt * {
+    visibility: visible;
+  }
+
+  .sale-receipt {
+    position: absolute;
+    inset: 0;
+    margin: 0 auto;
+    border: 0;
+    box-shadow: none;
+  }
+
+  .no-print {
+    display: none !important;
+  }
+}
