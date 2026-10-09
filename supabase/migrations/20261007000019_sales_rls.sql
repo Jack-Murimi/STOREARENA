@@ -85,3 +85,12 @@ select l.id, l.sale_id, l.variant_id, l.line_type, l.quantity,
   from public.sale_lines l;
 
 grant select on public.v_sale_lines_public to authenticated;
+
+-- The view was not enough. Granting SELECT on sale_lines to authenticated
+-- handed over every column including cost_at_sale, so an attendant could read
+-- the base table and see cost directly - verified, it returned a row.
+-- RLS is row-level and cannot hide a column, and GRANT cannot distinguish
+-- attendant from director because those are values in app_users.role, not
+-- database roles. So cost_at_sale is revoked from authenticated outright.
+-- Server-side margin reporting runs as postgres, or through a definer RPC.
+revoke select (cost_at_sale) on public.sale_lines from anon, authenticated;
