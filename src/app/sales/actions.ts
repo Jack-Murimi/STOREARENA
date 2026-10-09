@@ -35,6 +35,7 @@ export interface SalePaymentInput {
 export interface CompleteSaleInput {
   receiptNo: string;
   saleType: "counter" | "delivery";
+  saleDate?: string | null;
   customerId?: string | null;
   customerLocationId?: string | null;
   riderId?: string | null;
@@ -148,6 +149,7 @@ export async function completeSale(
     branch_id: process.env.SALES_BRANCH_ID ?? "loc-jam",
     receipt_no: String(input.receiptNo ?? "").trim(),
     sale_type: input.saleType === "delivery" ? "delivery" : "counter",
+    sale_date: clean(input.saleDate),
     customer_id: clean(input.customerId),
     customer_location_id: clean(input.customerLocationId),
     rider_id: clean(input.riderId),

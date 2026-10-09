@@ -35,6 +35,7 @@ type CartLine = {
 
 type Draft = {
   receiptNo: string;
+  saleDate: string;
   saleType: "counter" | "delivery";
   customerId: string;
   customerLocationId: string;
@@ -118,6 +119,7 @@ export function SaleTerminal({ data }: { data: PosData }) {
   const [serverState, action, pending] = useActionState(completeSale, emptyState);
   const [search, setSearch] = useState("");
   const [receiptNo, setReceiptNo] = useState("");
+  const [saleDate, setSaleDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [saleType, setSaleType] = useState<"counter" | "delivery">("counter");
   const [customerId, setCustomerId] = useState("");
   const [customerLocationId, setCustomerLocationId] = useState("");
@@ -165,6 +167,7 @@ export function SaleTerminal({ data }: { data: PosData }) {
             );
           }
           if (typeof draft.receiptNo === "string") setReceiptNo(draft.receiptNo);
+          if (typeof draft.saleDate === "string") setSaleDate(draft.saleDate);
           if (draft.saleType === "counter" || draft.saleType === "delivery") setSaleType(draft.saleType);
           if (typeof draft.customerId === "string") setCustomerId(draft.customerId);
           if (typeof draft.customerLocationId === "string") setCustomerLocationId(draft.customerLocationId);
@@ -203,6 +206,7 @@ export function SaleTerminal({ data }: { data: PosData }) {
     if (!hydrated || serverState.receipt) return;
     const draft: Draft = {
       receiptNo,
+      saleDate,
       saleType,
       customerId,
       customerLocationId,
@@ -229,6 +233,7 @@ export function SaleTerminal({ data }: { data: PosData }) {
     onAccount,
     payments,
     receiptNo,
+    saleDate,
     riderId,
     saleType,
     serverState.receipt,
@@ -368,6 +373,7 @@ export function SaleTerminal({ data }: { data: PosData }) {
     }
     const payload: CompleteSaleInput = {
       receiptNo,
+      saleDate,
       saleType,
       customerId: customerId || null,
       customerLocationId: customerLocationId || null,
@@ -407,6 +413,7 @@ export function SaleTerminal({ data }: { data: PosData }) {
     recordedPaid,
     recordedPayments,
     riderId,
+    saleDate,
     saleType,
     validateSaleDetails,
   ]);
@@ -454,38 +461,35 @@ export function SaleTerminal({ data }: { data: PosData }) {
 
   return (
     <div className="space-y-4">
-      <section className="rounded-lg border border-border bg-surface shadow-card">
-        <div className="flex flex-col gap-3 border-b border-border px-4 py-3 lg:flex-row lg:items-end lg:justify-between">
+      <section aria-labelledby="sale-information-title" className="rounded-lg border border-border bg-surface shadow-card">
+        <header className="flex flex-col gap-2 border-b border-border px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <p className="text-xs font-semibold uppercase tracking-wide text-ink-subtle">Step {checkoutStep === "sale" ? "1 of 2" : "2 of 2"} · sale information</p>
-            <h1 className="text-xl font-semibold text-ink">New sale</h1>
-            <p className="text-sm text-ink-muted">{data.branch.name} · draft first, payment second, stock only after confirmation</p>
+            <p className="text-xs font-semibold uppercase tracking-wide text-ink-subtle">Step {checkoutStep === "sale" ? "1 of 2" : "2 of 2"}</p>
+            <h1 id="sale-information-title" className="text-xl font-semibold text-ink">Sale information</h1>
           </div>
-          <div className="grid gap-2 sm:grid-cols-2">
-            <label className="space-y-1">
-              <span className="text-xs font-medium text-ink-subtle">Sale type</span>
-              <select
-                value={saleType}
-                onChange={(event) => setSaleType(event.target.value as "counter" | "delivery")}
-                className={textField}
-              >
-                <option value="counter">Counter sale</option>
-                <option value="delivery">Completed delivery</option>
-              </select>
-            </label>
-            <label className="space-y-1">
-              <span className="text-xs font-medium text-ink-subtle">Receipt no.</span>
-              <input
-                value={receiptNo}
-                onChange={(event) => setReceiptNo(event.target.value)}
-                className={textField}
-                placeholder="Enter receipt no."
-                aria-required="true"
-              />
-            </label>
+          <p className="text-sm text-ink-muted">Draft first, payment second, stock only after confirmation</p>
+        </header>
+        <div className="grid gap-3 px-4 py-3 sm:grid-cols-2 xl:grid-cols-4">
+          <label className="space-y-1">
+            <span className="text-xs font-medium text-ink-subtle">Receipt no.</span>
+            <input value={receiptNo} onChange={(event) => setReceiptNo(event.target.value)} className={textField} placeholder="Enter receipt no." aria-required="true" />
+          </label>
+          <label className="space-y-1">
+            <span className="text-xs font-medium text-ink-subtle">Sale date</span>
+            <input type="date" value={saleDate} max={new Date().toISOString().slice(0, 10)} onChange={(event) => setSaleDate(event.target.value)} className={textField} />
+          </label>
+          <label className="space-y-1">
+            <span className="text-xs font-medium text-ink-subtle">Source</span>
+            <select value={saleType} onChange={(event) => setSaleType(event.target.value as "counter" | "delivery")} className={textField}>
+              <option value="counter">Counter sale</option>
+              <option value="delivery">Completed delivery</option>
+            </select>
+          </label>
+          <div className="space-y-1">
+            <span className="text-xs font-medium text-ink-subtle">Stock location</span>
+            <p className="flex min-h-[var(--touch-target)] items-center rounded-md border border-border bg-surface-muted px-3 text-base font-medium text-ink">{data.branch.name}</p>
           </div>
         </div>
-
         <div className="grid gap-3 px-4 py-3 lg:grid-cols-3">
           <label className="space-y-1">
             <span className="text-xs font-medium text-ink-subtle">Customer {isDelivery || onAccount ? "(required)" : "(optional)"}</span>
@@ -537,7 +541,7 @@ export function SaleTerminal({ data }: { data: PosData }) {
           <div><p className="text-xs font-semibold uppercase tracking-wide text-ink-subtle">Product lines</p><h2 id="product-lines-title" className="text-lg font-semibold text-ink">Add products and returned cylinders</h2></div>
           <p className="text-sm text-ink-muted">Search adds a new line; returned empties stay on that refill line.</p>
         </div>
-      <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)]">
+      <div className="space-y-4">
         <section className="space-y-3">
           <div className="rounded-lg border border-border bg-surface p-3 shadow-card">
             <label className="relative block">
@@ -572,17 +576,17 @@ export function SaleTerminal({ data }: { data: PosData }) {
 
           <section className="overflow-hidden rounded-lg border border-border bg-surface shadow-card">
             <header className="flex items-center justify-between border-b border-border px-3 py-2">
-              <h2 className="text-base font-semibold text-ink">Catalogue</h2>
+              <h2 className="text-base font-semibold text-ink">Add product line</h2>
               <span className="text-xs text-ink-subtle">{filteredCatalogue.length} items</span>
             </header>
-            <div className="divide-line max-h-96 overflow-y-auto">
-              {filteredCatalogue.slice(0, 20).map((item) => (
+            <div className="grid gap-px bg-border sm:grid-cols-2 xl:grid-cols-3">
+              {filteredCatalogue.slice(0, 12).map((item) => (
                 <button
                   key={item.id}
                   type="button"
                   onClick={() => addItem(item)}
                   disabled={item.available === 0}
-                  className="flex min-h-[var(--touch-target)] w-full items-center justify-between gap-3 px-3 py-2 text-left transition-colors duration-150 hover:bg-surface-muted disabled:cursor-not-allowed disabled:opacity-50"
+                  className="flex min-h-[var(--touch-target)] w-full items-center justify-between gap-3 bg-surface px-3 py-2 text-left transition-colors duration-150 hover:bg-surface-muted disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   <span>
                     <span className="block text-sm font-medium text-ink">{item.name}</span>
@@ -662,7 +666,7 @@ export function SaleTerminal({ data }: { data: PosData }) {
                       {line.lineType === "refill" ? (
                         <div className="grid gap-2 sm:grid-cols-2">
                           <label className="space-y-1">
-                            <span className="text-xs font-medium text-ink-subtle">Returned empties</span>
+                            <span className="text-xs font-semibold uppercase tracking-wide text-ink-subtle">Returned empties</span>
                             <input type="number" min="0" value={line.emptiesReturned} onChange={(event) => patchLine(line.key, { emptiesReturned: Math.max(0, Math.floor(numberOrZero(event.target.value))) })} className={compactField} />
                           </label>
                           <label className="space-y-1">
@@ -741,7 +745,7 @@ export function SaleTerminal({ data }: { data: PosData }) {
           </dl>
           <div className="space-y-2 lg:min-w-60">
             {checkoutStep === "sale" ? (
-              <Button type="button" variant="primary" size="md" onClick={continueToPayment} disabled={lines.length === 0} className="w-full">Save & choose payment</Button>
+              <Button type="button" variant="primary" size="md" onClick={continueToPayment} disabled={lines.length === 0} className="w-full">Save sale & choose payment</Button>
             ) : (
               <Button type="button" variant="primary" size="md" onClick={submit} disabled={pending || lines.length === 0} className="w-full">{pending ? "Confirming sale…" : "Confirm sale"}</Button>
             )}
