@@ -219,3 +219,42 @@ export async function completeSale(
     return readableError(raw);
   }
 }
+
+export interface VoidSaleState {
+  error?: string;
+  success?: boolean;
+}
+
+/** Void through the audited database reversal, never by deleting or editing rows. */
+export async function voidSale(
+  _previous: VoidSaleState,
+  formData: FormData,
+): Promise<VoidSaleState> {
+  const saleId = String(formData.get("sale_id") ?? "").trim();
+  const reason = String(formData.get("reason") ?? "").trim();
+  if (!saleId) return { error: "This sale could not be identified." };
+  if (reason.length < 10) return { error: "Give a void reason of at least 10 characters." };
+
+  const { products, notice } = await getCustomerContext();
+  if (!products) return { error: notice ?? "The database is not reachable." };
+  try {
+    await products.db.transaction(async (tx) => {
+      await tx.query("select set_config('request.jwt.claims', $1, true)", [ACTOR_CLAIMS]);
+      await tx.query("select public.void_sale($1::uuid, $2)", [saleId, reason]);
+    });
+    revalidatePath("/sales");
+    revalidatePath(`/sales/${saleId}`);
+    revalidatePath("/inventory");
+    revalidatePath("/");
+    return { success: true };
+  } catch (error) {
+    const raw = error instanceof Error ? error.message.split("\n")[0] : "unknown_error";
+    const errors: Record<string, string> = {
+      void_needs_admin_or_director: "Only an administrator or director can void a sale.",
+      reason_too_short: "Give a void reason of at least 10 characters.",
+      already_void: "This sale has already been voided.",
+      sale_not_found: "This sale could not be found.",
+    };
+    return { error: errors[raw] ?? "The sale could not be voided." };
+  }
+}
