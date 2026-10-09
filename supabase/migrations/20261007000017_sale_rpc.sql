@@ -62,6 +62,8 @@ declare
   v_pay        jsonb;
   v_reason     text;
   v_dup        uuid;
+  v_rider_active boolean;
+  v_rider_branch text;
 begin
   -- ------------------------------------------------------------ identity ----
   if v_uid is null then
@@ -137,16 +139,25 @@ begin
     if v_rider_id is null or v_cust_loc is null then
       raise exception using message = 'delivery_needs_rider_and_location', errcode = '22023';
     end if;
-    select r.stock_location_id, r.is_active, r.branch_id
-      into v_stock_loc, v_line, v_reason
+    select r.is_active, r.branch_id into v_rider_active, v_rider_branch
       from public.riders r where r.id = v_rider_id;
 
-    if v_stock_loc is null then
+    if v_rider_branch is null then
       raise exception using message = 'rider_not_found', errcode = '22023';
     end if;
-  else
-    v_stock_loc := v_branch;   -- counter sales come off the branch store
+    if v_rider_active is distinct from true then
+      raise exception using message = 'rider_inactive', errcode = '22023';
+    end if;
+    if v_rider_branch <> v_branch then
+      raise exception using message = 'rider_wrong_branch', errcode = '42501';
+    end if;
   end if;
+
+  -- Riders do not hold stock. Only the four branches do, so both counter and
+  -- delivery sales draw from the branch store. Nothing leaves stock when a
+  -- rider drives out - only when the delivery is completed and the sale is
+  -- recorded here.
+  v_stock_loc := v_branch;
 
   -- -------------------------------------------------------------- lines -----
   if jsonb_array_length(coalesce(p_payload -> 'lines', '[]'::jsonb)) = 0 then
@@ -328,13 +339,20 @@ begin
        where ip.location_id = v_stock_loc and ip.variant_id = v_variant.id
          and ip.state = 'EMPTY';
 
-      -- No deposit is charged for cylinders left with the customer; custody
-      -- records where the cylinder actually is.
-      insert into public.cylinder_custody (location_id, variant_id, custody, quantity)
-      values (v_stock_loc, v_variant.id, 'CUSTOMER', v_qty)
-      on conflict (location_id, variant_id, custody)
-      do update set quantity = cylinder_custody.quantity + excluded.quantity,
-                    updated_at = now();
+      if v_type = 'new_cylinder' then
+        -- A complete gas: the cylinder itself leaves the branch and goes to
+        -- the customer. No deposit is charged; custody records where it is.
+        update public.cylinder_custody
+           set quantity = greatest(quantity - v_qty, 0), updated_at = now()
+         where location_id = v_stock_loc and variant_id = v_variant.id
+           and custody = 'BRANCH';
+
+        insert into public.cylinder_custody (location_id, variant_id, custody, quantity)
+        values (v_stock_loc, v_variant.id, 'CUSTOMER', v_qty)
+        on conflict (location_id, variant_id, custody)
+        do update set quantity = cylinder_custody.quantity + excluded.quantity,
+                      updated_at = now();
+      end if;
     end if;
 
     -- line_total is a GENERATED column in the legacy schema, so it is not
@@ -347,9 +365,15 @@ begin
       gen_random_uuid()::text, v_sale_id, v_variant.id, v_type, v_qty, v_list, v_unit,
       v_discount, v_empties, v_empty_brand,
       v_cost, nullif(trim(coalesce(v_line ->> 'price_override_reason','')), ''),
-      -- the legacy price_deviation_needs_reason check reads discount_reason, so
-      -- both columns carry the same justification
-      nullif(trim(coalesce(v_line ->> 'price_override_reason','')), ''),
+      -- The legacy price_deviation_needs_reason check fires on ANY deviation
+      -- from list price, up or down, and reads discount_reason. A new cylinder
+      -- is always priced above the refill list price, so without this every
+      -- new-cylinder sale would demand a reason nobody has to give.
+      coalesce(
+        nullif(trim(coalesce(v_line ->> 'price_override_reason','')), ''),
+        case when v_type = 'new_cylinder' and v_unit > v_list
+             then 'new cylinder sold with gas' end
+      ),
       case when v_unit < coalesce(v_variant.min_price, v_list) then v_uid else null end
     );
 
