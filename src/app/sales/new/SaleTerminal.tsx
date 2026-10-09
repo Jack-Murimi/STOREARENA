@@ -42,6 +42,7 @@ type Draft = {
   creditDueDate: string;
   notes: string;
   onAccount: boolean;
+  checkoutStep: "sale" | "payment";
   idempotencyKey: string;
   payments: PaymentRow[];
   lines: CartLine[];
@@ -130,6 +131,7 @@ export function SaleTerminal({ data }: { data: PosData }) {
   const [localError, setLocalError] = useState("");
   const [receiptFormat, setReceiptFormat] = useState<ReceiptFormat>("80");
   const [hydrated, setHydrated] = useState(false);
+  const [checkoutStep, setCheckoutStep] = useState<"sale" | "payment">("sale");
   const searchRef = useRef<HTMLInputElement>(null);
 
   const itemById = useMemo(
@@ -170,6 +172,9 @@ export function SaleTerminal({ data }: { data: PosData }) {
           if (typeof draft.creditDueDate === "string") setCreditDueDate(draft.creditDueDate);
           if (typeof draft.notes === "string") setNotes(draft.notes);
           if (typeof draft.onAccount === "boolean") setOnAccount(draft.onAccount);
+          if (draft.checkoutStep === "sale" || draft.checkoutStep === "payment") {
+            setCheckoutStep(draft.checkoutStep);
+          }
           if (typeof draft.idempotencyKey === "string" && draft.idempotencyKey.length > 0) {
             setIdempotencyKey(draft.idempotencyKey);
           }
@@ -205,6 +210,7 @@ export function SaleTerminal({ data }: { data: PosData }) {
       creditDueDate,
       notes,
       onAccount,
+      checkoutStep,
       idempotencyKey,
       payments,
       lines,
@@ -214,6 +220,7 @@ export function SaleTerminal({ data }: { data: PosData }) {
     creditDueDate,
     customerId,
     customerLocationId,
+    checkoutStep,
     data.branch.id,
     hydrated,
     idempotencyKey,
@@ -318,16 +325,37 @@ export function SaleTerminal({ data }: { data: PosData }) {
     setLocalError("");
   };
 
-  const submit = useCallback(() => {
+  const validateSaleDetails = useCallback((): boolean => {
     setLocalError("");
-    if (lines.length === 0) return setLocalError("Add at least one item before completing the sale.");
-    if (receiptNo.trim() === "") return setLocalError("Enter the receipt number.");
+    if (lines.length === 0) {
+      setLocalError("Add at least one product line before saving the sale.");
+      return false;
+    }
+    if (receiptNo.trim() === "") {
+      setLocalError("Enter the receipt number.");
+      return false;
+    }
     if (lines.some((line) => line.lineType === "refill" && !line.emptyBrandId)) {
-      return setLocalError("Choose the returned empty-cylinder brand on every refill line.");
+      setLocalError("Choose the returned empty-cylinder brand on every refill line.");
+      return false;
     }
-    if (isDelivery && (!customerId || !customerLocationId || !riderId)) {
-      return setLocalError("Delivery needs a customer, delivery location and rider.");
+    if (saleType === "delivery" && (!customerId || !customerLocationId || !riderId)) {
+      setLocalError("Delivery needs a customer, delivery location and rider.");
+      return false;
     }
+    if (hasLargeQuantity && !largeConfirmed) {
+      setLocalError("Confirm the unusually large quantity before continuing.");
+      return false;
+    }
+    return true;
+  }, [customerId, customerLocationId, hasLargeQuantity, largeConfirmed, lines, receiptNo, riderId, saleType]);
+
+  const continueToPayment = useCallback(() => {
+    if (validateSaleDetails()) setCheckoutStep("payment");
+  }, [validateSaleDetails]);
+
+  const submit = useCallback(() => {
+    if (!validateSaleDetails()) return;
     if (onAccount && !customerId) return setLocalError("Credit needs a customer account.");
     if (!onAccount && Math.abs(recordedPaid - estimateTotal) > 0.01) {
       return setLocalError("Payment must match the estimated total, or choose Credit for the outstanding amount.");
@@ -371,7 +399,6 @@ export function SaleTerminal({ data }: { data: PosData }) {
     estimateTotal,
     estimatedDue,
     idempotencyKey,
-    isDelivery,
     largeConfirmed,
     lines,
     notes,
@@ -381,6 +408,7 @@ export function SaleTerminal({ data }: { data: PosData }) {
     recordedPayments,
     riderId,
     saleType,
+    validateSaleDetails,
   ]);
 
   useEffect(() => {
@@ -393,12 +421,15 @@ export function SaleTerminal({ data }: { data: PosData }) {
       }
       if ((event.ctrlKey || event.metaKey) && event.key === "Enter") {
         event.preventDefault();
-        if (!pending && !serverState.receipt) submit();
+        if (!pending && !serverState.receipt) {
+          if (checkoutStep === "payment") submit();
+          else continueToPayment();
+        }
       }
     };
     window.addEventListener("keydown", listener);
     return () => window.removeEventListener("keydown", listener);
-  }, [pending, serverState.receipt, submit]);
+  }, [checkoutStep, continueToPayment, pending, serverState.receipt, submit]);
 
   const filteredCatalogue = data.catalogue.filter((item) => {
     const term = search.trim().toLowerCase();
@@ -426,9 +457,9 @@ export function SaleTerminal({ data }: { data: PosData }) {
       <section className="rounded-lg border border-border bg-surface shadow-card">
         <div className="flex flex-col gap-3 border-b border-border px-4 py-3 lg:flex-row lg:items-end lg:justify-between">
           <div>
-            <p className="text-xs font-semibold uppercase tracking-wide text-ink-subtle">Point of sale</p>
+            <p className="text-xs font-semibold uppercase tracking-wide text-ink-subtle">Step {checkoutStep === "sale" ? "1 of 2" : "2 of 2"} · sale information</p>
             <h1 className="text-xl font-semibold text-ink">New sale</h1>
-            <p className="text-sm text-ink-muted">{data.branch.name} · stock is confirmed when you complete the sale</p>
+            <p className="text-sm text-ink-muted">{data.branch.name} · draft first, payment second, stock only after confirmation</p>
           </div>
           <div className="grid gap-2 sm:grid-cols-2">
             <label className="space-y-1">
@@ -500,6 +531,12 @@ export function SaleTerminal({ data }: { data: PosData }) {
         </div>
       </section>
 
+      {checkoutStep === "sale" ? (
+      <section aria-labelledby="product-lines-title" className="space-y-4">
+        <div className="flex items-end justify-between gap-3">
+          <div><p className="text-xs font-semibold uppercase tracking-wide text-ink-subtle">Product lines</p><h2 id="product-lines-title" className="text-lg font-semibold text-ink">Add products and returned cylinders</h2></div>
+          <p className="text-sm text-ink-muted">Search adds a new line; returned empties stay on that refill line.</p>
+        </div>
       <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)]">
         <section className="space-y-3">
           <div className="rounded-lg border border-border bg-surface p-3 shadow-card">
@@ -566,8 +603,8 @@ export function SaleTerminal({ data }: { data: PosData }) {
           <div className="overflow-hidden rounded-lg border border-border bg-surface shadow-card">
             <header className="flex min-h-[var(--row-table)] items-center justify-between border-b border-border px-4">
               <div>
-                <h2 className="text-base font-semibold text-ink">Cart</h2>
-                <p className="text-xs text-ink-subtle">Prices and stock are checked again on completion</p>
+                <h2 className="text-base font-semibold text-ink">Product lines</h2>
+                <p className="text-xs text-ink-subtle">Returned empties and their brand are captured on each refill line</p>
               </div>
               <span className="num text-sm text-ink-muted">{lines.reduce((sum, line) => sum + line.quantity, 0)} item{lines.reduce((sum, line) => sum + line.quantity, 0) === 1 ? "" : "s"}</span>
             </header>
@@ -625,7 +662,7 @@ export function SaleTerminal({ data }: { data: PosData }) {
                       {line.lineType === "refill" ? (
                         <div className="grid gap-2 sm:grid-cols-2">
                           <label className="space-y-1">
-                            <span className="text-xs font-medium text-ink-subtle">Empty cylinders returned</span>
+                            <span className="text-xs font-medium text-ink-subtle">Returned empties</span>
                             <input type="number" min="0" value={line.emptiesReturned} onChange={(event) => patchLine(line.key, { emptiesReturned: Math.max(0, Math.floor(numberOrZero(event.target.value))) })} className={compactField} />
                           </label>
                           <label className="space-y-1">
@@ -668,56 +705,136 @@ export function SaleTerminal({ data }: { data: PosData }) {
           ) : null}
         </section>
       </div>
+      </section>
+      ) : (
+        <PaymentStep
+          lines={lines}
+          items={itemById}
+          payments={payments}
+          onAddPayment={addPayment}
+          onUpdatePayment={setPayments}
+          onAccount={onAccount}
+          onToggleAccount={() => { setOnAccount((value) => !value); setLocalError(""); }}
+          creditDueDate={creditDueDate}
+          onCreditDueDate={setCreditDueDate}
+          estimateTotal={estimateTotal}
+          recordedPaid={recordedPaid}
+          estimatedDue={estimatedDue}
+          cashChange={cashChange}
+          onBack={() => setCheckoutStep("sale")}
+        />
+      )}
 
       <section className="sticky bottom-0 z-10 rounded-lg border border-border bg-surface p-4 shadow-raised">
-        <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] xl:items-end">
+        <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-end">
           <div>
-            <p className="text-xs font-semibold uppercase tracking-wide text-ink-subtle">Payment</p>
-            <div className="mt-2 flex flex-wrap gap-2">
-              {(["cash", "mpesa", "card", "bank"] as PaymentMethod[]).map((method) => (
-                <button key={method} type="button" onClick={() => addPayment(method)} className={secondaryChip}>Add {readablePayment(method)}</button>
-              ))}
-              <button type="button" onClick={() => { setOnAccount((value) => !value); setLocalError(""); }} className={onAccount ? selectedChip : secondaryChip}>Credit / on account</button>
-            </div>
-            {payments.length === 0 ? <p className="mt-2 text-sm text-ink-muted">Choose a payment method, or record the balance as customer credit.</p> : null}
-            <div className="mt-3 space-y-2">
-              {payments.map((payment) => (
-                <div key={payment.key} className="grid gap-2 rounded-md border border-border bg-surface-sunken p-2 sm:grid-cols-[auto_1fr_1fr_auto] sm:items-center">
-                  <span className="text-sm font-semibold text-ink">{readablePayment(payment.method)}</span>
-                  <input inputMode="decimal" value={payment.amount} onChange={(event) => setPayments((current) => current.map((candidate) => candidate.key === payment.key ? { ...candidate, amount: event.target.value } : candidate))} placeholder={payment.method === "cash" ? "Tendered cash" : "Amount"} className={compactField} aria-label={`${readablePayment(payment.method)} amount`} />
-                  {["mpesa", "bank", "card"].includes(payment.method) ? <input value={payment.reference} onChange={(event) => setPayments((current) => current.map((candidate) => candidate.key === payment.key ? { ...candidate, reference: event.target.value } : candidate))} placeholder="Reference" className={compactField} aria-label={`${readablePayment(payment.method)} reference`} /> : <span className="text-xs text-ink-subtle">{payment.method === "cash" ? "Change is not recorded as payment." : ""}</span>}
-                  <button type="button" onClick={() => setPayments((current) => current.filter((candidate) => candidate.key !== payment.key))} className="min-h-[var(--touch-target)] px-2 text-sm font-medium text-critical hover:bg-critical-bg">Remove</button>
-                </div>
-              ))}
-            </div>
-            {onAccount || estimatedDue > 0 ? (
-              <div className="mt-3 grid gap-2 sm:grid-cols-2">
-                <label className="space-y-1"><span className="text-xs font-medium text-ink-subtle">Credit due date</span><input type="date" value={creditDueDate} onChange={(event) => setCreditDueDate(event.target.value)} className={compactField} /></label>
-                <p className="self-end text-sm text-ink-muted">Credit is attached to the selected customer and is checked against their approved limit.</p>
-              </div>
-            ) : null}
+            <p className="text-xs font-semibold uppercase tracking-wide text-ink-subtle">{checkoutStep === "sale" ? "Sale total" : "Payment review"}</p>
+            <p className="mt-1 text-sm text-ink-muted">{checkoutStep === "sale" ? "Save this device draft, then choose payment. Nothing has been sold yet." : "The final total, credit and stock are checked by the database when you confirm."}</p>
           </div>
-
-          <dl className="num space-y-1 text-right text-sm">
-            <div className="flex justify-end gap-6"><dt className="text-ink-subtle">Items</dt><dd>{lines.reduce((sum, line) => sum + line.quantity, 0)}</dd></div>
-            <div className="flex justify-end gap-6"><dt className="text-ink-subtle">Estimated subtotal</dt><dd>{formatKsh(estimateSubtotal)}</dd></div>
-            <div className="flex justify-end gap-6"><dt className="text-ink-subtle">Discount</dt><dd>{formatKsh(estimateDiscount)}</dd></div>
-            <div className="flex justify-end gap-6 text-md font-semibold"><dt>Total</dt><dd>{formatKsh(estimateTotal)}</dd></div>
-            {cashChange > 0 ? <div className="flex justify-end gap-6 text-ok"><dt>Cash change</dt><dd>{formatKsh(cashChange)}</dd></div> : null}
-            {estimatedDue > 0 ? <div className="flex justify-end gap-6 text-warn"><dt>Credit due</dt><dd>{formatKsh(estimatedDue)}</dd></div> : null}
+          <dl className="num grid grid-cols-2 gap-x-6 gap-y-1 text-right text-sm sm:flex sm:justify-end">
+            <div><dt className="text-ink-subtle">Items</dt><dd>{lines.reduce((sum, line) => sum + line.quantity, 0)}</dd></div>
+            <div><dt className="text-ink-subtle">Subtotal</dt><dd>{formatKsh(estimateSubtotal)}</dd></div>
+            <div><dt className="text-ink-subtle">Discount</dt><dd>{formatKsh(estimateDiscount)}</dd></div>
+            <div className="text-md font-semibold"><dt>Total</dt><dd>{formatKsh(estimateTotal)}</dd></div>
+            {checkoutStep === "payment" && cashChange > 0 ? <div className="text-ok"><dt>Cash change</dt><dd>{formatKsh(cashChange)}</dd></div> : null}
+            {checkoutStep === "payment" && estimatedDue > 0 ? <div className="text-warn"><dt>Credit due</dt><dd>{formatKsh(estimatedDue)}</dd></div> : null}
           </dl>
-
-          <div className="space-y-2 xl:min-w-60">
-            <Button type="button" variant="primary" size="md" onClick={submit} disabled={pending || lines.length === 0} className="w-full">
-              {pending ? "Completing sale…" : "Complete sale"}
-            </Button>
+          <div className="space-y-2 lg:min-w-60">
+            {checkoutStep === "sale" ? (
+              <Button type="button" variant="primary" size="md" onClick={continueToPayment} disabled={lines.length === 0} className="w-full">Save & choose payment</Button>
+            ) : (
+              <Button type="button" variant="primary" size="md" onClick={submit} disabled={pending || lines.length === 0} className="w-full">{pending ? "Confirming sale…" : "Confirm sale"}</Button>
+            )}
             <p className="text-center text-xs text-ink-subtle"><kbd className="rounded border border-border bg-surface-muted px-1 py-0.5">Ctrl</kbd> + <kbd className="rounded border border-border bg-surface-muted px-1 py-0.5">Enter</kbd></p>
           </div>
         </div>
         {localError || serverState.error ? <p role="alert" className="mt-3 rounded-md border border-critical bg-critical-bg px-3 py-2 text-sm text-critical">{localError || serverState.error}</p> : null}
-        <p className="mt-2 text-xs text-ink-subtle">Totals, availability, price limits, FIFO cost and credit checks are computed in the database at completion.</p>
       </section>
     </div>
+  );
+}
+
+function PaymentStep({
+  lines,
+  items,
+  payments,
+  onAddPayment,
+  onUpdatePayment,
+  onAccount,
+  onToggleAccount,
+  creditDueDate,
+  onCreditDueDate,
+  estimateTotal,
+  recordedPaid,
+  estimatedDue,
+  cashChange,
+  onBack,
+}: {
+  lines: CartLine[];
+  items: Map<string, PosCatalogueItem>;
+  payments: PaymentRow[];
+  onAddPayment: (method: PaymentMethod) => void;
+  onUpdatePayment: (update: (current: PaymentRow[]) => PaymentRow[]) => void;
+  onAccount: boolean;
+  onToggleAccount: () => void;
+  creditDueDate: string;
+  onCreditDueDate: (value: string) => void;
+  estimateTotal: number;
+  recordedPaid: number;
+  estimatedDue: number;
+  cashChange: number;
+  onBack: () => void;
+}) {
+  return (
+    <section aria-labelledby="payment-title" className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
+      <div className="rounded-lg border border-border bg-surface shadow-card">
+        <header className="flex items-start justify-between gap-3 border-b border-border px-4 py-3">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-wide text-ink-subtle">Step 2 of 2</p>
+            <h2 id="payment-title" className="text-lg font-semibold text-ink">Choose payment</h2>
+            <p className="text-sm text-ink-muted">Add one or more actual payment methods. Credit is the unpaid balance.</p>
+          </div>
+          <Button type="button" variant="secondary" size="sm" onClick={onBack}>Back to sale</Button>
+        </header>
+        <div className="space-y-3 p-4">
+          <div className="flex flex-wrap gap-2">
+            {(["cash", "mpesa", "card", "bank"] as PaymentMethod[]).map((method) => (
+              <button key={method} type="button" onClick={() => onAddPayment(method)} className={secondaryChip}>Add {readablePayment(method)}</button>
+            ))}
+            <button type="button" onClick={onToggleAccount} className={onAccount ? selectedChip : secondaryChip}>Credit / on account</button>
+          </div>
+          {payments.length === 0 ? <p className="rounded-md border border-border bg-surface-sunken px-3 py-2 text-sm text-ink-muted">No payment method added yet. Use Credit / on account only for a selected customer.</p> : null}
+          <div className="space-y-2">
+            {payments.map((payment) => (
+              <div key={payment.key} className="grid gap-2 rounded-md border border-border bg-surface-sunken p-2 sm:grid-cols-[auto_1fr_1fr_auto] sm:items-center">
+                <span className="text-sm font-semibold text-ink">{readablePayment(payment.method)}</span>
+                <input inputMode="decimal" value={payment.amount} onChange={(event) => onUpdatePayment((current) => current.map((candidate) => candidate.key === payment.key ? { ...candidate, amount: event.target.value } : candidate))} placeholder={payment.method === "cash" ? "Tendered cash" : "Amount"} className={compactField} aria-label={`${readablePayment(payment.method)} amount`} />
+                {["mpesa", "bank", "card"].includes(payment.method) ? <input value={payment.reference} onChange={(event) => onUpdatePayment((current) => current.map((candidate) => candidate.key === payment.key ? { ...candidate, reference: event.target.value } : candidate))} placeholder="Reference" className={compactField} aria-label={`${readablePayment(payment.method)} reference`} /> : <span className="text-xs text-ink-subtle">Change is not recorded as a payment.</span>}
+                <button type="button" onClick={() => onUpdatePayment((current) => current.filter((candidate) => candidate.key !== payment.key))} className="min-h-[var(--touch-target)] px-2 text-sm font-medium text-critical hover:bg-critical-bg">Remove</button>
+              </div>
+            ))}
+          </div>
+          {onAccount || estimatedDue > 0 ? (
+            <div className="grid gap-2 rounded-md border border-warn bg-warn-bg p-3 sm:grid-cols-2">
+              <label className="space-y-1"><span className="text-xs font-medium text-ink-muted">Credit due date</span><input type="date" value={creditDueDate} onChange={(event) => onCreditDueDate(event.target.value)} className={compactField} /></label>
+              <p className="self-end text-sm text-ink-muted">The selected customer’s approved credit limit is checked before the sale is posted.</p>
+            </div>
+          ) : null}
+        </div>
+      </div>
+
+      <aside className="rounded-lg border border-border bg-surface shadow-card">
+        <header className="border-b border-border px-4 py-3"><h2 className="text-base font-semibold text-ink">Sale review</h2><p className="text-sm text-ink-muted">Confirm products before final posting.</p></header>
+        <div className="divide-line">
+          {lines.map((line) => {
+            const item = items.get(line.variantId);
+            if (!item) return null;
+            return <div key={line.key} className="flex justify-between gap-3 px-4 py-3 text-sm"><span><strong className="font-medium text-ink">{item.name}</strong><span className="block text-xs text-ink-subtle">{line.quantity} × {formatKsh(linePrice(line, item))}{line.lineType === "refill" ? ` · ${line.emptiesReturned} returned` : ""}</span></span><span className="num font-semibold text-ink">{formatKsh(lineTotal(line, item))}</span></div>;
+          })}
+        </div>
+        <dl className="num space-y-2 border-t border-border p-4 text-sm"><div className="flex justify-between gap-4"><dt className="text-ink-muted">Sale total</dt><dd className="text-base font-semibold text-ink">{formatKsh(estimateTotal)}</dd></div><div className="flex justify-between gap-4"><dt className="text-ink-muted">Recorded payment</dt><dd>{formatKsh(recordedPaid)}</dd></div>{cashChange > 0 ? <div className="flex justify-between gap-4 text-ok"><dt>Cash change</dt><dd>{formatKsh(cashChange)}</dd></div> : null}{estimatedDue > 0 ? <div className="flex justify-between gap-4 text-warn"><dt>Credit due</dt><dd>{formatKsh(estimatedDue)}</dd></div> : null}</dl>
+      </aside>
+    </section>
   );
 }
 
