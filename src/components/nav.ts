@@ -19,6 +19,7 @@ export const navItems: NavItem[] = [
   { label: "Suppliers", short: "Suppliers", icon: TruckIcon, href: "/suppliers", matchPrefix: "/suppliers" },
   { label: "Payments", short: "Pay", icon: CashIcon, href: "/payments", matchPrefix: "/payments" },
   { label: "Customers", short: "Customers", icon: UsersIcon, href: "/customers", matchPrefix: "/customers" },
+  { label: "Riders", short: "Riders", icon: TruckIcon, href: "/riders", matchPrefix: "/riders" },
 ];
 
 export function navItemIsActive(item: NavItem, path = "/"): boolean {
