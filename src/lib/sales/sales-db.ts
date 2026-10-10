@@ -135,9 +135,9 @@ export async function getSaleDetail(db: Database, saleId: string): Promise<SaleD
     ),
     db.query<Record<string, unknown>>(
       `select er.sale_line_id, er.quantity, b.name as brand_name
-         from sale_line_empty_returns er
+         from sale_line_returns er
          join sale_lines l on l.id = er.sale_line_id
-         join product_variants pv on pv.id = er.variant_id
+         join product_variants pv on pv.id = er.returned_variant_id
          join brands b on b.id = pv.brand_id
         where l.sale_id = $1
         order by er.sale_line_id, b.name`,
