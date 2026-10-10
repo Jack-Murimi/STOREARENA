@@ -49,22 +49,25 @@ export async function createRider(form: FormData): Promise<void> {
   redirect(`/riders?saved=${encodeURIComponent(`${name} is ready for delivery assignments.`)}`);
 }
 
-/** Riders remain in history forever. Deactivation removes them from future POS
- * assignment but keeps every delivery and receipt intact. There is no delete action. */
-export async function deactivateRider(form: FormData): Promise<void> {
+/** Riders remain in history forever. Changing active status only controls
+ * whether POS can assign future deliveries; it never removes past receipts. */
+export async function setRiderActive(form: FormData): Promise<void> {
   const id = clean(form, "id");
-  if (!id) destination("Choose a rider to deactivate.");
+  const active = clean(form, "active") === "true";
+  if (!id) destination("Choose a rider to update.");
+
   const db = await riderDatabase();
   let rows: { name: string }[];
   try {
     rows = await db.query<{ name: string }>(
-      "update riders set is_active = false, updated_at = now() where id = $1 and is_active returning name",
-      [id],
+      "update riders set is_active = $2, updated_at = now() where id = $1 and is_active is distinct from $2 returning name",
+      [id, active],
     );
   } catch (error) {
-    destination(`Could not deactivate the rider: ${(error as Error).message}`);
+    destination(`Could not update the rider: ${(error as Error).message}`);
   }
-  if (!rows[0]) destination("That rider is already inactive or could not be found.");
+  if (!rows[0]) destination(`That rider is already ${active ? "active" : "inactive"} or could not be found.`);
   revalidatePath("/riders");
-  redirect(`/riders?saved=${encodeURIComponent(`${rows[0].name} was deactivated. Their delivery history remains available.`)}`);
+  const status = active ? "reactivated and is available for new delivery assignments" : "deactivated; their delivery history remains available";
+  redirect(`/riders?saved=${encodeURIComponent(`${rows[0].name} was ${status}.`)}`);
 }

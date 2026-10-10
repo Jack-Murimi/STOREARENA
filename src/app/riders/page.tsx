@@ -9,7 +9,7 @@ import type { DataColumn } from "@/components/ui";
 import { currentStaff, stationName } from "@/lib/data";
 import { getCustomerContext } from "@/lib/db";
 import { formatKsh } from "@/lib/format";
-import { createRider, deactivateRider } from "./actions";
+import { createRider, setRiderActive } from "./actions";
 
 export const metadata: Metadata = { title: "Riders" };
 export const dynamic = "force-dynamic";
@@ -81,7 +81,7 @@ export default async function RidersPage({ searchParams }: { searchParams: Promi
     { key: "value", header: "Delivered value", align: "right", num: true, priority: 3, cell: (rider) => formatKsh(rider.deliveryValue) },
     { key: "last", header: "Last delivery", priority: 3, cell: (rider) => <span className="text-ink-subtle">{deliveryDate(rider.lastDelivery)}</span> },
     { key: "status", header: "Status", priority: 3, cell: (rider) => rider.active ? <StatusBadge tone="ok">Active</StatusBadge> : <StatusBadge tone="neutral">Inactive</StatusBadge> },
-    { key: "action", header: "", align: "right", cell: (rider) => rider.active ? <form action={deactivateRider}><input type="hidden" name="id" value={rider.id} /><Button type="submit" variant="danger" size="sm">Deactivate</Button></form> : <span className="text-xs text-ink-subtle">Not assignable</span> },
+    { key: "action", header: "", align: "right", cell: (rider) => <form action={setRiderActive}><input type="hidden" name="id" value={rider.id} /><input type="hidden" name="active" value={rider.active ? "false" : "true"} /><Button type="submit" variant={rider.active ? "danger" : "secondary"} size="sm">{rider.active ? "Deactivate" : "Reactivate"}</Button></form> },
   ];
 
   return <>
