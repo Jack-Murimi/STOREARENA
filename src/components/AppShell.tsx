@@ -16,6 +16,7 @@ export function AppShell({
   staff,
   branch,
   activeHref,
+  topbarAction,
   children,
 }: {
   title: string;
@@ -23,13 +24,14 @@ export function AppShell({
   staff: StaffMember;
   branch?: string;
   activeHref?: string;
+  topbarAction?: ReactNode;
   children: ReactNode;
 }) {
   return (
     <div className="flex min-h-screen bg-bg">
       <Sidebar activeHref={activeHref} />
       <div className="flex min-w-0 flex-1 flex-col">
-        <Topbar title={title} subtitle={subtitle} staff={staff} branch={branch} />
+        <Topbar title={title} subtitle={subtitle} staff={staff} branch={branch} action={topbarAction} />
         <main className="page-shell flex-1 space-y-4 pb-20 md:pb-0">{children}</main>
       </div>
       <BottomTabBar activeHref={activeHref} />

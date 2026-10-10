@@ -12,6 +12,7 @@ import {
   useState,
 } from "react";
 import { useRouter } from "next/navigation";
+import { createPortal } from "react-dom";
 import { Button, StatusBadge } from "@/components/ui";
 import { CheckIcon, ReceiptIcon, SearchIcon } from "@/components/icons";
 import { formatKsh } from "@/lib/format";
@@ -34,6 +35,7 @@ type CartLine = {
   quantity: number;
   emptyReturns: EmptyCylinderReturn[];
   requestedUnitPrice: string;
+  returnsFollowQuantity: boolean;
 };
 
 type PaymentRow = { key: string; method: PaymentMethod; amount: string; reference: string };
@@ -43,7 +45,6 @@ type CheckoutStep = "sale" | "payment";
 type Draft = {
   receiptNo: string;
   saleDate: string;
-  saleType: "counter" | "delivery";
   customerId: string;
   customerLocationId: string;
   riderId: string;
@@ -116,6 +117,7 @@ function defaultLine(item: PosCatalogueItem): CartLine {
     quantity: 1,
     emptyReturns: item.lineType === "refill" ? [{ key: newKey(), variantId: item.id, quantity: 1 }] : [],
     requestedUnitPrice: "",
+    returnsFollowQuantity: item.lineType === "refill",
   };
 }
 
@@ -192,12 +194,11 @@ function CustomerCombobox({
   );
 }
 
-export function SaleTerminal({ data }: { data: PosData }) {
+export function SaleTerminal({ data, canChangeBranch }: { data: PosData; canChangeBranch: boolean }) {
   const router = useRouter();
   const [serverState, action, pending] = useActionState(completeSale, emptyState);
   const [receiptNo, setReceiptNo] = useState("");
   const [saleDate, setSaleDate] = useState(today);
-  const [saleType, setSaleType] = useState<"counter" | "delivery">("counter");
   const [customerId, setCustomerId] = useState("");
   const [customerLocationId, setCustomerLocationId] = useState("");
   const [riderId, setRiderId] = useState("");
@@ -217,6 +218,7 @@ export function SaleTerminal({ data }: { data: PosData }) {
   const [activeResult, setActiveResult] = useState(0);
   const [flashLine, setFlashLine] = useState<string | null>(null);
   const [noteSheetOpen, setNoteSheetOpen] = useState(false);
+  const [returnEditorLine, setReturnEditorLine] = useState<string | null>(null);
   const receiptRef = useRef<HTMLInputElement>(null);
   const searchRef = useRef<HTMLInputElement>(null);
   const searchBoxRef = useRef<HTMLDivElement>(null);
@@ -224,7 +226,6 @@ export function SaleTerminal({ data }: { data: PosData }) {
 
   const itemById = useMemo(() => new Map(data.catalogue.map((item) => [item.id, item])), [data.catalogue]);
   const selectedCustomer = data.customers.find((customer) => customer.id === customerId);
-  const isDelivery = saleType === "delivery";
   const search = useMemo(() => searchCatalogue(query, data.catalogue, data.quickAddIds), [data.catalogue, data.quickAddIds, query]);
   const quickItems = useMemo(() => {
     const index = new Map(data.quickAddIds.map((id, position) => [id, position]));
@@ -244,7 +245,6 @@ export function SaleTerminal({ data }: { data: PosData }) {
           const draft = JSON.parse(saved) as Partial<Draft>;
           if (typeof draft.receiptNo === "string") setReceiptNo(draft.receiptNo);
           if (typeof draft.saleDate === "string") setSaleDate(draft.saleDate);
-          if (draft.saleType === "counter" || draft.saleType === "delivery") setSaleType(draft.saleType);
           if (typeof draft.customerId === "string") setCustomerId(draft.customerId);
           if (typeof draft.customerLocationId === "string") setCustomerLocationId(draft.customerLocationId);
           if (typeof draft.riderId === "string") setRiderId(draft.riderId);
@@ -261,6 +261,7 @@ export function SaleTerminal({ data }: { data: PosData }) {
                 ? line.emptyReturns.filter((returned) => Boolean(returned?.variantId)).map((returned) => ({ ...returned, key: returned.key || newKey(), quantity: Math.max(0, Number(returned.quantity) || 0) }))
                 : line.lineType === "refill" ? [{ key: newKey(), variantId: line.variantId, quantity: Math.max(0, Number((line as unknown as { emptiesReturned?: number }).emptiesReturned ?? 1)) }] : [],
               requestedUnitPrice: "",
+              returnsFollowQuantity: line.returnsFollowQuantity !== false,
             })));
           if (Array.isArray(draft.payments)) setPayments(draft.payments.filter((payment): payment is PaymentRow => ["cash", "mpesa", "bank", "card"].includes(payment?.method)));
         }
@@ -276,9 +277,9 @@ export function SaleTerminal({ data }: { data: PosData }) {
 
   useEffect(() => {
     if (!hydrated || serverState.receipt) return;
-    const draft: Draft = { receiptNo, saleDate, saleType, customerId, customerLocationId, riderId, creditDueDate, notes, onAccount, checkoutStep, idempotencyKey, payments, lines };
+    const draft: Draft = { receiptNo, saleDate, customerId, customerLocationId, riderId, creditDueDate, notes, onAccount, checkoutStep, idempotencyKey, payments, lines };
     window.localStorage.setItem(`${DRAFT_KEY}:${data.branch.id}`, JSON.stringify(draft));
-  }, [checkoutStep, creditDueDate, customerId, customerLocationId, data.branch.id, hydrated, idempotencyKey, lines, notes, onAccount, payments, receiptNo, riderId, saleDate, saleType, serverState.receipt]);
+  }, [checkoutStep, creditDueDate, customerId, customerLocationId, data.branch.id, hydrated, idempotencyKey, lines, notes, onAccount, payments, receiptNo, riderId, saleDate, serverState.receipt]);
 
   useEffect(() => {
     if (serverState.receipt) window.localStorage.removeItem(`${DRAFT_KEY}:${data.branch.id}`);
@@ -324,7 +325,11 @@ export function SaleTerminal({ data }: { data: PosData }) {
 
   const setQuantity = useCallback((line: CartLine, next: number) => {
     const maximum = maxFor(line, itemById.get(line.variantId));
-    patchLine(line.key, { quantity: Math.max(1, Math.min(Math.floor(next), maximum)) });
+    const quantity = Math.max(1, Math.min(Math.floor(next), maximum));
+    patchLine(line.key, {
+      quantity,
+      emptyReturns: line.returnsFollowQuantity ? line.emptyReturns.map((returned, index) => index === 0 ? { ...returned, quantity } : returned) : line.emptyReturns,
+    });
   }, [itemById, maxFor, patchLine]);
 
   const estimateSubtotal = lines.reduce((sum, line) => sum + line.quantity * linePrice(line, itemById.get(line.variantId)), 0);
@@ -354,9 +359,9 @@ export function SaleTerminal({ data }: { data: PosData }) {
       if (line.emptyReturns.some((item) => !item.variantId || Number(item.quantity) <= 0)) errors[`return-${line.key}`] = "Choose each returned cylinder and enter its quantity.";
       else if (returned > line.quantity) errors[`return-${line.key}`] = "Returned cylinders cannot exceed the refill quantity.";
     });
-    if (isDelivery && !customerId) errors.customer = "Choose the delivery customer.";
-    if (isDelivery && !customerLocationId) errors.location = "Choose the delivery location.";
-    if (isDelivery && !riderId) errors.rider = "Choose the rider.";
+    if (lines.some((line) => line.lineType === "refill" && line.emptyReturns.reduce((sum, returned) => sum + returned.quantity, 0) < line.quantity) && !customerId) {
+      errors.customer = "Choose a customer to leave cylinders with them.";
+    }
     if (hasLargeQuantity && !largeConfirmed) errors.largeQuantity = "Confirm the large quantity.";
     setFieldErrors(errors);
     if (Object.keys(errors).length > 0) {
@@ -364,7 +369,7 @@ export function SaleTerminal({ data }: { data: PosData }) {
       return false;
     }
     return true;
-  }, [customerId, customerLocationId, hasLargeQuantity, isDelivery, largeConfirmed, lines, receiptNo, riderId]);
+  }, [customerId, hasLargeQuantity, largeConfirmed, lines, receiptNo]);
 
   const continueToPayment = useCallback(() => {
     if (validateSaleDetails()) setCheckoutStep("payment");
@@ -378,7 +383,7 @@ export function SaleTerminal({ data }: { data: PosData }) {
     const electronicWithoutReference = recordedPayments.find((payment) => ["mpesa", "bank", "card"].includes(payment.method) && !payment.reference);
     if (electronicWithoutReference) return setLocalError(`Add the ${readablePayment(electronicWithoutReference.method)} reference.`);
     const payload: CompleteSaleInput = {
-      branchId: data.branch.id, receiptNo, saleDate, saleType, customerId: customerId || null, customerLocationId: customerLocationId || null, riderId: riderId || null,
+      branchId: data.branch.id, receiptNo, saleDate, customerId: customerId || null, customerLocationId: customerLocationId || null, riderId: riderId || null,
       creditDueDate: onAccount || estimatedDue > 0 ? creditDueDate : null, notes, confirmLargeQuantity: largeConfirmed, idempotencyKey,
       lines: lines.map((line) => ({
         variantId: line.variantId,
@@ -392,7 +397,7 @@ export function SaleTerminal({ data }: { data: PosData }) {
       payments: recordedPayments,
     };
     action(payload);
-  }, [action, creditDueDate, customerId, customerLocationId, data.branch.id, estimateTotal, estimatedDue, idempotencyKey, largeConfirmed, lines, notes, onAccount, receiptNo, recordedPaid, recordedPayments, riderId, saleDate, saleType, validateSaleDetails]);
+  }, [action, creditDueDate, customerId, customerLocationId, data.branch.id, estimateTotal, estimatedDue, idempotencyKey, largeConfirmed, lines, notes, onAccount, receiptNo, recordedPaid, recordedPayments, riderId, saleDate, validateSaleDetails]);
 
   const onSearchKeyDown = (event: ReactKeyboardEvent<HTMLInputElement>) => {
     if (event.key === "ArrowDown") { event.preventDefault(); setSearchOpen(true); setActiveResult((current) => Math.min(current + 1, Math.max(0, dropdownItems.length - 1))); }
@@ -425,7 +430,9 @@ export function SaleTerminal({ data }: { data: PosData }) {
   if (serverState.receipt) return <SaleReceipt receipt={serverState.receipt} branch={data.branch} format={receiptFormat} onFormat={setReceiptFormat} />;
 
   const changeBranch = (branchId: string) => {
-    if (branchId !== data.branch.id) router.push(`/sales/new?branch=${encodeURIComponent(branchId)}`);
+    if (branchId === data.branch.id) return;
+    if (lines.length > 0 && !window.confirm("Changing branch clears this branch-specific cart. Continue?")) return;
+    router.push(`/sales/new?branch=${encodeURIComponent(branchId)}`);
   };
 
   const clearFieldError = (key: string) => setFieldErrors((current) => {
@@ -442,10 +449,9 @@ export function SaleTerminal({ data }: { data: PosData }) {
   const renderInfoFields = () => <>
     <label className="space-y-1"><span className="text-xs font-medium text-ink-subtle">Receipt no.</span><input ref={receiptRef} value={receiptNo} onChange={(event) => { setReceiptNo(event.target.value); clearFieldError("receiptNo"); if (event.target.value.trim()) window.setTimeout(() => searchRef.current?.focus(), 0); }} className={field} placeholder="Receipt no." required autoFocus aria-invalid={Boolean(fieldErrors.receiptNo)} /><FieldError message={fieldErrors.receiptNo} /></label>
     <label className="space-y-1"><span className="text-xs font-medium text-ink-subtle">Date</span><input type="date" value={saleDate} max={today()} onChange={(event) => setSaleDate(event.target.value)} className={field} /></label>
-    <fieldset className="space-y-1"><legend className="text-xs font-medium text-ink-subtle">Sale type</legend><div className="flex h-[var(--pos-field-height)] rounded-md border border-border bg-surface p-0.5"><button type="button" onClick={() => setSaleType("counter")} className={`flex-1 rounded-sm text-sm font-medium ${saleType === "counter" ? "bg-surface-muted text-ink" : "text-ink-muted"}`}>Counter</button><button type="button" onClick={() => setSaleType("delivery")} className={`flex-1 rounded-sm text-sm font-medium ${saleType === "delivery" ? "bg-surface-muted text-ink" : "text-ink-muted"}`}>Delivery</button></div></fieldset>
-    <div><CustomerCombobox customers={data.customers} customerId={customerId} onChange={(id) => { setCustomerId(id); setCustomerLocationId(""); clearFieldError("customer"); }} required={isDelivery || onAccount} /><FieldError message={fieldErrors.customer} /></div>
-    <label className="space-y-1"><span className="text-xs font-medium text-ink-subtle">Delivery person</span><select value={riderId} onChange={(event) => { setRiderId(event.target.value); clearFieldError("rider"); }} className={field} aria-invalid={Boolean(fieldErrors.rider)}><option value="">No rider assigned</option>{data.riders.map((rider) => <option key={rider.id} value={rider.id}>{rider.name}</option>)}</select><FieldError message={fieldErrors.rider} /></label>
-    <label className="space-y-1"><span className="text-xs font-medium text-ink-subtle">Branch</span><select value={data.branch.id} onChange={(event) => changeBranch(event.target.value)} className={field}><option value={data.branch.id}>{data.branch.name} · {data.branch.code}</option>{data.branches.filter((branch) => branch.id !== data.branch.id).map((branch) => <option key={branch.id} value={branch.id}>{branch.name} · {branch.code}</option>)}</select></label>
+    <div><CustomerCombobox customers={data.customers} customerId={customerId} onChange={(id) => { setCustomerId(id); setCustomerLocationId(""); clearFieldError("customer"); }} required={onAccount} /><FieldError message={fieldErrors.customer} /></div>
+    <label className="space-y-1"><span className="text-xs font-medium text-ink-subtle">Rider</span><select value={riderId} onChange={(event) => { setRiderId(event.target.value); clearFieldError("rider"); }} className={field} aria-invalid={Boolean(fieldErrors.rider)}><option value="">No rider assigned</option>{data.riders.map((rider) => <option key={rider.id} value={rider.id}>{rider.name}</option>)}</select><FieldError message={fieldErrors.rider} /></label>
+    {canChangeBranch ? <label className="space-y-1"><span className="text-xs font-medium text-ink-subtle">Branch</span><select value={data.branch.id} onChange={(event) => changeBranch(event.target.value)} className={field}><option value={data.branch.id}>{data.branch.name} · {data.branch.code}</option>{data.branches.filter((branch) => branch.id !== data.branch.id).map((branch) => <option key={branch.id} value={branch.id}>{branch.name} · {branch.code}</option>)}</select></label> : null}
   </>;
 
   return (
@@ -454,8 +460,8 @@ export function SaleTerminal({ data }: { data: PosData }) {
         <div className="hidden items-end gap-3 md:grid md:grid-cols-3 xl:grid-cols-6">
           {renderInfoFields()}
         </div>
-        <details className="md:hidden"><summary className="flex min-h-[var(--touch-target)] cursor-pointer list-none items-center justify-between gap-2 text-sm text-ink"><span className="truncate">{receiptNo ? `Receipt ${receiptNo}` : "New receipt"} · {saleDate} · {saleType === "counter" ? "Counter" : "Delivery"} · {selectedCustomer?.name ?? "Walk-in"} · {data.branch.code}</span><span className="text-orange-700">Edit</span></summary><div className="grid gap-3 border-t border-border pt-3">{renderInfoFields()}</div></details>
-        {isDelivery ? <div className="pos-delivery grid gap-3 border-t border-border pt-3 md:mt-3 md:grid-cols-2"><label className="space-y-1"><span className="text-xs font-medium text-ink-subtle">Location</span><select value={customerLocationId} onChange={(event) => { setCustomerLocationId(event.target.value); clearFieldError("location"); }} className={field} disabled={!selectedCustomer} aria-invalid={Boolean(fieldErrors.location)}><option value="">Choose location…</option>{selectedCustomer?.locations.map((location) => <option key={location.id} value={location.id}>{location.label}{location.area ? ` · ${location.area}` : ""}</option>)}</select><FieldError message={fieldErrors.location} /></label><p className="self-end pb-2 text-sm text-ink-muted">Delivery stock stays at {data.branch.name}; the rider does not hold inventory.</p></div> : null}
+        <details className="md:hidden"><summary className="flex min-h-[var(--touch-target)] cursor-pointer list-none items-center justify-between gap-2 text-sm text-ink"><span className="truncate">{receiptNo ? `Receipt ${receiptNo}` : "New receipt"} · {saleDate} · {selectedCustomer?.name ?? "Walk-in customer"} · {data.branch.code}</span><span className="text-orange-700">Edit</span></summary><div className="grid gap-3 border-t border-border pt-3">{renderInfoFields()}</div></details>
+        {selectedCustomer && selectedCustomer.locations.length > 0 ? <div className="pos-delivery grid gap-3 border-t border-border pt-3 md:mt-3 md:grid-cols-2"><label className="space-y-1"><span className="text-xs font-medium text-ink-subtle">Location</span><select value={customerLocationId} onChange={(event) => { setCustomerLocationId(event.target.value); clearFieldError("location"); }} className={field} disabled={!selectedCustomer} aria-invalid={Boolean(fieldErrors.location)}><option value="">Choose location…</option>{selectedCustomer?.locations.map((location) => <option key={location.id} value={location.id}>{location.label}{location.area ? ` · ${location.area}` : ""}</option>)}</select><FieldError message={fieldErrors.location} /></label><p className="self-end pb-2 text-sm text-ink-muted">Location is optional. Stock stays at {data.branch.name}.</p></div> : null}
       </section>
 
       {checkoutStep === "sale" ? <>
@@ -465,17 +471,22 @@ export function SaleTerminal({ data }: { data: PosData }) {
         </div>
 
         <section className="sales-cart" aria-label="Sale items">
-          <header className="flex h-[var(--row-table)] items-center justify-between border-b border-border px-4"><h2 className="text-base font-semibold text-ink">Items</h2><span className="num text-sm text-ink-muted">{lines.reduce((sum, line) => sum + line.quantity, 0)} items · {cylinderCount} cylinders</span></header>
+          <header className="flex h-[var(--row-table)] items-center border-b border-border px-4"><h2 className="text-base font-semibold text-ink">Items</h2></header>
           {lines.length > 0 ? <div className="sales-cart-column-head" aria-hidden="true"><span>Product</span><span>Quantity</span><span>Returned cylinder</span><span>Unit price</span><span>Line total</span><span /></div> : null}
           {lines.length === 0 ? <div className="sales-empty-cart"><ReceiptIcon className="h-6 w-6 text-ink-subtle" /><p className="text-sm text-ink-muted">Search for a product to start this sale.</p><FieldError message={fieldErrors.lines} /></div> : <div>{lines.map((line) => {
             const item = itemById.get(line.variantId);
             if (!item) return null;
             const error = serverState.lineName === item.name ? serverState.error : fieldErrors[`return-${line.key}`];
-            const returnOptions = emptyOptionsFor(item);
             return <article key={line.key} className={`sales-cart-row ${flashLine === line.key ? "sales-line-flash" : ""}`}>
-              <div className="min-w-0"><p className="truncate text-sm font-semibold text-ink">{item.name}</p><div className="mt-1 flex flex-wrap gap-1"><span className="sales-mini-chip">{item.sizeKg ? `${item.sizeKg} kg` : item.categoryName}</span><button type="button" onClick={() => item.categoryCode === "LPG" && patchLine(line.key, { lineType: line.lineType === "refill" ? "new_cylinder" : "refill", emptyReturns: line.lineType === "refill" ? [] : [{ key: newKey(), variantId: item.id, quantity: 1 }] })} className="sales-mini-chip">{lineTypeLabel(line.lineType)}</button></div></div>
+              <div className="min-w-0"><p className="truncate text-sm font-semibold text-ink">{item.name}</p><div className="mt-1"><span className="sales-mini-chip">{lineTypeLabel(line.lineType)}</span></div></div>
               <input id={`quantity-${line.key}`} type="number" min="1" inputMode="numeric" value={line.quantity} onFocus={(event) => event.currentTarget.select()} onChange={(event) => setQuantity(line, numberOrZero(event.target.value))} className="sales-quantity-input num" aria-label={`${item.name} quantity`} />
-              {line.lineType === "refill" ? <div className="sales-return-stack">{line.emptyReturns.map((returned) => <div key={returned.key} className="sales-return-row"><select value={returned.variantId} onChange={(event) => { patchLine(line.key, { emptyReturns: line.emptyReturns.map((candidate) => candidate.key === returned.key ? { ...candidate, variantId: event.target.value } : candidate) }); clearFieldError(`return-${line.key}`); }} className={compactField} aria-label="Returned cylinder"><option value="">Cylinder…</option>{returnOptions.map((option) => <option key={option.id} value={option.id} disabled={line.emptyReturns.some((candidate) => candidate.key !== returned.key && candidate.variantId === option.id)}>{option.brandName} {option.sizeKg} kg</option>)}</select><input type="number" min="1" inputMode="numeric" value={returned.quantity} onFocus={(event) => event.currentTarget.select()} onChange={(event) => { patchLine(line.key, { emptyReturns: line.emptyReturns.map((candidate) => candidate.key === returned.key ? { ...candidate, quantity: Math.max(0, Math.floor(numberOrZero(event.target.value))) } : candidate) }); clearFieldError(`return-${line.key}`); }} className="sales-return-quantity num" aria-label="Returned cylinder quantity" />{line.emptyReturns.length > 1 ? <button type="button" onClick={() => patchLine(line.key, { emptyReturns: line.emptyReturns.filter((candidate) => candidate.key !== returned.key) })} className="min-h-[var(--touch-target)] min-w-[var(--touch-target)] text-critical" aria-label="Remove returned cylinder">×</button> : null}</div>)}<button type="button" onClick={() => patchLine(line.key, { emptyReturns: [...line.emptyReturns, { key: newKey(), variantId: "", quantity: 1 }] })} className="min-h-[var(--touch-target)] text-left text-xs font-medium text-orange-700">Add another returned cylinder</button></div> : <span className="text-sm text-ink-subtle">—</span>}
+              {line.lineType === "refill" ? (() => {
+                const returned = line.emptyReturns.reduce((sum, entry) => sum + entry.quantity, 0);
+                const names = line.emptyReturns.map((entry) => itemById.get(entry.variantId)?.brandName ?? "Cylinder");
+                const mismatch = line.emptyReturns.filter((entry) => itemById.get(entry.variantId)?.brandId !== item.brandId).length;
+                const summary = returned === 0 ? "None returned" : returned < line.quantity ? `${returned} of ${line.quantity} returned` : `${names[0] ?? item.brandName} × ${returned}`;
+                return <button type="button" onClick={() => setReturnEditorLine(line.key)} className={`sales-return-button ${returned === line.quantity && mismatch === 0 ? "sales-return-complete" : "sales-return-warning"}`}>{summary}{mismatch > 0 ? ` · ${mismatch} other brand` : ""}</button>;
+              })() : null}
               <span className="num text-sm font-medium text-ink">{formatKsh(linePrice(line, item))}</span>
               <span className="num text-sm font-semibold text-ink">{formatKsh(lineTotal(line, item))}</span>
               <button type="button" onClick={() => setLines((current) => current.filter((candidate) => candidate.key !== line.key))} className="min-h-[var(--touch-target)] min-w-[var(--touch-target)] text-md text-critical hover:bg-critical-bg" aria-label={`Remove ${item.name}`}>×</button>
@@ -486,7 +497,15 @@ export function SaleTerminal({ data }: { data: PosData }) {
         </section>
       </> : <PaymentStep lines={lines} items={itemById} payments={payments} onAddPayment={(method) => { setPayments((current) => [...current, { key: newKey(), method, amount: "", reference: "" }]); setOnAccount(false); }} onUpdatePayment={setPayments} onAccount={onAccount} onToggleAccount={() => setOnAccount((value) => !value)} creditDueDate={creditDueDate} onCreditDueDate={setCreditDueDate} estimateTotal={estimateTotal} recordedPaid={recordedPaid} estimatedDue={estimatedDue} cashChange={cashChange} onBack={() => setCheckoutStep("sale")} />}
 
-      <footer className="sales-footer"><div className="sales-footer-inner"><div className="hidden min-w-0 flex-1 md:block"><input value={notes} onChange={(event) => setNotes(event.target.value)} className="w-full max-w-[var(--pos-note-width)] border-0 bg-transparent text-sm text-ink outline-none placeholder:text-ink-subtle" placeholder="Add note" aria-label="Sale note" /></div><button type="button" onClick={() => setNoteSheetOpen(true)} className={`relative min-h-[var(--touch-target)] min-w-[var(--touch-target)] rounded-md text-sm text-ink md:hidden ${notes ? "after:absolute after:right-1 after:top-1 after:h-1.5 after:w-1.5 after:rounded-full after:bg-orange-500" : ""}`}>Note</button><div className="num flex items-center gap-3 text-right text-sm"><span className="hidden lg:inline">{lines.reduce((sum, line) => sum + line.quantity, 0)} items · {cylinderCount} cylinders</span><span className="hidden sm:inline">Subtotal {formatKsh(estimateSubtotal)}</span>{estimateDiscount > 0 ? <span className="hidden sm:inline">Discount {formatKsh(estimateDiscount)}</span> : null}<strong className="text-md text-ink">{formatKsh(estimateTotal)}</strong></div><Button type="button" variant="primary" size="md" title={checkoutStep === "sale" ? "Save sale and choose payment. Ctrl/Cmd+Enter." : "Confirm sale. Ctrl/Cmd+Enter."} onClick={checkoutStep === "sale" ? continueToPayment : submit} disabled={pending} className="sales-footer-primary whitespace-nowrap">{checkoutStep === "sale" ? "Save sale & choose payment" : pending ? "Confirming…" : "Confirm sale"}</Button></div>{localError || serverState.error ? <p role="alert" className="sales-footer-error">{localError || serverState.error}</p> : null}</footer>
+      <footer className="sales-footer"><div className="sales-footer-inner"><div className="hidden min-w-0 flex-1 md:block"><input value={notes} onChange={(event) => setNotes(event.target.value)} className="w-full max-w-[var(--pos-note-width)] border-0 bg-transparent text-sm text-ink outline-none placeholder:text-ink-subtle" placeholder="Add note" aria-label="Sale note" /></div><button type="button" onClick={() => setNoteSheetOpen(true)} className={`relative min-h-[var(--touch-target)] min-w-[var(--touch-target)] rounded-md text-sm text-ink md:hidden ${notes ? "after:absolute after:right-1 after:top-1 after:h-1.5 after:w-1.5 after:rounded-full after:bg-orange-500" : ""}`}>Note</button><div className="num flex items-center gap-3 text-right text-sm"><span className="hidden lg:inline">{lines.reduce((sum, line) => sum + line.quantity, 0)} {lines.reduce((sum, line) => sum + line.quantity, 0) === 1 ? "item" : "items"} · {cylinderCount} {cylinderCount === 1 ? "cylinder" : "cylinders"}</span><span className="hidden sm:inline">Subtotal {formatKsh(estimateSubtotal)}</span>{estimateDiscount > 0 ? <span className="hidden sm:inline">Discount {formatKsh(estimateDiscount)}</span> : null}<strong className="text-md text-ink">{formatKsh(estimateTotal)}</strong></div><Button type="button" variant="primary" size="md" title={checkoutStep === "sale" ? "Save sale and choose payment. Ctrl/Cmd+Enter." : "Confirm sale. Ctrl/Cmd+Enter."} onClick={checkoutStep === "sale" ? continueToPayment : submit} disabled={pending} className="sales-footer-primary whitespace-nowrap">{checkoutStep === "sale" ? "Save sale & choose payment" : pending ? "Confirming…" : "Confirm sale"}</Button></div>{localError || serverState.error ? <p role="alert" className="sales-footer-error">{localError || serverState.error}</p> : null}</footer>
+      {returnEditorLine && typeof document !== "undefined" ? createPortal((() => {
+        const line = lines.find((candidate) => candidate.key === returnEditorLine);
+        const item = line ? itemById.get(line.variantId) : undefined;
+        if (!line || !item) return null;
+        const options = emptyOptionsFor(item);
+        const total = line.emptyReturns.reduce((sum, returned) => sum + returned.quantity, 0);
+        return <div className="sales-return-dialog" role="dialog" aria-modal="true" aria-label={`Returned cylinders for ${item.name}`} onKeyDown={(event) => { if (event.key === "Escape") setReturnEditorLine(null); }}><div className="sales-return-dialog-card"><header className="flex items-center justify-between gap-3"><div><h2 className="text-base font-semibold text-ink">Returned cylinders</h2><p className="text-sm text-ink-muted">{item.sizeKg} kg cylinders only</p></div><button type="button" onClick={() => setReturnEditorLine(null)} className="min-h-[var(--touch-target)] min-w-[var(--touch-target)] text-ink-muted">×</button></header><div className="mt-3 space-y-2">{line.emptyReturns.map((returned) => <div key={returned.key} className="sales-return-editor-row"><select value={returned.variantId} onChange={(event) => patchLine(line.key, { emptyReturns: line.emptyReturns.map((candidate) => candidate.key === returned.key ? { ...candidate, variantId: event.target.value } : candidate), returnsFollowQuantity: false })} className={compactField}><option value="">Cylinder brand…</option>{options.map((option) => <option key={option.id} value={option.id}>{option.brandName}</option>)}</select><input type="number" min="1" value={returned.quantity} onChange={(event) => patchLine(line.key, { emptyReturns: line.emptyReturns.map((candidate) => candidate.key === returned.key ? { ...candidate, quantity: Math.max(0, Math.floor(numberOrZero(event.target.value))) } : candidate), returnsFollowQuantity: false })} className="sales-return-quantity num" aria-label="Returned quantity" />{line.emptyReturns.length > 1 ? <button type="button" onClick={() => patchLine(line.key, { emptyReturns: line.emptyReturns.filter((candidate) => candidate.key !== returned.key), returnsFollowQuantity: false })} className="min-h-[var(--touch-target)] min-w-[var(--touch-target)] text-critical">×</button> : null}</div>)}</div><p className={`mt-3 text-sm ${total > line.quantity ? "text-critical" : total === line.quantity ? "text-ok" : "text-warn"}`}>{total > line.quantity ? "Returned more than sold" : `Returned ${total} of ${line.quantity}`}</p><div className="mt-3 flex flex-wrap gap-2"><button type="button" onClick={() => patchLine(line.key, { emptyReturns: [{ key: line.emptyReturns[0]?.key ?? newKey(), variantId: item.id, quantity: line.quantity }], returnsFollowQuantity: true })} className={secondaryChip}>All same brand ({line.quantity})</button><button type="button" onClick={() => patchLine(line.key, { emptyReturns: [], returnsFollowQuantity: false })} className={secondaryChip}>None returned</button><button type="button" onClick={() => patchLine(line.key, { emptyReturns: [...line.emptyReturns, { key: newKey(), variantId: "", quantity: 1 }], returnsFollowQuantity: false })} className={secondaryChip}>+ Add another brand</button><Button type="button" onClick={() => setReturnEditorLine(null)}>Done</Button></div></div></div>;
+      })(), document.body) : null}
       {noteSheetOpen ? <div className="sales-note-sheet md:hidden"><div className="rounded-t-lg border border-border bg-surface p-4 shadow-raised"><div className="flex items-center justify-between"><h2 className="text-base font-semibold text-ink">Sale note</h2><button type="button" onClick={() => setNoteSheetOpen(false)} className="min-h-[var(--touch-target)] px-2 text-sm text-orange-700">Done</button></div><textarea value={notes} onChange={(event) => setNotes(event.target.value)} className="mt-3 w-full rounded-md border border-border bg-surface p-3 text-base text-ink" rows={3} placeholder="Add note" autoFocus /></div></div> : null}
     </div>
   );

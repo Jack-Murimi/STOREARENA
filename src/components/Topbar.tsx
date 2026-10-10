@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import { UserMenu } from "./UserMenu";
 import type { StaffMember } from "@/lib/types";
 
@@ -22,11 +23,13 @@ export function Topbar({
   subtitle,
   staff,
   branch,
+  action,
 }: {
   title: string;
   subtitle?: string;
   staff: StaffMember;
   branch?: string;
+  action?: ReactNode;
 }) {
   return (
     <header className="sticky top-0 z-20 border-b border-border bg-surface">
@@ -38,7 +41,8 @@ export function Topbar({
           ) : null}
         </div>
 
-        <div className="flex shrink-0 items-center gap-1">
+        <div className="flex shrink-0 items-center gap-2">
+          {action}
           {branch ? (
             <span className="hidden items-center gap-1.5 rounded-md border border-border px-2 py-1 text-sm text-ink-muted lg:flex">
               <svg

@@ -115,8 +115,9 @@ export async function getPosData(db: Database, branchId: string): Promise<PosDat
     ),
     db.query<Record<string, unknown>>(
       `select id, name, phone from riders
-        where is_active
+        where branch_id = $1 and is_active
         order by name`,
+      [branchId],
     ),
   ]);
 

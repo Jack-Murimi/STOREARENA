@@ -41,7 +41,6 @@ export interface SalePaymentInput {
 export interface CompleteSaleInput {
   branchId?: string | null;
   receiptNo: string;
-  saleType: "counter" | "delivery";
   saleDate?: string | null;
   customerId?: string | null;
   customerLocationId?: string | null;
@@ -89,7 +88,9 @@ function readableError(raw: string): Pick<CompleteSaleState, "error" | "errorCod
     no_lines: "Add at least one item to the cart.",
     quantity_must_be_positive: "Each item needs a quantity above zero.",
     refill_needs_empty_brand: "Choose the brand of the empty cylinder returned.",
-    delivery_needs_rider_and_location: "Delivery needs both a rider and a customer location.",
+    rider_not_active_for_branch: "Choose an active rider for this branch.",
+    short_return_needs_customer: "Choose a customer to leave cylinders with them.",
+    returned_cylinders_exceed_refill_quantity: "Returned cylinders cannot exceed the refill quantity.",
     rider_wrong_branch: "That rider is not assigned to this branch.",
     rider_inactive: "That rider is not active.",
     payment_reference_required: "Add the M-Pesa, bank or card reference.",
@@ -133,7 +134,7 @@ export async function completeSale(
         quantity: Number(line.quantity),
         empties_returned: Number(line.emptiesReturned ?? 0),
         empty_brand_id: clean(line.emptyBrandId),
-        empty_returns: Array.isArray(line.emptyReturns)
+        returns: Array.isArray(line.emptyReturns)
           ? line.emptyReturns.map((returned) => ({ variant_id: String(returned.variantId ?? ""), quantity: Number(returned.quantity) }))
           : [],
         unit_price:
@@ -158,7 +159,8 @@ export async function completeSale(
   const payload = {
     branch_id: clean(input.branchId) ?? process.env.SALES_BRANCH_ID ?? "loc-jam",
     receipt_no: String(input.receiptNo ?? "").trim(),
-    sale_type: input.saleType === "delivery" ? "delivery" : "counter",
+    // The database derives sale type from rider_id; the browser cannot choose it.
+    sale_type: clean(input.riderId) ? "delivery" : "counter",
     sale_date: clean(input.saleDate),
     customer_id: clean(input.customerId),
     customer_location_id: clean(input.customerLocationId),

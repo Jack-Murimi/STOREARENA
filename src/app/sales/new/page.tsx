@@ -1,6 +1,5 @@
 import type { Metadata } from "next";
 import { AppShell } from "@/components/AppShell";
-import { PageHeader } from "@/components/ui";
 import { DatabaseUnavailable } from "@/components/customers/DatabaseUnavailable";
 import { currentStaff, stationName } from "@/lib/data";
 import { getCustomerContext } from "@/lib/db";
@@ -35,16 +34,13 @@ export default async function NewSalePage({ searchParams }: { searchParams: Prom
 
   return (
     <AppShell
-      title="Sales"
+      title="Sales › New sale"
+      topbarAction={<ol aria-label="Sale workflow" className="hidden items-center gap-1 rounded-pill border border-border bg-surface px-2 py-1 text-xs font-semibold sm:flex"><li className="text-orange-700">1 Sale</li><li aria-hidden="true" className="text-ink-subtle">—</li><li className="text-ink-subtle">2 Payment</li></ol>}
       staff={currentStaff}
       branch={data.branch.name}
       activeHref="/sales"
     >
-      <PageHeader
-        title="New sale"
-        action={<ol aria-label="Sale workflow" className="flex items-center gap-1 rounded-pill border border-border bg-surface px-2 py-1 text-xs font-semibold"><li className="text-orange-700">1 Sale</li><li aria-hidden="true" className="text-ink-subtle">—</li><li className="text-ink-subtle">2 Payment</li></ol>}
-      />
-      <SaleTerminal key={data.branch.id} data={data} />
+      <SaleTerminal key={data.branch.id} data={data} canChangeBranch={["Admin", "Director"].includes(currentStaff.role)} />
     </AppShell>
   );
 }
