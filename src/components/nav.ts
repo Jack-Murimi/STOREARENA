@@ -1,4 +1,4 @@
-import { CashIcon, CylinderIcon, GaugeIcon, ReceiptIcon, TruckIcon, UsersIcon } from "./icons";
+import { CashIcon, ChartIcon, CylinderIcon, GaugeIcon, ReceiptIcon, TruckIcon, UsersIcon } from "./icons";
 
 /** Navigation data shared by sidebar and mobile tabs. `matchPrefix` prevents
  * descendants such as /sales/new and /sales/[id] from losing their active
@@ -18,6 +18,7 @@ export const navItems: NavItem[] = [
   { label: "Purchases", short: "Buy", icon: ReceiptIcon, href: "/purchases", matchPrefix: "/purchases" },
   { label: "Suppliers", short: "Suppliers", icon: TruckIcon, href: "/suppliers", matchPrefix: "/suppliers" },
   { label: "Payments", short: "Pay", icon: CashIcon, href: "/payments", matchPrefix: "/payments" },
+  { label: "Reports", short: "Reports", icon: ChartIcon, href: "/reports", matchPrefix: "/reports" },
   { label: "Customers", short: "Customers", icon: UsersIcon, href: "/customers", matchPrefix: "/customers" },
   { label: "Riders", short: "Riders", icon: TruckIcon, href: "/riders", matchPrefix: "/riders" },
 ];

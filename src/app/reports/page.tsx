@@ -58,7 +58,7 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
   const { products, notice, diagnostic } = await getCustomerContext();
 
   if (!products) {
-    return <AppShell title="Reports" subtitle="Sales reporting" staff={currentStaff} branch={stationName} activeHref="/"><DatabaseUnavailable notice={notice} diagnostic={diagnostic} /></AppShell>;
+    return <AppShell title="Reports" subtitle="Sales reporting" staff={currentStaff} branch={stationName} activeHref="/reports"><DatabaseUnavailable notice={notice} diagnostic={diagnostic} /></AppShell>;
   }
 
   const [branchRows, riderRows, saleRows] = await Promise.all([
@@ -114,7 +114,7 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
     { key: "status", header: "Status", priority: 3, cell: (sale) => sale.status === "void" ? <StatusBadge tone="neutral">Void</StatusBadge> : sale.due > 0 ? <StatusBadge tone="warn">Credit due</StatusBadge> : <StatusBadge tone="ok">Paid</StatusBadge> },
   ];
 
-  return <AppShell title="Reports" subtitle="Filter sales by branch, date, rider, payment, and type" staff={currentStaff} branch={stationName} activeHref="/">
+  return <AppShell title="Reports" subtitle="Filter sales by branch, date, rider, payment, and type" staff={currentStaff} branch={stationName} activeHref="/reports">
     <PageHeader title="Reports" subtitle={`${from} to ${to}`} action={<ButtonLink href="/" variant="secondary">Back to dashboard</ButtonLink>} />
     {notice ? <p className="rounded-lg border border-warn bg-warn-bg p-3 text-sm text-warn">{notice}</p> : null}
     <Card title="Filters" subtitle="Reports include posted sales by default; choose All to include voided receipts.">

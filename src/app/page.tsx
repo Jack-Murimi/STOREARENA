@@ -21,6 +21,9 @@ export const metadata: Metadata = {
 
 export default function DashboardPage() {
   const now = new Date();
+  const reportDate = (date: Date) => new Intl.DateTimeFormat("en-CA", { timeZone: "Africa/Nairobi" }).format(date);
+  const todayReport = `/reports?from=${reportDate(now)}&to=${reportDate(now)}`;
+  const weekReport = `/reports?from=${reportDate(new Date(now.getTime() - 6 * 24 * 60 * 60 * 1000))}&to=${reportDate(now)}`;
 
   const takingsToday = metrics.revenueKsh(salesToday);
   const cylindersToday = metrics.cylindersSold(salesToday);
@@ -49,14 +52,14 @@ export default function DashboardPage() {
       {/* Three metrics that change a decision. The old fourth card was a link
           to the alerts list, which is now a chip on the stock card. */}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        <a href="/reports" aria-label="Open sales reports">
+        <a href={todayReport} aria-label="Open today’s sales report">
           <KpiCard
             label="Takings today"
             value={formatKsh(takingsToday)}
             subtext={`${cylindersToday} cylinders · ${salesToday.length} sales · avg ${formatKsh(averageBasket)}`}
           />
         </a>
-        <a href="/reports" aria-label="Open sales reports">
+        <a href={todayReport} aria-label="Open today’s sales report">
           <KpiCard
             label="Cylinders sold"
             value={String(cylindersToday)}
@@ -81,7 +84,7 @@ export default function DashboardPage() {
 
       <div className="grid gap-4 lg:grid-cols-3">
         <div className="space-y-4 lg:col-span-2">
-          <a href="/reports" className="block rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500" aria-label="Open sales reports">
+          <a href={weekReport} className="block rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500" aria-label="Open seven-day sales report">
             <Card title="Takings, last 7 days" subtitle="Today counted so far">
               <SalesTrendChart data={trend} />
             </Card>
@@ -103,19 +106,21 @@ export default function DashboardPage() {
         </div>
 
         <div className="space-y-4">
-          <Card
-            title="Today's sales"
-            subtitle={
-              bestSeller
-                ? `${formatCylinder(bestSeller.sizeKg)} is the best seller (${bestSeller.units})`
-                : "No sales yet"
-            }
-            flush
-          >
-            <RecentSales sales={salesToday} limit={6} />
-          </Card>
+          <a href={todayReport} className="block rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500" aria-label="Open today’s sales report">
+            <Card
+              title="Today's sales"
+              subtitle={
+                bestSeller
+                  ? `${formatCylinder(bestSeller.sizeKg)} is the best seller (${bestSeller.units})`
+                  : "No sales yet"
+              }
+              flush
+            >
+              <RecentSales sales={salesToday} limit={6} />
+            </Card>
+          </a>
 
-          <a href="/reports" className="block rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500" aria-label="Open sales reports">
+          <a href={todayReport} className="block rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500" aria-label="Open today’s sales report">
             <Card title="Sales mix">
               <SalesMix sales={salesToday} />
             </Card>
