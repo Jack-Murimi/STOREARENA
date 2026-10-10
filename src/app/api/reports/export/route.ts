@@ -11,6 +11,12 @@ export async function GET(request: Request): Promise<Response> {
   const branch = url.searchParams.get("branch") ?? "";
   const from = url.searchParams.get("from") ?? "";
   const to = url.searchParams.get("to") ?? "";
+  const customer = url.searchParams.get("customer") ?? "";
+  const rider = url.searchParams.get("rider") ?? "";
+  const type = url.searchParams.get("type") ?? "";
+  const payment = url.searchParams.get("payment") ?? "";
+  const status = url.searchParams.get("status") ?? "posted";
+  const lookup = url.searchParams.get("q") ?? "";
   const { products } = await getCustomerContext();
   if (!products) return new Response("Reports database is unavailable.", { status: 503 });
 
@@ -30,7 +36,7 @@ export async function GET(request: Request): Promise<Response> {
     rows = await products.db.query<Record<string, unknown>>(`select r.name rider, r.phone, b.name branch, count(s.id) filter(where s.status='posted') deliveries, coalesce(sum(s.total) filter(where s.status='posted'),0) delivered_value, coalesce(sum(s.balance_due) filter(where s.status='posted'),0) credit_due from riders r join stock_locations b on b.id=r.branch_id left join sales s on s.rider_id=r.id and s.sale_date >= $2::date and s.sale_date < ($3::date + interval '1 day') where ($1='' or r.branch_id=$1) group by r.id,b.name order by delivered_value desc`, [branch, from, to]);
   } else {
     heading = ["Receipt", "Date", "Branch", "Customer", "Rider", "Type", "Total", "Paid", "Balance due", "Status"];
-    rows = await products.db.query<Record<string, unknown>>(`select s.receipt_no receipt, s.sale_date date, b.name branch, coalesce(c.name,'Walk-in') customer, coalesce(r.name,'') rider, s.sale_type type, s.total, s.amount_paid paid, s.balance_due, s.status from sales s join stock_locations b on b.id=s.branch_id left join customers c on c.id=s.customer_id left join riders r on r.id=s.rider_id where ($1='' or s.branch_id=$1) and s.sale_date >= $2::date and s.sale_date < ($3::date + interval '1 day') order by s.sale_date desc`, [branch, from, to]);
+    rows = await products.db.query<Record<string, unknown>>(`select s.receipt_no receipt, s.sale_date date, b.name branch, coalesce(c.name,'Walk-in') customer, coalesce(r.name,'') rider, s.sale_type type, s.total, s.amount_paid paid, s.balance_due, s.status from sales s join stock_locations b on b.id=s.branch_id left join customers c on c.id=s.customer_id left join riders r on r.id=s.rider_id where ($1='' or s.branch_id=$1) and s.sale_date >= $2::date and s.sale_date < ($3::date + interval '1 day') and ($4='' or s.customer_id=$4) and ($5='' or s.rider_id::text=$5) and ($6='' or s.sale_type=$6) and ($7='all' or s.status=$7) and ($8='' or exists(select 1 from sale_payments p where p.sale_id=s.id and p.method=$8)) and ($9='' or s.receipt_no ilike '%' || $9 || '%' or c.name ilike '%' || $9 || '%' or exists(select 1 from invoices i where i.sale_id=s.id::text and i.reference ilike '%' || $9 || '%') or exists(select 1 from sale_payments p where p.sale_id=s.id and coalesce(p.reference,'') ilike '%' || $9 || '%')) order by s.sale_date desc`, [branch, from, to, customer, rider, type, status, payment, lookup]);
   }
   const fields = Object.keys(rows[0] ?? {});
   const document = [heading.map(csv).join(","), ...rows.map((row) => fields.map((field) => csv(row[field])).join(","))].join("\r\n");
