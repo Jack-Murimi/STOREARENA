@@ -13,10 +13,9 @@ import {
   FilterBar,
   PageHeader,
   SearchInput,
-  StatusBadge,
 } from "@/components/ui";
 import type { DataColumn } from "@/components/ui";
-import { CustomerKind, formatKenyanPhone, type CustomerRecord } from "@/lib/customers";
+import { formatKenyanPhone, type CustomerRecord } from "@/lib/customers";
 import { currentStaff, stationName } from "@/lib/data";
 import { getCustomerContext } from "@/lib/db";
 import { formatKsh } from "@/lib/format";
@@ -62,34 +61,17 @@ export default async function CustomersPage({ searchParams }: PageProps) {
 
   const columns: DataColumn<CustomerRecord>[] = [
     {
-      key: "customer",
-      header: "Name",
+      key: "customer-location",
+      header: "Customer & location",
       priority: 1,
-      cell: (customer) => (
-        <span className="block min-w-0">
-          <span className="flex items-center gap-2">
-            <span className="truncate font-medium text-ink">{customer.name}</span>
-            {customer.active ? null : <StatusBadge tone="critical">Inactive</StatusBadge>}
-          </span>
-          {/* The code is an identifier, so it is the one thing here in mono. */}
-          <span className="code block truncate text-xs text-ink-subtle">
-            {customer.code} ·{" "}
-            {customer.kind === CustomerKind.Business ? "Business" : "Household"}
-          </span>
-        </span>
-      ),
-    },
-    {
-      key: "location",
-      header: "Location",
-      priority: 2,
       cell: (customer) => {
-        const primary = customer.locations.find((location) => location.isPrimary) ?? customer.locations[0];
-        if (!primary) return <span className="text-ink-subtle">—</span>;
+        const location = customer.locations.find((entry) => entry.isPrimary) ?? customer.locations[0];
+        const address = [location?.label, location?.addressLine].filter(Boolean).join(" · ");
         return (
           <span className="block min-w-0">
-            <span className="block truncate text-sm text-ink">{primary.label}</span>
-            {primary.area ? <span className="block truncate text-xs text-ink-subtle">{primary.area}</span> : null}
+            <span className="block truncate font-medium text-ink">{customer.name}</span>
+            {address ? <span className="block truncate text-sm text-ink-subtle">{address}</span> : null}
+            {location?.details ? <span className="block truncate text-sm text-ink-subtle">{location.details}</span> : null}
           </span>
         );
       },
@@ -97,47 +79,30 @@ export default async function CustomersPage({ searchParams }: PageProps) {
     {
       key: "main-phone",
       header: "Main phone",
-      priority: 3,
+      priority: 2,
       cell: (customer) => {
-        const primary = customer.contacts.find((contact) => contact.isPrimary) ?? customer.contacts[0];
-        if (!primary) return <span className="text-ink-subtle">—</span>;
+        const contact = customer.contacts.find((entry) => entry.isPrimary) ?? customer.contacts[0];
+        if (!contact) return <span className="text-ink-subtle">—</span>;
         return (
           <span className="block min-w-0">
+            <span className="block truncate text-sm text-ink">{contact.name}</span>
             <a
-              href={`tel:${primary.phone}`}
+              href={`tel:${contact.phone}`}
               className="num relative z-20 font-medium text-orange-700 hover:underline"
             >
-              {formatKenyanPhone(primary.phone)}
+              {formatKenyanPhone(contact.phone)}
             </a>
-            {primary.name ? <span className="block truncate text-xs text-ink-subtle">{primary.name}</span> : null}
           </span>
         );
       },
     },
     {
       key: "balance",
-      header: "Balance",
+      header: "Current balance",
       align: "right",
       num: true,
       priority: 3,
-      /* Only money that is owed gets a chip. A screen full of red "Settled"
-         badges makes the ones that matter invisible. */
-      cell: (customer) => {
-        const owed = balances[customer.id]?.balance ?? 0;
-        if (owed > 0) {
-          return (
-            <StatusBadge tone="critical">
-              {formatKsh(owed)} owed
-            </StatusBadge>
-          );
-        }
-        if (owed < 0) {
-          return (
-            <span className="text-sm text-ink-subtle">{formatKsh(Math.abs(owed))} credit</span>
-          );
-        }
-        return <span className="text-ink-subtle">—</span>;
-      },
+      cell: (customer) => <span className="num text-sm font-medium text-ink">{formatKsh(balances[customer.id]?.balance ?? 0)}</span>,
     },
   ];
 
