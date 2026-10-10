@@ -15,12 +15,18 @@ const ACTOR_CLAIMS = JSON.stringify({ sub: ACTOR_UID, role: "authenticated" });
 
 export type PaymentMethod = "cash" | "mpesa" | "bank" | "card";
 
+export interface EmptyCylinderReturnInput {
+  variantId: string;
+  quantity: number;
+}
+
 export interface SaleDraftLineInput {
   variantId: string;
   lineType: SaleLineType;
   quantity: number;
   emptiesReturned?: number;
   emptyBrandId?: string | null;
+  emptyReturns?: EmptyCylinderReturnInput[];
   requestedUnitPrice?: number | null;
   discountAmount?: number | null;
   priceOverrideReason?: string | null;
@@ -33,6 +39,7 @@ export interface SalePaymentInput {
 }
 
 export interface CompleteSaleInput {
+  branchId?: string | null;
   receiptNo: string;
   saleType: "counter" | "delivery";
   saleDate?: string | null;
@@ -126,6 +133,9 @@ export async function completeSale(
         quantity: Number(line.quantity),
         empties_returned: Number(line.emptiesReturned ?? 0),
         empty_brand_id: clean(line.emptyBrandId),
+        empty_returns: Array.isArray(line.emptyReturns)
+          ? line.emptyReturns.map((returned) => ({ variant_id: String(returned.variantId ?? ""), quantity: Number(returned.quantity) }))
+          : [],
         unit_price:
           line.requestedUnitPrice === null || line.requestedUnitPrice === undefined
             ? null
@@ -146,7 +156,7 @@ export async function completeSale(
     : [];
 
   const payload = {
-    branch_id: process.env.SALES_BRANCH_ID ?? "loc-jam",
+    branch_id: clean(input.branchId) ?? process.env.SALES_BRANCH_ID ?? "loc-jam",
     receipt_no: String(input.receiptNo ?? "").trim(),
     sale_type: input.saleType === "delivery" ? "delivery" : "counter",
     sale_date: clean(input.saleDate),

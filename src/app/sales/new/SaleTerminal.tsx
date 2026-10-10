@@ -25,16 +25,15 @@ import {
   type SalePaymentInput,
 } from "../actions";
 
+type EmptyCylinderReturn = { key: string; variantId: string; quantity: number };
+
 type CartLine = {
   key: string;
   variantId: string;
   lineType: SaleLineType;
   quantity: number;
-  emptiesReturned: number;
-  emptyBrandId: string;
+  emptyReturns: EmptyCylinderReturn[];
   requestedUnitPrice: string;
-  discountAmount: string;
-  priceOverrideReason: string;
 };
 
 type PaymentRow = { key: string; method: PaymentMethod; amount: string; reference: string };
@@ -101,12 +100,12 @@ function linePrice(line: CartLine, item: PosCatalogueItem | undefined): number {
   return requested > 0 ? requested : item?.listPrice ?? 0;
 }
 
-function lineDiscount(line: CartLine): number {
-  return Math.max(0, numberOrZero(line.discountAmount));
+function lineDiscount(): number {
+  return 0;
 }
 
 function lineTotal(line: CartLine, item: PosCatalogueItem | undefined): number {
-  return Math.max(0, line.quantity * linePrice(line, item) - lineDiscount(line));
+  return Math.max(0, line.quantity * linePrice(line, item) - lineDiscount());
 }
 
 function defaultLine(item: PosCatalogueItem): CartLine {
@@ -115,11 +114,8 @@ function defaultLine(item: PosCatalogueItem): CartLine {
     variantId: item.id,
     lineType: item.lineType,
     quantity: 1,
-    emptiesReturned: item.lineType === "refill" ? 1 : 0,
-    emptyBrandId: item.lineType === "refill" ? item.brandId : "",
+    emptyReturns: item.lineType === "refill" ? [{ key: newKey(), variantId: item.id, quantity: 1 }] : [],
     requestedUnitPrice: "",
-    discountAmount: "",
-    priceOverrideReason: "",
   };
 }
 
@@ -146,6 +142,10 @@ function highlight(text: string, query: string): ReactNode {
       <mark key={index} className="rounded-sm bg-orange-100 px-0.5 text-ink">{part}</mark>
     ) : part,
   );
+}
+
+function FieldError({ message }: { message?: string }) {
+  return message ? <p role="alert" className="mt-1 text-xs text-critical">{message}</p> : null;
 }
 
 function CustomerCombobox({
@@ -209,12 +209,12 @@ export function SaleTerminal({ data }: { data: PosData }) {
   const [lines, setLines] = useState<CartLine[]>([]);
   const [checkoutStep, setCheckoutStep] = useState<CheckoutStep>("sale");
   const [localError, setLocalError] = useState("");
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [receiptFormat, setReceiptFormat] = useState<ReceiptFormat>("80");
   const [hydrated, setHydrated] = useState(false);
   const [query, setQuery] = useState("");
   const [searchOpen, setSearchOpen] = useState(false);
   const [activeResult, setActiveResult] = useState(0);
-  const [focusedLine, setFocusedLine] = useState<string | null>(null);
   const [flashLine, setFlashLine] = useState<string | null>(null);
   const [noteSheetOpen, setNoteSheetOpen] = useState(false);
   const receiptRef = useRef<HTMLInputElement>(null);
@@ -224,7 +224,6 @@ export function SaleTerminal({ data }: { data: PosData }) {
 
   const itemById = useMemo(() => new Map(data.catalogue.map((item) => [item.id, item])), [data.catalogue]);
   const selectedCustomer = data.customers.find((customer) => customer.id === customerId);
-  const selectedRider = data.riders.find((rider) => rider.id === riderId);
   const isDelivery = saleType === "delivery";
   const search = useMemo(() => searchCatalogue(query, data.catalogue, data.quickAddIds), [data.catalogue, data.quickAddIds, query]);
   const quickItems = useMemo(() => {
@@ -254,7 +253,15 @@ export function SaleTerminal({ data }: { data: PosData }) {
           if (typeof draft.onAccount === "boolean") setOnAccount(draft.onAccount);
           if (draft.checkoutStep === "sale" || draft.checkoutStep === "payment") setCheckoutStep(draft.checkoutStep);
           if (typeof draft.idempotencyKey === "string") setIdempotencyKey(draft.idempotencyKey);
-          if (Array.isArray(draft.lines)) setLines(draft.lines.filter((line): line is CartLine => Boolean(line?.variantId) && itemById.has(line.variantId) && Number(line.quantity) > 0));
+          if (Array.isArray(draft.lines)) setLines(draft.lines
+            .filter((line): line is CartLine => Boolean(line?.variantId) && itemById.has(line.variantId) && Number(line.quantity) > 0)
+            .map((line) => ({
+              ...line,
+              emptyReturns: Array.isArray(line.emptyReturns)
+                ? line.emptyReturns.filter((returned) => Boolean(returned?.variantId)).map((returned) => ({ ...returned, key: returned.key || newKey(), quantity: Math.max(0, Number(returned.quantity) || 0) }))
+                : line.lineType === "refill" ? [{ key: newKey(), variantId: line.variantId, quantity: Math.max(0, Number((line as unknown as { emptiesReturned?: number }).emptiesReturned ?? 1)) }] : [],
+              requestedUnitPrice: "",
+            })));
           if (Array.isArray(draft.payments)) setPayments(draft.payments.filter((payment): payment is PaymentRow => ["cash", "mpesa", "bank", "card"].includes(payment?.method)));
         }
       } catch {
@@ -303,8 +310,8 @@ export function SaleTerminal({ data }: { data: PosData }) {
     const maximum = item.available === null ? Number.POSITIVE_INFINITY : Math.max(0, item.available - totalElsewhere);
     if (existing && existing.quantity >= maximum) return;
     setLines((current) => existing
-      ? current.map((line) => line.key === existing.key ? { ...line, quantity: Math.min(maximum, line.quantity + requestedQuantity), emptiesReturned: line.lineType === "refill" ? Math.min(maximum, line.quantity + requestedQuantity) : line.emptiesReturned } : line)
-      : [...current, { ...defaultLine(item), key, quantity: Math.min(maximum, requestedQuantity), emptiesReturned: item.lineType === "refill" ? Math.min(maximum, requestedQuantity) : 0 }]);
+      ? current.map((line) => line.key === existing.key ? { ...line, quantity: Math.min(maximum, line.quantity + requestedQuantity) } : line)
+      : [...current, { ...defaultLine(item), key, quantity: Math.min(maximum, requestedQuantity) }]);
     lastAddedKey.current = key;
     setFlashLine(key);
     window.setTimeout(() => setFlashLine((current) => current === key ? null : current), 180);
@@ -317,11 +324,11 @@ export function SaleTerminal({ data }: { data: PosData }) {
 
   const setQuantity = useCallback((line: CartLine, next: number) => {
     const maximum = maxFor(line, itemById.get(line.variantId));
-    patchLine(line.key, { quantity: Math.max(1, Math.min(Math.floor(next), maximum)), emptiesReturned: line.lineType === "refill" ? Math.max(0, Math.min(Math.floor(next), maximum)) : line.emptiesReturned });
+    patchLine(line.key, { quantity: Math.max(1, Math.min(Math.floor(next), maximum)) });
   }, [itemById, maxFor, patchLine]);
 
   const estimateSubtotal = lines.reduce((sum, line) => sum + line.quantity * linePrice(line, itemById.get(line.variantId)), 0);
-  const estimateDiscount = lines.reduce((sum, line) => sum + lineDiscount(line), 0);
+  const estimateDiscount = 0;
   const estimateTotal = Math.max(0, estimateSubtotal - estimateDiscount);
   const enteredTender = payments.reduce((sum, payment) => sum + Math.max(0, numberOrZero(payment.amount)), 0);
   const cashChange = Math.max(0, enteredTender - estimateTotal);
@@ -337,21 +344,27 @@ export function SaleTerminal({ data }: { data: PosData }) {
   const cylinderCount = lines.filter((line) => ["refill", "new_cylinder"].includes(line.lineType)).reduce((sum, line) => sum + line.quantity, 0);
   const [largeConfirmed, setLargeConfirmed] = useState(false);
 
-  const missing = useMemo(() => {
-    if (!receiptNo.trim()) return "Enter receipt no.";
-    if (lines.length === 0) return "Add a product";
-    if (lines.some((line) => line.lineType === "refill" && !line.emptyBrandId)) return "Choose empty-cylinder brand";
-    if (isDelivery && (!customerId || !customerLocationId || !riderId)) return "Choose delivery details";
-    if (hasLargeQuantity && !largeConfirmed) return "Confirm large quantity";
-    if (checkoutStep === "payment" && onAccount && !customerId) return "Choose a customer for credit";
-    if (checkoutStep === "payment" && !onAccount && Math.abs(recordedPaid - estimateTotal) > 0.01) return "Match payment to total";
-    return "";
-  }, [checkoutStep, customerId, customerLocationId, hasLargeQuantity, isDelivery, largeConfirmed, lines, onAccount, receiptNo, recordedPaid, riderId, estimateTotal]);
-
   const validateSaleDetails = useCallback((): boolean => {
-    if (missing && !(checkoutStep === "payment" && missing.startsWith("Match payment"))) { setLocalError(missing); return false; }
+    const errors: Record<string, string> = {};
+    if (!receiptNo.trim()) errors.receiptNo = "Enter the receipt number.";
+    if (lines.length === 0) errors.lines = "Add at least one product.";
+    lines.forEach((line) => {
+      if (line.lineType !== "refill") return;
+      const returned = line.emptyReturns.reduce((sum, item) => sum + Math.max(0, Number(item.quantity) || 0), 0);
+      if (line.emptyReturns.some((item) => !item.variantId || Number(item.quantity) <= 0)) errors[`return-${line.key}`] = "Choose each returned cylinder and enter its quantity.";
+      else if (returned > line.quantity) errors[`return-${line.key}`] = "Returned cylinders cannot exceed the refill quantity.";
+    });
+    if (isDelivery && !customerId) errors.customer = "Choose the delivery customer.";
+    if (isDelivery && !customerLocationId) errors.location = "Choose the delivery location.";
+    if (isDelivery && !riderId) errors.rider = "Choose the rider.";
+    if (hasLargeQuantity && !largeConfirmed) errors.largeQuantity = "Confirm the large quantity.";
+    setFieldErrors(errors);
+    if (Object.keys(errors).length > 0) {
+      setLocalError("Complete the fields marked below before continuing.");
+      return false;
+    }
     return true;
-  }, [checkoutStep, missing]);
+  }, [customerId, customerLocationId, hasLargeQuantity, isDelivery, largeConfirmed, lines, receiptNo, riderId]);
 
   const continueToPayment = useCallback(() => {
     if (validateSaleDetails()) setCheckoutStep("payment");
@@ -365,13 +378,21 @@ export function SaleTerminal({ data }: { data: PosData }) {
     const electronicWithoutReference = recordedPayments.find((payment) => ["mpesa", "bank", "card"].includes(payment.method) && !payment.reference);
     if (electronicWithoutReference) return setLocalError(`Add the ${readablePayment(electronicWithoutReference.method)} reference.`);
     const payload: CompleteSaleInput = {
-      receiptNo, saleDate, saleType, customerId: customerId || null, customerLocationId: customerLocationId || null, riderId: riderId || null,
+      branchId: data.branch.id, receiptNo, saleDate, saleType, customerId: customerId || null, customerLocationId: customerLocationId || null, riderId: riderId || null,
       creditDueDate: onAccount || estimatedDue > 0 ? creditDueDate : null, notes, confirmLargeQuantity: largeConfirmed, idempotencyKey,
-      lines: lines.map((line) => ({ variantId: line.variantId, lineType: line.lineType, quantity: line.quantity, emptiesReturned: line.lineType === "refill" ? line.emptiesReturned : 0, emptyBrandId: line.lineType === "refill" ? line.emptyBrandId || null : null, requestedUnitPrice: line.requestedUnitPrice ? numberOrZero(line.requestedUnitPrice) : null, discountAmount: lineDiscount(line), priceOverrideReason: line.priceOverrideReason || null })),
+      lines: lines.map((line) => ({
+        variantId: line.variantId,
+        lineType: line.lineType,
+        quantity: line.quantity,
+        emptyReturns: line.lineType === "refill" ? line.emptyReturns.map((returned) => ({ variantId: returned.variantId, quantity: returned.quantity })) : [],
+        requestedUnitPrice: null,
+        discountAmount: 0,
+        priceOverrideReason: null,
+      })),
       payments: recordedPayments,
     };
     action(payload);
-  }, [action, creditDueDate, customerId, customerLocationId, estimateTotal, estimatedDue, idempotencyKey, largeConfirmed, lines, notes, onAccount, receiptNo, recordedPaid, recordedPayments, riderId, saleDate, saleType, validateSaleDetails]);
+  }, [action, creditDueDate, customerId, customerLocationId, data.branch.id, estimateTotal, estimatedDue, idempotencyKey, largeConfirmed, lines, notes, onAccount, receiptNo, recordedPaid, recordedPayments, riderId, saleDate, saleType, validateSaleDetails]);
 
   const onSearchKeyDown = (event: ReactKeyboardEvent<HTMLInputElement>) => {
     if (event.key === "ArrowDown") { event.preventDefault(); setSearchOpen(true); setActiveResult((current) => Math.min(current + 1, Math.max(0, dropdownItems.length - 1))); }
@@ -403,22 +424,38 @@ export function SaleTerminal({ data }: { data: PosData }) {
 
   if (serverState.receipt) return <SaleReceipt receipt={serverState.receipt} branch={data.branch} format={receiptFormat} onFormat={setReceiptFormat} />;
 
+  const changeBranch = (branchId: string) => {
+    if (branchId !== data.branch.id) router.push(`/sales/new?branch=${encodeURIComponent(branchId)}`);
+  };
+
+  const clearFieldError = (key: string) => setFieldErrors((current) => {
+    if (!current[key]) return current;
+    const next = { ...current };
+    delete next[key];
+    return next;
+  });
+
+  const emptyOptionsFor = (item: PosCatalogueItem) => data.catalogue.filter((candidate) =>
+    candidate.categoryCode === "LPG" && candidate.sizeKg === item.sizeKg,
+  );
+
   const renderInfoFields = () => <>
-    <label className="space-y-1"><span className="text-xs font-medium text-ink-subtle">Receipt no.</span><input ref={receiptRef} value={receiptNo} onChange={(event) => { setReceiptNo(event.target.value); if (event.target.value.trim()) window.setTimeout(() => searchRef.current?.focus(), 0); }} className={field} placeholder="Receipt no." required autoFocus /></label>
+    <label className="space-y-1"><span className="text-xs font-medium text-ink-subtle">Receipt no.</span><input ref={receiptRef} value={receiptNo} onChange={(event) => { setReceiptNo(event.target.value); clearFieldError("receiptNo"); if (event.target.value.trim()) window.setTimeout(() => searchRef.current?.focus(), 0); }} className={field} placeholder="Receipt no." required autoFocus aria-invalid={Boolean(fieldErrors.receiptNo)} /><FieldError message={fieldErrors.receiptNo} /></label>
     <label className="space-y-1"><span className="text-xs font-medium text-ink-subtle">Date</span><input type="date" value={saleDate} max={today()} onChange={(event) => setSaleDate(event.target.value)} className={field} /></label>
-    <fieldset className="space-y-1"><legend className="text-xs font-medium text-ink-subtle">Source</legend><div className="flex h-[var(--pos-field-height)] rounded-md border border-border bg-surface p-0.5"><button type="button" onClick={() => setSaleType("counter")} className={`flex-1 rounded-sm text-sm font-medium ${saleType === "counter" ? "bg-surface-muted text-ink" : "text-ink-muted"}`}>Counter</button><button type="button" onClick={() => setSaleType("delivery")} className={`flex-1 rounded-sm text-sm font-medium ${saleType === "delivery" ? "bg-surface-muted text-ink" : "text-ink-muted"}`}>Delivery</button></div></fieldset>
-    <CustomerCombobox customers={data.customers} customerId={customerId} onChange={(id) => { setCustomerId(id); setCustomerLocationId(""); }} required={isDelivery || onAccount} />
+    <fieldset className="space-y-1"><legend className="text-xs font-medium text-ink-subtle">Sale type</legend><div className="flex h-[var(--pos-field-height)] rounded-md border border-border bg-surface p-0.5"><button type="button" onClick={() => setSaleType("counter")} className={`flex-1 rounded-sm text-sm font-medium ${saleType === "counter" ? "bg-surface-muted text-ink" : "text-ink-muted"}`}>Counter</button><button type="button" onClick={() => setSaleType("delivery")} className={`flex-1 rounded-sm text-sm font-medium ${saleType === "delivery" ? "bg-surface-muted text-ink" : "text-ink-muted"}`}>Delivery</button></div></fieldset>
+    <div><CustomerCombobox customers={data.customers} customerId={customerId} onChange={(id) => { setCustomerId(id); setCustomerLocationId(""); clearFieldError("customer"); }} required={isDelivery || onAccount} /><FieldError message={fieldErrors.customer} /></div>
+    <label className="space-y-1"><span className="text-xs font-medium text-ink-subtle">Delivery person</span><select value={riderId} onChange={(event) => { setRiderId(event.target.value); clearFieldError("rider"); }} className={field} aria-invalid={Boolean(fieldErrors.rider)}><option value="">No rider assigned</option>{data.riders.map((rider) => <option key={rider.id} value={rider.id}>{rider.name}</option>)}</select><FieldError message={fieldErrors.rider} /></label>
+    <label className="space-y-1"><span className="text-xs font-medium text-ink-subtle">Branch</span><select value={data.branch.id} onChange={(event) => changeBranch(event.target.value)} className={field}><option value={data.branch.id}>{data.branch.name} · {data.branch.code}</option>{data.branches.filter((branch) => branch.id !== data.branch.id).map((branch) => <option key={branch.id} value={branch.id}>{branch.name} · {branch.code}</option>)}</select></label>
   </>;
 
   return (
     <div className="sales-terminal space-y-3">
       <section className="sales-info-card">
-        <div className="hidden items-end gap-3 md:grid md:grid-cols-4">
+        <div className="hidden items-end gap-3 md:grid md:grid-cols-3 xl:grid-cols-6">
           {renderInfoFields()}
-          <span className="sales-branch-chip md:col-start-4">{data.branch.code}</span>
         </div>
-        <details className="md:hidden"><summary className="flex min-h-[var(--touch-target)] cursor-pointer list-none items-center justify-between gap-2 text-sm text-ink"><span className="truncate">{receiptNo ? `Receipt ${receiptNo}` : "New receipt"} · {saleDate} · {saleType === "counter" ? "Counter" : "Delivery"} · {selectedCustomer?.name ?? "Walk-in"}</span><span className="text-orange-700">Edit</span></summary><div className="grid gap-3 border-t border-border pt-3">{renderInfoFields()}</div></details>
-        {isDelivery ? <div className="pos-delivery grid gap-3 border-t border-border pt-3 md:mt-3 md:grid-cols-3"><label className="space-y-1"><span className="text-xs font-medium text-ink-subtle">Location</span><select value={customerLocationId} onChange={(event) => setCustomerLocationId(event.target.value)} className={field} disabled={!selectedCustomer}><option value="">Choose location…</option>{selectedCustomer?.locations.map((location) => <option key={location.id} value={location.id}>{location.label}{location.area ? ` · ${location.area}` : ""}</option>)}</select></label><label className="space-y-1"><span className="text-xs font-medium text-ink-subtle">Rider</span><select value={riderId} onChange={(event) => setRiderId(event.target.value)} className={field}><option value="">Choose rider…</option>{data.riders.map((rider) => <option key={rider.id} value={rider.id}>{rider.name}</option>)}</select></label><p className="self-end pb-2 text-sm text-ink-muted">From: {data.branch.name}{selectedRider ? ` · Rider ${selectedRider.name}` : ""}</p></div> : null}
+        <details className="md:hidden"><summary className="flex min-h-[var(--touch-target)] cursor-pointer list-none items-center justify-between gap-2 text-sm text-ink"><span className="truncate">{receiptNo ? `Receipt ${receiptNo}` : "New receipt"} · {saleDate} · {saleType === "counter" ? "Counter" : "Delivery"} · {selectedCustomer?.name ?? "Walk-in"} · {data.branch.code}</span><span className="text-orange-700">Edit</span></summary><div className="grid gap-3 border-t border-border pt-3">{renderInfoFields()}</div></details>
+        {isDelivery ? <div className="pos-delivery grid gap-3 border-t border-border pt-3 md:mt-3 md:grid-cols-2"><label className="space-y-1"><span className="text-xs font-medium text-ink-subtle">Location</span><select value={customerLocationId} onChange={(event) => { setCustomerLocationId(event.target.value); clearFieldError("location"); }} className={field} disabled={!selectedCustomer} aria-invalid={Boolean(fieldErrors.location)}><option value="">Choose location…</option>{selectedCustomer?.locations.map((location) => <option key={location.id} value={location.id}>{location.label}{location.area ? ` · ${location.area}` : ""}</option>)}</select><FieldError message={fieldErrors.location} /></label><p className="self-end pb-2 text-sm text-ink-muted">Delivery stock stays at {data.branch.name}; the rider does not hold inventory.</p></div> : null}
       </section>
 
       {checkoutStep === "sale" ? <>
@@ -428,14 +465,28 @@ export function SaleTerminal({ data }: { data: PosData }) {
         </div>
 
         <section className="sales-cart" aria-label="Sale items">
-          <header className="flex h-[var(--row-table)] items-center justify-between border-b border-border px-3"><h2 className="text-base font-semibold text-ink">Items</h2><span className="num text-sm text-ink-muted">{lines.reduce((sum, line) => sum + line.quantity, 0)} items · {cylinderCount} cylinders</span></header>
-          {lines.length > 0 ? <div className="sales-cart-column-head" aria-hidden="true"><span>Product</span><span>Available</span><span>Quantity</span><span>Returned empties</span><span>Unit price</span><span>Line total</span><span /></div> : null}
-          {lines.length === 0 ? <div className="sales-empty-cart"><ReceiptIcon className="h-6 w-6 text-ink-subtle" /><p className="text-sm text-ink-muted">Search for a product to start this sale.</p></div> : <div>{lines.map((line) => { const item = itemById.get(line.variantId); if (!item) return null; const maximum = maxFor(line, item); const error = serverState.lineName === item.name ? serverState.error : ""; return <article key={line.key} className={`sales-cart-row ${flashLine === line.key ? "sales-line-flash" : ""}`}><div className="min-w-0"><p className="truncate text-sm font-semibold text-ink">{item.name}</p><div className="mt-1 flex flex-wrap gap-1"><span className="sales-mini-chip">{item.sizeKg ? `${item.sizeKg} kg` : item.categoryName}</span><button type="button" onClick={() => item.categoryCode === "LPG" && patchLine(line.key, { lineType: line.lineType === "refill" ? "new_cylinder" : "refill", emptiesReturned: line.lineType === "refill" ? 0 : line.quantity, emptyBrandId: line.lineType === "refill" ? "" : item.brandId })} className="sales-mini-chip">{lineTypeLabel(line.lineType)}</button></div></div><span className="num text-sm text-ink-muted">{item.available === null ? "—" : maximum}</span><div className="relative flex items-center rounded-md border border-border"><button type="button" onClick={() => setQuantity(line, line.quantity - 1)} className="min-h-[var(--touch-target)] min-w-[var(--touch-target)] text-md hover:bg-surface-muted">−</button><input id={`quantity-${line.key}`} inputMode="numeric" value={line.quantity} onFocus={() => setFocusedLine(line.key)} onChange={(event) => setQuantity(line, numberOrZero(event.target.value))} className="num min-w-0 flex-1 bg-transparent text-center text-sm font-semibold outline-none" aria-label={`${item.name} quantity`} /><button type="button" onClick={() => setQuantity(line, line.quantity + 1)} disabled={line.quantity >= maximum} className="min-h-[var(--touch-target)] min-w-[var(--touch-target)] text-md hover:bg-surface-muted disabled:opacity-40">+</button>{focusedLine === line.key ? <div className="absolute top-full z-20 mt-1 flex gap-1 rounded-md border border-border bg-surface p-1 shadow-card">{[1,2,3,5].map((quantity) => <button key={quantity} type="button" onMouseDown={(event) => event.preventDefault()} onClick={() => setQuantity(line, quantity)} className="min-h-[var(--touch-target)] min-w-[var(--touch-target)] rounded-sm text-sm hover:bg-surface-muted">{quantity}</button>)}</div> : null}</div>{line.lineType === "refill" ? <div className="grid gap-1 sm:grid-cols-2"><input type="number" min="0" value={line.emptiesReturned} onChange={(event) => patchLine(line.key, { emptiesReturned: Math.max(0, Math.floor(numberOrZero(event.target.value))) })} className={compactField} aria-label="Returned empties" /><select value={line.emptyBrandId} onChange={(event) => patchLine(line.key, { emptyBrandId: event.target.value })} className={compactField} aria-label="Empty-cylinder brand"><option value="">Brand…</option>{data.brands.map((brand) => <option key={brand.id} value={brand.id}>{brand.name}</option>)}</select></div> : <span className="text-sm text-ink-subtle">—</span>}<div><input inputMode="decimal" value={line.requestedUnitPrice} onChange={(event) => patchLine(line.key, { requestedUnitPrice: event.target.value })} className={compactField} placeholder={String(item.listPrice)} aria-label="Requested unit price" /><details className="mt-1"><summary className="cursor-pointer text-xs text-orange-700">Discount / override</summary><div className="mt-1 grid gap-1"><input inputMode="decimal" value={line.discountAmount} onChange={(event) => patchLine(line.key, { discountAmount: event.target.value })} className={compactField} placeholder="Discount" /><input value={line.priceOverrideReason} onChange={(event) => patchLine(line.key, { priceOverrideReason: event.target.value })} className={compactField} placeholder="Override reason" /></div></details></div><span className="num text-sm font-semibold text-ink">{formatKsh(lineTotal(line, item))}</span><button type="button" onClick={() => setLines((current) => current.filter((candidate) => candidate.key !== line.key))} className="min-h-[var(--touch-target)] min-w-[var(--touch-target)] text-md text-critical hover:bg-critical-bg" aria-label={`Remove ${item.name}`}>×</button>{error ? <p role="alert" className="sales-line-error">{error}</p> : null}</article>; })}</div>}
+          <header className="flex h-[var(--row-table)] items-center justify-between border-b border-border px-4"><h2 className="text-base font-semibold text-ink">Items</h2><span className="num text-sm text-ink-muted">{lines.reduce((sum, line) => sum + line.quantity, 0)} items · {cylinderCount} cylinders</span></header>
+          {lines.length > 0 ? <div className="sales-cart-column-head" aria-hidden="true"><span>Product</span><span>Quantity</span><span>Returned cylinder</span><span>Unit price</span><span>Line total</span><span /></div> : null}
+          {lines.length === 0 ? <div className="sales-empty-cart"><ReceiptIcon className="h-6 w-6 text-ink-subtle" /><p className="text-sm text-ink-muted">Search for a product to start this sale.</p><FieldError message={fieldErrors.lines} /></div> : <div>{lines.map((line) => {
+            const item = itemById.get(line.variantId);
+            if (!item) return null;
+            const error = serverState.lineName === item.name ? serverState.error : fieldErrors[`return-${line.key}`];
+            const returnOptions = emptyOptionsFor(item);
+            return <article key={line.key} className={`sales-cart-row ${flashLine === line.key ? "sales-line-flash" : ""}`}>
+              <div className="min-w-0"><p className="truncate text-sm font-semibold text-ink">{item.name}</p><div className="mt-1 flex flex-wrap gap-1"><span className="sales-mini-chip">{item.sizeKg ? `${item.sizeKg} kg` : item.categoryName}</span><button type="button" onClick={() => item.categoryCode === "LPG" && patchLine(line.key, { lineType: line.lineType === "refill" ? "new_cylinder" : "refill", emptyReturns: line.lineType === "refill" ? [] : [{ key: newKey(), variantId: item.id, quantity: 1 }] })} className="sales-mini-chip">{lineTypeLabel(line.lineType)}</button></div></div>
+              <input id={`quantity-${line.key}`} type="number" min="1" inputMode="numeric" value={line.quantity} onFocus={(event) => event.currentTarget.select()} onChange={(event) => setQuantity(line, numberOrZero(event.target.value))} className="sales-quantity-input num" aria-label={`${item.name} quantity`} />
+              {line.lineType === "refill" ? <div className="sales-return-stack">{line.emptyReturns.map((returned) => <div key={returned.key} className="sales-return-row"><select value={returned.variantId} onChange={(event) => { patchLine(line.key, { emptyReturns: line.emptyReturns.map((candidate) => candidate.key === returned.key ? { ...candidate, variantId: event.target.value } : candidate) }); clearFieldError(`return-${line.key}`); }} className={compactField} aria-label="Returned cylinder"><option value="">Cylinder…</option>{returnOptions.map((option) => <option key={option.id} value={option.id} disabled={line.emptyReturns.some((candidate) => candidate.key !== returned.key && candidate.variantId === option.id)}>{option.brandName} {option.sizeKg} kg</option>)}</select><input type="number" min="1" inputMode="numeric" value={returned.quantity} onFocus={(event) => event.currentTarget.select()} onChange={(event) => { patchLine(line.key, { emptyReturns: line.emptyReturns.map((candidate) => candidate.key === returned.key ? { ...candidate, quantity: Math.max(0, Math.floor(numberOrZero(event.target.value))) } : candidate) }); clearFieldError(`return-${line.key}`); }} className="sales-return-quantity num" aria-label="Returned cylinder quantity" />{line.emptyReturns.length > 1 ? <button type="button" onClick={() => patchLine(line.key, { emptyReturns: line.emptyReturns.filter((candidate) => candidate.key !== returned.key) })} className="min-h-[var(--touch-target)] min-w-[var(--touch-target)] text-critical" aria-label="Remove returned cylinder">×</button> : null}</div>)}<button type="button" onClick={() => patchLine(line.key, { emptyReturns: [...line.emptyReturns, { key: newKey(), variantId: "", quantity: 1 }] })} className="min-h-[var(--touch-target)] text-left text-xs font-medium text-orange-700">Add another returned cylinder</button></div> : <span className="text-sm text-ink-subtle">—</span>}
+              <span className="num text-sm font-medium text-ink">{formatKsh(linePrice(line, item))}</span>
+              <span className="num text-sm font-semibold text-ink">{formatKsh(lineTotal(line, item))}</span>
+              <button type="button" onClick={() => setLines((current) => current.filter((candidate) => candidate.key !== line.key))} className="min-h-[var(--touch-target)] min-w-[var(--touch-target)] text-md text-critical hover:bg-critical-bg" aria-label={`Remove ${item.name}`}>×</button>
+              {error ? <p role="alert" className="sales-line-error">{error}</p> : null}
+            </article>;
+          })}</div>}
           {hasLargeQuantity ? <label className="m-3 flex min-h-[var(--touch-target)] items-start gap-2 rounded-md border border-warn bg-warn-bg px-3 py-2 text-sm text-ink"><input type="checkbox" checked={largeConfirmed} onChange={(event) => setLargeConfirmed(event.target.checked)} className="mt-1" /><span><strong>Large quantity confirmation.</strong> Confirm a line above 20 items.</span></label> : null}
         </section>
       </> : <PaymentStep lines={lines} items={itemById} payments={payments} onAddPayment={(method) => { setPayments((current) => [...current, { key: newKey(), method, amount: "", reference: "" }]); setOnAccount(false); }} onUpdatePayment={setPayments} onAccount={onAccount} onToggleAccount={() => setOnAccount((value) => !value)} creditDueDate={creditDueDate} onCreditDueDate={setCreditDueDate} estimateTotal={estimateTotal} recordedPaid={recordedPaid} estimatedDue={estimatedDue} cashChange={cashChange} onBack={() => setCheckoutStep("sale")} />}
 
-      <footer className="sales-footer"><div className="sales-footer-inner"><div className="hidden min-w-0 flex-1 md:block"><input value={notes} onChange={(event) => setNotes(event.target.value)} className="w-full max-w-[var(--pos-note-width)] border-0 bg-transparent text-sm text-ink outline-none placeholder:text-ink-subtle" placeholder="Add note" aria-label="Sale note" /></div><button type="button" onClick={() => setNoteSheetOpen(true)} className={`relative min-h-[var(--touch-target)] min-w-[var(--touch-target)] rounded-md text-sm text-ink md:hidden ${notes ? "after:absolute after:right-1 after:top-1 after:h-1.5 after:w-1.5 after:rounded-full after:bg-orange-500" : ""}`}>Note</button><div className="num flex items-center gap-3 text-right text-sm"><span className="hidden lg:inline">{lines.reduce((sum, line) => sum + line.quantity, 0)} items · {cylinderCount} cylinders</span><span className="hidden sm:inline">Subtotal {formatKsh(estimateSubtotal)}</span>{estimateDiscount > 0 ? <span className="hidden sm:inline">Discount {formatKsh(estimateDiscount)}</span> : null}<strong className="text-md text-ink">{formatKsh(estimateTotal)}</strong></div>{missing ? <span className="sales-missing-text truncate text-xs text-ink-muted sm:text-sm">{missing}</span> : null}<Button type="button" variant="primary" size="md" title={checkoutStep === "sale" ? "Save sale and choose payment. Ctrl/Cmd+Enter." : "Confirm sale. Ctrl/Cmd+Enter."} onClick={checkoutStep === "sale" ? continueToPayment : submit} disabled={pending || Boolean(missing)} className="sales-footer-primary whitespace-nowrap">{checkoutStep === "sale" ? "Save sale & choose payment" : pending ? "Confirming…" : "Confirm sale"}</Button></div>{localError || serverState.error ? <p role="alert" className="sales-footer-error">{localError || serverState.error}</p> : null}</footer>
+      <footer className="sales-footer"><div className="sales-footer-inner"><div className="hidden min-w-0 flex-1 md:block"><input value={notes} onChange={(event) => setNotes(event.target.value)} className="w-full max-w-[var(--pos-note-width)] border-0 bg-transparent text-sm text-ink outline-none placeholder:text-ink-subtle" placeholder="Add note" aria-label="Sale note" /></div><button type="button" onClick={() => setNoteSheetOpen(true)} className={`relative min-h-[var(--touch-target)] min-w-[var(--touch-target)] rounded-md text-sm text-ink md:hidden ${notes ? "after:absolute after:right-1 after:top-1 after:h-1.5 after:w-1.5 after:rounded-full after:bg-orange-500" : ""}`}>Note</button><div className="num flex items-center gap-3 text-right text-sm"><span className="hidden lg:inline">{lines.reduce((sum, line) => sum + line.quantity, 0)} items · {cylinderCount} cylinders</span><span className="hidden sm:inline">Subtotal {formatKsh(estimateSubtotal)}</span>{estimateDiscount > 0 ? <span className="hidden sm:inline">Discount {formatKsh(estimateDiscount)}</span> : null}<strong className="text-md text-ink">{formatKsh(estimateTotal)}</strong></div><Button type="button" variant="primary" size="md" title={checkoutStep === "sale" ? "Save sale and choose payment. Ctrl/Cmd+Enter." : "Confirm sale. Ctrl/Cmd+Enter."} onClick={checkoutStep === "sale" ? continueToPayment : submit} disabled={pending} className="sales-footer-primary whitespace-nowrap">{checkoutStep === "sale" ? "Save sale & choose payment" : pending ? "Confirming…" : "Confirm sale"}</Button></div>{localError || serverState.error ? <p role="alert" className="sales-footer-error">{localError || serverState.error}</p> : null}</footer>
       {noteSheetOpen ? <div className="sales-note-sheet md:hidden"><div className="rounded-t-lg border border-border bg-surface p-4 shadow-raised"><div className="flex items-center justify-between"><h2 className="text-base font-semibold text-ink">Sale note</h2><button type="button" onClick={() => setNoteSheetOpen(false)} className="min-h-[var(--touch-target)] px-2 text-sm text-orange-700">Done</button></div><textarea value={notes} onChange={(event) => setNotes(event.target.value)} className="mt-3 w-full rounded-md border border-border bg-surface p-3 text-base text-ink" rows={3} placeholder="Add note" autoFocus /></div></div> : null}
     </div>
   );
@@ -516,7 +567,7 @@ function PaymentStep({
           {lines.map((line) => {
             const item = items.get(line.variantId);
             if (!item) return null;
-            return <div key={line.key} className="flex justify-between gap-3 px-4 py-3 text-sm"><span><strong className="font-medium text-ink">{item.name}</strong><span className="block text-xs text-ink-subtle">{line.quantity} × {formatKsh(linePrice(line, item))}{line.lineType === "refill" ? ` · ${line.emptiesReturned} returned` : ""}</span></span><span className="num font-semibold text-ink">{formatKsh(lineTotal(line, item))}</span></div>;
+            return <div key={line.key} className="flex justify-between gap-3 px-4 py-3 text-sm"><span><strong className="font-medium text-ink">{item.name}</strong><span className="block text-xs text-ink-subtle">{line.quantity} × {formatKsh(linePrice(line, item))}{line.lineType === "refill" ? ` · ${line.emptyReturns.reduce((sum, returned) => sum + returned.quantity, 0)} returned` : ""}</span></span><span className="num font-semibold text-ink">{formatKsh(lineTotal(line, item))}</span></div>;
           })}
         </div>
         <dl className="num space-y-2 border-t border-border p-4 text-sm"><div className="flex justify-between gap-4"><dt className="text-ink-muted">Sale total</dt><dd className="text-base font-semibold text-ink">{formatKsh(estimateTotal)}</dd></div><div className="flex justify-between gap-4"><dt className="text-ink-muted">Recorded payment</dt><dd>{formatKsh(recordedPaid)}</dd></div>{cashChange > 0 ? <div className="flex justify-between gap-4 text-ok"><dt>Cash change</dt><dd>{formatKsh(cashChange)}</dd></div> : null}{estimatedDue > 0 ? <div className="flex justify-between gap-4 text-warn"><dt>Credit due</dt><dd>{formatKsh(estimatedDue)}</dd></div> : null}</dl>

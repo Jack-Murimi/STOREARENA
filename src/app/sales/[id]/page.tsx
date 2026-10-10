@@ -23,7 +23,7 @@ const lineColumns: DataColumn<SaleDetailLine>[] = [
   { key: "qty", header: "Qty", num: true, align: "right", priority: 2, cell: (line) => line.quantity },
   { key: "price", header: "Unit price", num: true, align: "right", priority: 3, cell: (line) => formatKsh(line.unitPrice) },
   { key: "discount", header: "Discount", num: true, align: "right", priority: 3, cell: (line) => line.discountAmount > 0 ? formatKsh(line.discountAmount) : "—" },
-  { key: "empties", header: "Empties", priority: 2, cell: (line) => line.emptiesReturned > 0 ? `${line.emptiesReturned} · ${line.emptyBrandName ?? "brand not recorded"}` : "—" },
+  { key: "empties", header: "Returned cylinders", priority: 2, cell: (line) => line.emptyReturns.length > 0 ? line.emptyReturns.map((returned) => `${returned.brandName} × ${returned.quantity}`).join(", ") : line.emptiesReturned > 0 ? `${line.emptiesReturned} · ${line.emptyBrandName ?? "brand not recorded"}` : "—" },
   { key: "total", header: "Net", num: true, align: "right", priority: 1, cell: (line) => <span className="font-semibold">{formatKsh(line.lineTotal)}</span> },
 ];
 

@@ -38,6 +38,7 @@ export interface SaleDetailLine {
   lineTotal: number;
   emptiesReturned: number;
   emptyBrandName: string | null;
+  emptyReturns: { brandName: string; quantity: number }[];
 }
 
 export interface SalePaymentRow {
@@ -101,7 +102,7 @@ export async function listSales(
 
 /** A receipt-detail view. It deliberately does not select cost_at_sale. */
 export async function getSaleDetail(db: Database, saleId: string): Promise<SaleDetail | null> {
-  const [headerRows, lineRows, paymentRows] = await Promise.all([
+  const [headerRows, lineRows, paymentRows, emptyReturnRows] = await Promise.all([
     db.query<Record<string, unknown>>(
       `select s.id, s.receipt_no, s.sale_date, s.sale_type, s.status, s.total,
               s.amount_paid, s.balance_due, s.credit_due_date, s.void_reason, s.notes,
@@ -130,6 +131,16 @@ export async function getSaleDetail(db: Database, saleId: string): Promise<SaleD
     ),
     db.query<Record<string, unknown>>(
       "select id, method, amount, reference from sale_payments where sale_id = $1 order by created_at, id",
+      [saleId],
+    ),
+    db.query<Record<string, unknown>>(
+      `select er.sale_line_id, er.quantity, b.name as brand_name
+         from sale_line_empty_returns er
+         join sale_lines l on l.id = er.sale_line_id
+         join product_variants pv on pv.id = er.variant_id
+         join brands b on b.id = pv.brand_id
+        where l.sale_id = $1
+        order by er.sale_line_id, b.name`,
       [saleId],
     ),
   ]);
@@ -167,6 +178,9 @@ export async function getSaleDetail(db: Database, saleId: string): Promise<SaleD
       lineTotal: money(line.line_total) - money(line.discount_amount),
       emptiesReturned: Number(line.empties_returned ?? 0),
       emptyBrandName: nullable(line.empty_brand_name),
+      emptyReturns: emptyReturnRows
+        .filter((returned) => value(returned.sale_line_id) === value(line.id))
+        .map((returned) => ({ brandName: value(returned.brand_name), quantity: Number(returned.quantity ?? 0) })),
     })),
     payments: paymentRows.map((payment) => ({
       id: value(payment.id),

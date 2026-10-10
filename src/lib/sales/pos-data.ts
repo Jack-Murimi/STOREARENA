@@ -33,8 +33,15 @@ export interface PosRider {
   phone: string | null;
 }
 
+export interface PosBranch {
+  id: string;
+  name: string;
+  code: string;
+}
+
 export interface PosData {
-  branch: { id: string; name: string; code: string };
+  branch: PosBranch;
+  branches: PosBranch[];
   catalogue: PosCatalogueItem[];
   /** Recent branch sellers, used only inside the empty search dropdown. */
   quickAddIds: string[];
@@ -90,11 +97,16 @@ export async function getPosData(db: Database, branchId: string): Promise<PosDat
       [branchId],
     ),
   ]);
-  const [brandRows, customerRows, locationRows, riderRows] = await Promise.all([
+  const [branchOptionsRows, brandRows, customerRows] = await Promise.all([
+    db.query<Record<string, unknown>>(
+      "select id, name, code from stock_locations where kind = 'BRANCH' and active order by name",
+    ),
     db.query<Record<string, unknown>>("select id, name from brands order by name"),
     db.query<Record<string, unknown>>(
       "select id, code, name from customers where active order by name",
     ),
+  ]);
+  const [locationRows, riderRows] = await Promise.all([
     db.query<Record<string, unknown>>(
       `select id, customer_id, label, area
          from customer_locations
@@ -103,9 +115,8 @@ export async function getPosData(db: Database, branchId: string): Promise<PosDat
     ),
     db.query<Record<string, unknown>>(
       `select id, name, phone from riders
-        where branch_id = $1 and is_active
+        where is_active
         order by name`,
-      [branchId],
     ),
   ]);
 
@@ -121,6 +132,7 @@ export async function getPosData(db: Database, branchId: string): Promise<PosDat
 
   return {
     branch: { id: text(branch.id), name: text(branch.name), code: text(branch.code) },
+    branches: branchOptionsRows.map((row) => ({ id: text(row.id), name: text(row.name), code: text(row.code) })),
     catalogue: catalogueRows.map((row) => ({
       id: text(row.id),
       name: text(row.name),

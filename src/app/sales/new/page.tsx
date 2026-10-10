@@ -10,7 +10,7 @@ import { SaleTerminal } from "./SaleTerminal";
 export const metadata: Metadata = { title: "New sale" };
 export const dynamic = "force-dynamic";
 
-export default async function NewSalePage() {
+export default async function NewSalePage({ searchParams }: { searchParams: Promise<{ branch?: string }> }) {
   const { products, notice, diagnostic } = await getCustomerContext();
   if (!products) {
     return (
@@ -20,7 +20,8 @@ export default async function NewSalePage() {
     );
   }
 
-  const data = await getPosData(products.db, process.env.SALES_BRANCH_ID ?? "loc-jam");
+  const requestedBranch = (await searchParams).branch;
+  const data = await getPosData(products.db, requestedBranch || process.env.SALES_BRANCH_ID || "loc-jam");
   if (!data) {
     return (
       <AppShell title="New sale" staff={currentStaff} branch={stationName} activeHref="/sales">
@@ -43,7 +44,7 @@ export default async function NewSalePage() {
         title="New sale"
         action={<ol aria-label="Sale workflow" className="flex items-center gap-1 rounded-pill border border-border bg-surface px-2 py-1 text-xs font-semibold"><li className="text-orange-700">1 Sale</li><li aria-hidden="true" className="text-ink-subtle">—</li><li className="text-ink-subtle">2 Payment</li></ol>}
       />
-      <SaleTerminal data={data} />
+      <SaleTerminal key={data.branch.id} data={data} />
     </AppShell>
   );
 }
