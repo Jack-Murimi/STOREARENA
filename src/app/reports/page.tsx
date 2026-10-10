@@ -49,6 +49,8 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
   const today = dateInput(now);
   const thirtyDaysAgo = dateInput(new Date(now.getTime() - 29 * 24 * 60 * 60 * 1000));
   const branchId = get("branch");
+  const customerId = get("customer");
+  const lookup = get("q").trim();
   const from = safeDate(get("from"), thirtyDaysAgo);
   const to = safeDate(get("to"), today);
   const riderId = get("rider");
@@ -61,8 +63,9 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
     return <AppShell title="Reports" subtitle="Sales reporting" staff={currentStaff} branch={stationName} activeHref="/reports"><DatabaseUnavailable notice={notice} diagnostic={diagnostic} /></AppShell>;
   }
 
-  const [branchRows, riderRows, saleRows] = await Promise.all([
+  const [branchRows, customerRows, riderRows, saleRows] = await Promise.all([
     products.db.query<Record<string, unknown>>("select id, name, code from stock_locations where kind = 'BRANCH' and active order by name"),
+    products.db.query<Record<string, unknown>>("select id, name from customers order by name"),
     products.db.query<Record<string, unknown>>("select id, name, branch_id, is_active from riders order by is_active desc, name"),
     products.db.query<Record<string, unknown>>(
       `select s.id, s.receipt_no, s.sale_date, s.sale_type, s.status,
@@ -81,14 +84,20 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
           and ($5 = '' or s.sale_type = $5)
           and ($6 = 'all' or s.status = $6)
           and ($7 = '' or exists (select 1 from sale_payments match_payment where match_payment.sale_id = s.id and match_payment.method = $7))
+          and ($8 = '' or s.customer_id = $8)
+          and ($9 = '' or s.receipt_no ilike '%' || $9 || '%'
+               or c.name ilike '%' || $9 || '%'
+               or exists (select 1 from invoices i where i.sale_id = s.id::text and i.reference ilike '%' || $9 || '%')
+               or exists (select 1 from sale_payments lookup_payment where lookup_payment.sale_id = s.id and coalesce(lookup_payment.reference, '') ilike '%' || $9 || '%'))
         group by s.id, b.name, c.name, r.name
         order by s.sale_date desc
         limit 500`,
-      [branchId, from, to, riderId, saleType, status, payment],
+      [branchId, from, to, riderId, saleType, status, payment, customerId, lookup],
     ),
   ]);
 
   const branches: Branch[] = branchRows.map((row) => ({ id: text(row.id), name: text(row.name), code: text(row.code) }));
+  const customers = customerRows.map((row) => ({ id: text(row.id), name: text(row.name) }));
   const riders: Rider[] = riderRows.map((row) => ({ id: text(row.id), name: text(row.name), branchId: text(row.branch_id), active: row.is_active === true || row.is_active === "t" }));
   const sales: ReportSale[] = saleRows.map((row) => ({
     id: text(row.id), receiptNo: text(row.receipt_no), saleDate: text(row.sale_date), branchName: text(row.branch_name),
@@ -114,11 +123,13 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
     { key: "status", header: "Status", priority: 3, cell: (sale) => sale.status === "void" ? <StatusBadge tone="neutral">Void</StatusBadge> : sale.due > 0 ? <StatusBadge tone="warn">Credit due</StatusBadge> : <StatusBadge tone="ok">Paid</StatusBadge> },
   ];
 
-  return <AppShell title="Reports" subtitle="Filter sales by branch, date, rider, payment, and type" staff={currentStaff} branch={stationName} activeHref="/reports">
+  return <AppShell title="Reports" subtitle="Filter sales by branch, date, customer, rider, payment, and type" staff={currentStaff} branch={stationName} activeHref="/reports">
     <PageHeader title="Reports" subtitle={`${from} to ${to}`} action={<ButtonLink href="/" variant="secondary">Back to dashboard</ButtonLink>} />
     {notice ? <p className="rounded-lg border border-warn bg-warn-bg p-3 text-sm text-warn">{notice}</p> : null}
     <Card title="Filters" subtitle="Reports include posted sales by default; choose All to include voided receipts.">
       <form method="get" className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <label className="space-y-1"><span className="text-xs font-medium text-ink-subtle">Search receipt, invoice or payment code</span><input name="q" defaultValue={lookup} placeholder="e.g. RCP-001, INV-0001, M-Pesa code" className="h-10 w-full rounded-md border border-border bg-surface px-3 text-sm" /></label>
+        <label className="space-y-1"><span className="text-xs font-medium text-ink-subtle">Customer</span><select name="customer" defaultValue={customerId} className="h-10 w-full rounded-md border border-border bg-surface px-3 text-sm"><option value="">All customers and walk-ins</option>{customers.map((customer) => <option key={customer.id} value={customer.id}>{customer.name}</option>)}</select></label>
         <label className="space-y-1"><span className="text-xs font-medium text-ink-subtle">Branch</span><select name="branch" defaultValue={branchId} className="h-10 w-full rounded-md border border-border bg-surface px-3 text-sm"><option value="">All branches</option>{branches.map((branch) => <option key={branch.id} value={branch.id}>{branch.name} · {branch.code}</option>)}</select></label>
         <label className="space-y-1"><span className="text-xs font-medium text-ink-subtle">From</span><input type="date" name="from" defaultValue={from} max={to} className="h-10 w-full rounded-md border border-border bg-surface px-3 text-sm" /></label>
         <label className="space-y-1"><span className="text-xs font-medium text-ink-subtle">To</span><input type="date" name="to" defaultValue={to} min={from} max={today} className="h-10 w-full rounded-md border border-border bg-surface px-3 text-sm" /></label>
@@ -130,6 +141,6 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
       </form>
     </Card>
     <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4"><KpiCard label="Sales" value={String(posted.length)} subtext="Posted receipts" /><KpiCard label="Revenue" value={formatKsh(revenue)} subtext="Posted sales total" /><KpiCard label="Collected" value={formatKsh(paid)} subtext="Recorded payments" /><KpiCard label="Outstanding" value={formatKsh(due)} subtext={`${deliveries} delivery sale${deliveries === 1 ? "" : "s"}`} /></div>
-    <Card title="Sales report" subtitle={`${sales.length} receipt${sales.length === 1 ? "" : "s"} match these filters`} flush><DataTable rows={sales} columns={columns} rowKey={(sale) => sale.id} rowHref={(sale) => `/sales/${sale.id}`} caption="Filtered sales report" empty={<EmptyState icon={ReceiptIcon} title="No sales match these filters" description="Adjust the date range, branch, rider, or payment filter and try again." />} /></Card>
+    <Card title="Sales report" subtitle={`${sales.length} receipt${sales.length === 1 ? "" : "s"} match these filters`} flush><DataTable rows={sales} columns={columns} rowKey={(sale) => sale.id} rowHref={(sale) => `/sales/${sale.id}`} caption="Filtered sales report" empty={<EmptyState icon={ReceiptIcon} title="No sales match these filters" description="Adjust the date range, customer, branch, rider, payment, or search code and try again." />} /></Card>
   </AppShell>;
 }
