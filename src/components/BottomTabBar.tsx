@@ -1,4 +1,4 @@
-import { navItems } from "./nav";
+import { navItemIsActive, navItems } from "./nav";
 
 /**
  * Under 768px the sidebar becomes a bottom tab bar. Three items, so it fits
@@ -12,7 +12,7 @@ export function BottomTabBar({ activeHref = "/" }: { activeHref?: string }) {
     >
       {navItems.map((item) => {
         const Icon = item.icon;
-        const active = item.href === activeHref;
+        const active = navItemIsActive(item, activeHref);
         return (
           <a
             key={item.href}
