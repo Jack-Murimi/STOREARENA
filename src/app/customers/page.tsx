@@ -63,7 +63,7 @@ export default async function CustomersPage({ searchParams }: PageProps) {
   const columns: DataColumn<CustomerRecord>[] = [
     {
       key: "customer",
-      header: "Customer",
+      header: "Name",
       priority: 1,
       cell: (customer) => (
         <span className="block min-w-0">
@@ -80,58 +80,36 @@ export default async function CustomersPage({ searchParams }: PageProps) {
       ),
     },
     {
-      key: "places",
-      header: "Places",
-      align: "right",
-      num: true,
+      key: "location",
+      header: "Location",
+      priority: 2,
       cell: (customer) => {
-        const primary =
-          customer.locations.find((l) => l.isPrimary) ?? customer.locations[0];
+        const primary = customer.locations.find((location) => location.isPrimary) ?? customer.locations[0];
+        if (!primary) return <span className="text-ink-subtle">—</span>;
         return (
-          <span className="block">
-            {customer.locations.length}
-            <span className="block text-xs text-ink-subtle">
-              {primary?.area ?? primary?.label ?? "—"}
-            </span>
+          <span className="block min-w-0">
+            <span className="block truncate text-sm text-ink">{primary.label}</span>
+            {primary.area ? <span className="block truncate text-xs text-ink-subtle">{primary.area}</span> : null}
           </span>
         );
       },
     },
     {
-      key: "contacts",
-      header: "Contacts",
-      priority: 2,
-      /* One column instead of a count plus a separate "main number" column.
-         The count on its own told you nothing you could act on. */
+      key: "main-phone",
+      header: "Main phone",
+      priority: 3,
       cell: (customer) => {
-        const ordered = [
-          ...customer.contacts.filter((c) => c.isPrimary),
-          ...customer.contacts.filter((c) => !c.isPrimary),
-        ];
-        const primary = ordered[0];
+        const primary = customer.contacts.find((contact) => contact.isPrimary) ?? customer.contacts[0];
         if (!primary) return <span className="text-ink-subtle">—</span>;
-        const rest = ordered.length - 1;
         return (
           <span className="block min-w-0">
-            <span className="flex items-baseline gap-2">
-              <span className="truncate text-sm text-ink">{primary.name}</span>
-              {/* The only tappable number in the row. Two numbers in one row
-                  means two targets close together on a phone, and dialling the
-                  wrong one is worse than tapping twice. */}
-              <a
-                href={`tel:${primary.phone}`}
-                className="num relative z-20 shrink-0 font-medium text-orange-700 hover:underline"
-              >
-                {formatKenyanPhone(primary.phone)}
-              </a>
-            </span>
-            {primary.role || rest > 0 ? (
-              <span className="block truncate text-xs text-ink-subtle">
-                {[primary.role, rest > 0 ? `+${rest} more` : null]
-                  .filter(Boolean)
-                  .join(" · ")}
-              </span>
-            ) : null}
+            <a
+              href={`tel:${primary.phone}`}
+              className="num relative z-20 font-medium text-orange-700 hover:underline"
+            >
+              {formatKenyanPhone(primary.phone)}
+            </a>
+            {primary.name ? <span className="block truncate text-xs text-ink-subtle">{primary.name}</span> : null}
           </span>
         );
       },
