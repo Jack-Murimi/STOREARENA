@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import type { ReactNode } from "react";
 import { AppShell } from "@/components/AppShell";
 import { DatabaseUnavailable } from "@/components/customers/DatabaseUnavailable";
 import { ButtonLink, Card, DataTable, EmptyState, KpiCard, PageHeader, StatusBadge } from "@/components/ui";
@@ -27,6 +28,14 @@ type ReportSale = {
 };
 
 type Branch = { id: string; name: string; code: string };
+type ReportKind = "sales" | "customers" | "inventory" | "purchases" | "deliveries";
+const reportKinds: { id: ReportKind; label: string; description: string }[] = [
+  { id: "sales", label: "Sales", description: "Receipts, revenue, collection, and credit" },
+  { id: "customers", label: "Customers", description: "Current customer balances and account activity" },
+  { id: "inventory", label: "Inventory", description: "Stock on hand by branch, product, and state" },
+  { id: "purchases", label: "Purchases", description: "Supplier invoices and branch buying" },
+  { id: "deliveries", label: "Deliveries", description: "Rider delivery performance and value" },
+];
 type Rider = { id: string; name: string; branchId: string; active: boolean };
 const text = (value: unknown): string => value === null || value === undefined ? "" : String(value);
 const money = (value: unknown): number => Number(value ?? 0);
@@ -48,6 +57,8 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
   const now = new Date();
   const today = dateInput(now);
   const thirtyDaysAgo = dateInput(new Date(now.getTime() - 29 * 24 * 60 * 60 * 1000));
+  const requestedReport = get("report");
+  const report: ReportKind = reportKinds.some((entry) => entry.id === requestedReport) ? requestedReport as ReportKind : "sales";
   const branchId = get("branch");
   const customerId = get("customer");
   const lookup = get("q").trim();
@@ -123,11 +134,43 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
     { key: "status", header: "Status", priority: 3, cell: (sale) => sale.status === "void" ? <StatusBadge tone="neutral">Void</StatusBadge> : sale.due > 0 ? <StatusBadge tone="warn">Credit due</StatusBadge> : <StatusBadge tone="ok">Paid</StatusBadge> },
   ];
 
+  const exportHref = `/api/reports/export?report=${report}&branch=${encodeURIComponent(branchId)}&from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`;
+  const reportNavigation = <nav aria-label="Report category" className="flex flex-wrap gap-2">{reportKinds.map((entry) => <a key={entry.id} href={`/reports?report=${entry.id}&branch=${encodeURIComponent(branchId)}&from=${from}&to=${to}`} className={`rounded-pill border px-3 py-2 text-sm font-medium ${report === entry.id ? "border-orange-500 bg-orange-500 text-ink" : "border-border bg-surface text-ink-muted hover:bg-surface-muted"}`}>{entry.label}</a>)}</nav>;
+  const baseFilters = <form method="get" className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4"><input type="hidden" name="report" value={report} /><label className="space-y-1"><span className="text-xs font-medium text-ink-subtle">Branch</span><select name="branch" defaultValue={branchId} className="h-10 w-full rounded-md border border-border bg-surface px-3 text-sm"><option value="">All branches</option>{branches.map((branch) => <option key={branch.id} value={branch.id}>{branch.name} · {branch.code}</option>)}</select></label><label className="space-y-1"><span className="text-xs font-medium text-ink-subtle">From</span><input type="date" name="from" defaultValue={from} max={to} className="h-10 w-full rounded-md border border-border bg-surface px-3 text-sm" /></label><label className="space-y-1"><span className="text-xs font-medium text-ink-subtle">To</span><input type="date" name="to" defaultValue={to} min={from} max={today} className="h-10 w-full rounded-md border border-border bg-surface px-3 text-sm" /></label><div className="flex items-end gap-2"><button type="submit" className="h-10 rounded-md bg-orange-500 px-4 text-sm font-semibold text-ink hover:bg-orange-400">Apply filters</button><a href={`/reports?report=${report}`} className="inline-flex h-10 items-center px-2 text-sm font-medium text-orange-700 hover:underline">Reset</a></div></form>;
+
+  if (report !== "sales") {
+    let content: ReactNode;
+    let title = "";
+    let subtitle = "";
+    if (report === "customers") {
+      const rows = await products.db.query<Record<string, unknown>>(`select c.id, c.name, c.code, coalesce(v.invoiced, 0) as invoiced, coalesce(v.paid, 0) as paid, coalesce(v.balance, 0) as balance, coalesce(v.invoice_count, 0) as invoice_count from customers c left join v_customer_balance v on v.id = c.id order by balance desc, c.name`);
+      const totalBalance = rows.reduce((sum, row) => sum + money(row.balance), 0);
+      title = "Customer balances"; subtitle = "Live balances are company-wide; they are not limited to a branch.";
+      content = <><div className="grid gap-4 sm:grid-cols-3"><KpiCard label="Customers" value={String(rows.length)} /><KpiCard label="Outstanding" value={formatKsh(totalBalance)} /><KpiCard label="Invoiced" value={formatKsh(rows.reduce((sum, row) => sum + money(row.invoiced), 0))} /></div><Card title="Customer account report" flush><DataTable rows={rows} rowKey={(row) => text(row.id)} columns={[{ key: "customer", header: "Customer", priority: 1, cell: (row) => <span><span className="block font-medium">{text(row.name)}</span><span className="code text-xs text-ink-subtle">{text(row.code)}</span></span> }, { key: "invoices", header: "Invoices", align: "right", num: true, priority: 2, cell: (row) => Number(row.invoice_count ?? 0) }, { key: "invoiced", header: "Invoiced", align: "right", num: true, priority: 3, cell: (row) => formatKsh(money(row.invoiced)) }, { key: "paid", header: "Paid", align: "right", num: true, priority: 3, cell: (row) => formatKsh(money(row.paid)) }, { key: "balance", header: "Balance", align: "right", num: true, priority: 1, cell: (row) => <span className="font-semibold">{formatKsh(money(row.balance))}</span> }]} empty={<EmptyState icon={ReceiptIcon} title="No customer accounts" description="Customer balances will appear after invoices and payments are recorded." />} /></Card></>;
+    } else if (report === "inventory") {
+      const rows = await products.db.query<Record<string, unknown>>(`select l.name as branch_name, pv.id, pv.name as product_name, b.name as brand_name, pv.size_kg, coalesce(sum(p.quantity) filter (where p.state = 'REFILL'), 0) as refills, coalesce(sum(p.quantity) filter (where p.state = 'EMPTY'), 0) as empties from inventory_positions p join stock_locations l on l.id = p.location_id join product_variants pv on pv.id = p.variant_id join brands b on b.id = pv.brand_id where ($1 = '' or p.location_id = $1) group by l.name, pv.id, b.name order by l.name, pv.size_kg nulls last, pv.name`, [branchId]);
+      title = "Inventory on hand"; subtitle = "Current physical stock by branch. Date filters do not alter a current stock position.";
+      content = <><div className="grid gap-4 sm:grid-cols-3"><KpiCard label="Refills on hand" value={String(rows.reduce((sum, row) => sum + Number(row.refills ?? 0), 0))} /><KpiCard label="Empty cylinders" value={String(rows.reduce((sum, row) => sum + Number(row.empties ?? 0), 0))} /><KpiCard label="Products represented" value={String(new Set(rows.map((row) => text(row.id))).size)} /></div><Card title="Stock by branch" flush><DataTable rows={rows} rowKey={(row) => `${text(row.branch_name)}-${text(row.id)}`} columns={[{ key: "product", header: "Product", priority: 1, cell: (row) => <span><span className="block font-medium">{text(row.product_name)}</span><span className="text-xs text-ink-subtle">{text(row.brand_name)}{row.size_kg ? ` · ${text(row.size_kg)} kg` : ""}</span></span> }, { key: "branch", header: "Branch", priority: 2, cell: (row) => text(row.branch_name) }, { key: "refills", header: "Refills", align: "right", num: true, priority: 2, cell: (row) => Number(row.refills ?? 0) }, { key: "empties", header: "Empties", align: "right", num: true, priority: 3, cell: (row) => Number(row.empties ?? 0) }]} empty={<EmptyState icon={ReceiptIcon} title="No stock position" description="No stock is recorded for this branch selection." />} /></Card></>;
+    } else if (report === "purchases") {
+      const rows = await products.db.query<Record<string, unknown>>(`select p.id, p.invoice_no, p.invoice_date, p.status, p.total, s.name as supplier_name, b.name as branch_name from purchase_invoices p join suppliers s on s.id = p.supplier_id join stock_locations b on b.id = p.branch_id where ($1 = '' or p.branch_id = $1) and p.invoice_date >= $2::date and p.invoice_date <= $3::date order by p.invoice_date desc limit 500`, [branchId, from, to]);
+      const postedRows = rows.filter((row) => text(row.status) === "posted");
+      title = "Purchase report"; subtitle = "Supplier invoices and spend for the chosen branch and date range.";
+      content = <><div className="grid gap-4 sm:grid-cols-3"><KpiCard label="Posted invoices" value={String(postedRows.length)} /><KpiCard label="Purchase spend" value={formatKsh(postedRows.reduce((sum, row) => sum + money(row.total), 0))} /><KpiCard label="Suppliers" value={String(new Set(postedRows.map((row) => text(row.supplier_name))).size)} /></div><Card title="Supplier purchase invoices" flush><DataTable rows={rows} rowKey={(row) => text(row.id)} columns={[{ key: "invoice", header: "Invoice", priority: 1, cell: (row) => <span className="code font-semibold">{text(row.invoice_no)}</span> }, { key: "date", header: "Date", priority: 2, cell: (row) => text(row.invoice_date) }, { key: "supplier", header: "Supplier", priority: 1, cell: (row) => text(row.supplier_name) }, { key: "branch", header: "Branch", priority: 2, cell: (row) => text(row.branch_name) }, { key: "total", header: "Total", align: "right", num: true, priority: 1, cell: (row) => formatKsh(money(row.total)) }, { key: "status", header: "Status", priority: 3, cell: (row) => <StatusBadge tone={text(row.status) === "posted" ? "ok" : "neutral"}>{text(row.status)}</StatusBadge> }]} empty={<EmptyState icon={ReceiptIcon} title="No purchase invoices" description="No supplier purchases match this branch and date range." />} /></Card></>;
+    } else {
+      const rows = await products.db.query<Record<string, unknown>>(`select r.id, r.name, r.phone, b.name as branch_name, count(s.id) filter (where s.status = 'posted')::integer as deliveries, coalesce(sum(s.total) filter (where s.status = 'posted'), 0) as delivery_value, coalesce(sum(s.balance_due) filter (where s.status = 'posted'), 0) as outstanding from riders r join stock_locations b on b.id = r.branch_id left join sales s on s.rider_id = r.id and s.sale_date >= $2::date and s.sale_date < ($3::date + interval '1 day') where ($1 = '' or r.branch_id = $1) group by r.id, b.name order by delivery_value desc, r.name`, [branchId, from, to]);
+      title = "Delivery performance"; subtitle = "Rider-assigned posted sales for the selected branch and date range.";
+      content = <><div className="grid gap-4 sm:grid-cols-3"><KpiCard label="Deliveries" value={String(rows.reduce((sum, row) => sum + Number(row.deliveries ?? 0), 0))} /><KpiCard label="Delivered value" value={formatKsh(rows.reduce((sum, row) => sum + money(row.delivery_value), 0))} /><KpiCard label="Delivery credit due" value={formatKsh(rows.reduce((sum, row) => sum + money(row.outstanding), 0))} /></div><Card title="Rider delivery report" flush><DataTable rows={rows} rowKey={(row) => text(row.id)} columns={[{ key: "rider", header: "Rider", priority: 1, cell: (row) => <span><span className="block font-medium">{text(row.name)}</span><span className="text-xs text-ink-subtle">{text(row.phone)}</span></span> }, { key: "branch", header: "Branch", priority: 2, cell: (row) => text(row.branch_name) }, { key: "deliveries", header: "Deliveries", align: "right", num: true, priority: 2, cell: (row) => Number(row.deliveries ?? 0) }, { key: "value", header: "Delivered value", align: "right", num: true, priority: 1, cell: (row) => formatKsh(money(row.delivery_value)) }, { key: "due", header: "Credit due", align: "right", num: true, priority: 3, cell: (row) => formatKsh(money(row.outstanding)) }]} empty={<EmptyState icon={ReceiptIcon} title="No rider deliveries" description="No rider-assigned posted sales match this date range." />} /></Card></>;
+    }
+    return <AppShell title="Reports" subtitle="Management reporting across sales, customers, stock, purchases, and deliveries" staff={currentStaff} branch={stationName} activeHref="/reports"><PageHeader title={title} subtitle={subtitle} action={<ButtonLink href="/" variant="secondary">Back to dashboard</ButtonLink>} />{reportNavigation}<Card title="Filters" action={<a href={exportHref} className="text-sm font-medium text-orange-700 hover:underline">Download CSV</a>}>{baseFilters}</Card>{content}</AppShell>;
+  }
+
   return <AppShell title="Reports" subtitle="Filter sales by branch, date, customer, rider, payment, and type" staff={currentStaff} branch={stationName} activeHref="/reports">
-    <PageHeader title="Reports" subtitle={`${from} to ${to}`} action={<ButtonLink href="/" variant="secondary">Back to dashboard</ButtonLink>} />
+    <PageHeader title="Sales report" subtitle={`${from} to ${to}`} action={<ButtonLink href="/" variant="secondary">Back to dashboard</ButtonLink>} />
+    {reportNavigation}
     {notice ? <p className="rounded-lg border border-warn bg-warn-bg p-3 text-sm text-warn">{notice}</p> : null}
-    <Card title="Filters" subtitle="Reports include posted sales by default; choose All to include voided receipts.">
+    <Card title="Filters" subtitle="Reports include posted sales by default; choose All to include voided receipts." action={<a href={exportHref} className="text-sm font-medium text-orange-700 hover:underline">Download CSV</a>}>
       <form method="get" className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <input type="hidden" name="report" value="sales" />
         <label className="space-y-1"><span className="text-xs font-medium text-ink-subtle">Search receipt, invoice or payment code</span><input name="q" defaultValue={lookup} placeholder="e.g. RCP-001, INV-0001, M-Pesa code" className="h-10 w-full rounded-md border border-border bg-surface px-3 text-sm" /></label>
         <label className="space-y-1"><span className="text-xs font-medium text-ink-subtle">Customer</span><select name="customer" defaultValue={customerId} className="h-10 w-full rounded-md border border-border bg-surface px-3 text-sm"><option value="">All customers and walk-ins</option>{customers.map((customer) => <option key={customer.id} value={customer.id}>{customer.name}</option>)}</select></label>
         <label className="space-y-1"><span className="text-xs font-medium text-ink-subtle">Branch</span><select name="branch" defaultValue={branchId} className="h-10 w-full rounded-md border border-border bg-surface px-3 text-sm"><option value="">All branches</option>{branches.map((branch) => <option key={branch.id} value={branch.id}>{branch.name} · {branch.code}</option>)}</select></label>
