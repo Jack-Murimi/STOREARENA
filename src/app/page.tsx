@@ -49,16 +49,20 @@ export default function DashboardPage() {
       {/* Three metrics that change a decision. The old fourth card was a link
           to the alerts list, which is now a chip on the stock card. */}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        <KpiCard
-          label="Takings today"
-          value={formatKsh(takingsToday)}
-          subtext={`${cylindersToday} cylinders · ${salesToday.length} sales · avg ${formatKsh(averageBasket)}`}
-        />
-        <KpiCard
-          label="Cylinders sold"
-          value={String(cylindersToday)}
-          subtext={`${formatKg(gasSoldToday)} of gas`}
-        />
+        <a href="/reports" aria-label="Open sales reports">
+          <KpiCard
+            label="Takings today"
+            value={formatKsh(takingsToday)}
+            subtext={`${cylindersToday} cylinders · ${salesToday.length} sales · avg ${formatKsh(averageBasket)}`}
+          />
+        </a>
+        <a href="/reports" aria-label="Open sales reports">
+          <KpiCard
+            label="Cylinders sold"
+            value={String(cylindersToday)}
+            subtext={`${formatKg(gasSoldToday)} of gas`}
+          />
+        </a>
         <KpiCard
           label="Stock on hand"
           value={`${formatKg(kgOnHand)} · ${formatCylinders(cylindersOnHand)}`}
@@ -77,9 +81,11 @@ export default function DashboardPage() {
 
       <div className="grid gap-4 lg:grid-cols-3">
         <div className="space-y-4 lg:col-span-2">
-          <Card title="Takings, last 7 days" subtitle="Today counted so far">
-            <SalesTrendChart data={trend} />
-          </Card>
+          <a href="/reports" className="block rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500" aria-label="Open sales reports">
+            <Card title="Takings, last 7 days" subtitle="Today counted so far">
+              <SalesTrendChart data={trend} />
+            </Card>
+          </a>
 
           {/* One table replaces the old "Stock levels" and "Replenishment
               needed" panels, which showed the same numbers twice. */}
@@ -109,9 +115,11 @@ export default function DashboardPage() {
             <RecentSales sales={salesToday} limit={6} />
           </Card>
 
-          <Card title="Sales mix">
-            <SalesMix sales={salesToday} />
-          </Card>
+          <a href="/reports" className="block rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500" aria-label="Open sales reports">
+            <Card title="Sales mix">
+              <SalesMix sales={salesToday} />
+            </Card>
+          </a>
         </div>
       </div>
 
