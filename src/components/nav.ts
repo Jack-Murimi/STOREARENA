@@ -14,6 +14,7 @@ export interface NavItem {
 export const navItems: NavItem[] = [
   { label: "Dashboard", short: "Home", icon: GaugeIcon, href: "/" },
   { label: "Inventory", short: "Stock", icon: CylinderIcon, href: "/inventory", matchPrefix: "/inventory" },
+  { label: "Transfers", short: "Move", icon: TruckIcon, href: "/transfers", matchPrefix: "/transfers" },
   { label: "Sales", short: "Sales", icon: CashIcon, href: "/sales", matchPrefix: "/sales" },
   { label: "Purchases", short: "Buy", icon: ReceiptIcon, href: "/purchases", matchPrefix: "/purchases" },
   { label: "Suppliers", short: "Suppliers", icon: TruckIcon, href: "/suppliers", matchPrefix: "/suppliers" },
