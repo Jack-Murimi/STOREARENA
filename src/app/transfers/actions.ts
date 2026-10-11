@@ -6,7 +6,7 @@ import { redirect } from "next/navigation";
 import { getCustomerContext } from "@/lib/db";
 
 const value = (form: FormData, key: string) => typeof form.get(key) === "string" ? String(form.get(key)).trim() : "";
-const quantity = (form: FormData, key: string) => Math.max(0, Math.floor(Number(value(form, key) || 0)));
+const quantities = (form: FormData, key: string): number[] => form.getAll(key).map((entry) => Math.max(0, Math.floor(Number(String(entry) || 0))));
 
 const errors: Record<string, string> = {
   transfer_workflow_invalid: "Choose a transfer workflow.", transfer_branches_invalid: "Choose two different active branches.",
@@ -27,11 +27,15 @@ export async function postTransfer(form: FormData): Promise<void> {
   const workflow = value(form, "workflow");
   const from = value(form, "from_branch_id");
   const to = value(form, "to_branch_id");
+  const variants = form.getAll("variant_id").map(String);
+  const refills = quantities(form, "refills_sent");
+  const emptiesSent = quantities(form, "empties_sent");
+  const emptiesReturned = quantities(form, "empties_returned");
+  const lines = variants.map((variant_id, index) => ({ variant_id, refills_sent: refills[index] ?? 0, empties_sent: emptiesSent[index] ?? 0, empties_returned: emptiesReturned[index] ?? 0 }));
   const payload = {
     workflow, from_branch_id: from, to_branch_id: to,
     delivery_note: value(form, "delivery_note") || null, notes: value(form, "notes") || null,
-    actor: "Portal staff", idempotency_key: randomUUID(),
-    lines: [{ variant_id: value(form, "variant_id"), refills_sent: quantity(form, "refills_sent"), empties_sent: quantity(form, "empties_sent"), empties_returned: quantity(form, "empties_returned") }],
+    actor: "Portal staff", idempotency_key: randomUUID(), lines,
   };
   try {
     const result = await products.db.query<{ create_stock_transfer: { transfer_no: string } }>("select public.create_stock_transfer($1::jsonb)", [payload]);
