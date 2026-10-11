@@ -33,9 +33,16 @@ function deliveryDate(value: string | null): string {
   if (!value) return "No deliveries yet";
   return new Intl.DateTimeFormat("en-KE", { day: "numeric", month: "short", year: "numeric", timeZone: "Africa/Nairobi" }).format(new Date(value));
 }
+function dateInput(date: Date): string { return new Intl.DateTimeFormat("en-CA", { timeZone: "Africa/Nairobi" }).format(date); }
+function safeDate(value: string | undefined, fallback: string): string { return value && /^\d{4}-\d{2}-\d{2}$/.test(value) ? value : fallback; }
 
-export default async function RidersPage({ searchParams }: { searchParams: Promise<{ q?: string; new?: string; error?: string; saved?: string }> }) {
+export default async function RidersPage({ searchParams }: { searchParams: Promise<{ q?: string; from?: string; to?: string; new?: string; error?: string; saved?: string }> }) {
   const params = await searchParams;
+  const now = new Date();
+  const today = dateInput(now);
+  const thirtyDaysAgo = dateInput(new Date(now.getTime() - 29 * 24 * 60 * 60 * 1000));
+  const from = safeDate(params.from, thirtyDaysAgo);
+  const to = safeDate(params.to, today);
   const query = params.q?.trim() ?? "";
   const showNewForm = params.new === "1";
   const { products, notice, diagnostic } = await getCustomerContext();
@@ -54,10 +61,12 @@ export default async function RidersPage({ searchParams }: { searchParams: Promi
          from riders r
          join stock_locations b on b.id = r.branch_id
     left join sales s on s.rider_id = r.id
-        where ($1 = '' or r.name ilike '%' || $1 || '%' or r.phone ilike '%' || $1 || '%' or b.name ilike '%' || $1 || '%')
+                    and s.sale_date >= $1::date
+                    and s.sale_date < ($2::date + interval '1 day')
+        where ($3 = '' or r.name ilike '%' || $3 || '%' or r.phone ilike '%' || $3 || '%' or b.name ilike '%' || $3 || '%')
         group by r.id, b.name, b.code
         order by r.is_active desc, r.name`,
-      [query],
+      [from, to, query],
     ),
     products.db.query<Record<string, unknown>>(
       "select id, name, code from stock_locations where kind = 'BRANCH' and active order by name",
@@ -86,13 +95,13 @@ export default async function RidersPage({ searchParams }: { searchParams: Promi
 
   return <>
     <SavedToast key={params.saved ?? "none"} message={params.saved ?? null} />
-    <AppShell title="Riders" subtitle="Delivery team and delivery history" staff={currentStaff} branch={stationName} activeHref="/riders">
+    <AppShell title="Riders" subtitle={`Delivery team performance · ${from} to ${to}`} staff={currentStaff} branch={stationName} activeHref="/riders">
       <PageHeader title="Riders" subtitle="Create delivery riders, see their branch and delivery activity" action={<ButtonLink href={showNewForm ? "/riders" : "/riders?new=1"} variant="primary">{showNewForm ? "Close" : "New rider"}</ButtonLink>} />
       {notice ? <Banner tone="warn">{notice}</Banner> : null}
       {params.error ? <Banner tone="bad">{params.error}</Banner> : null}
       {showNewForm ? <Card title="New rider" subtitle="Riders are assigned to one branch; they do not hold stock."><form action={createRider} className="grid gap-3 sm:grid-cols-3"><label className="space-y-1"><span className="text-xs font-medium text-ink-subtle">Full name</span><input className="h-10 w-full rounded-md border border-border bg-surface px-3 text-sm" name="name" required minLength={2} autoComplete="name" /></label><label className="space-y-1"><span className="text-xs font-medium text-ink-subtle">Phone</span><input className="h-10 w-full rounded-md border border-border bg-surface px-3 text-sm" name="phone" required minLength={7} inputMode="tel" autoComplete="tel" /></label><label className="space-y-1"><span className="text-xs font-medium text-ink-subtle">Branch</span><select className="h-10 w-full rounded-md border border-border bg-surface px-3 text-sm" name="branch_id" required defaultValue=""><option value="" disabled>Choose branch…</option>{branches.map((branch) => <option key={branch.id} value={branch.id}>{branch.name} · {branch.code}</option>)}</select></label><div className="sm:col-span-3"><Button type="submit" variant="primary">Create rider</Button></div></form></Card> : null}
       <div className="grid gap-4 sm:grid-cols-3"><KpiCard label="Active riders" value={String(active.length)} subtext={`${riders.length - active.length} inactive`} /><KpiCard label="Recorded deliveries" value={String(deliveryCount)} subtext="Posted rider-assigned sales" /><KpiCard label="Delivered value" value={formatKsh(riders.reduce((sum, rider) => sum + rider.deliveryValue, 0))} subtext="Posted rider-assigned sales" /></div>
-      <FilterBar search={<form action="/riders" method="get" role="search"><SearchInput name="q" defaultValue={query} placeholder="Name, phone or branch" label="Search riders" /></form>} filters={<p className="text-sm text-ink-subtle">{riders.length} riders shown</p>} />
+      <FilterBar search={<form action="/riders" method="get" role="search" className="grid gap-2 sm:grid-cols-[minmax(180px,1fr)_auto_auto_auto]"><SearchInput name="q" defaultValue={query} placeholder="Name, phone or branch" label="Search riders" /><label className="sr-only" htmlFor="riders-from">From</label><input id="riders-from" type="date" name="from" defaultValue={from} max={to} className="h-10 rounded-md border border-border bg-surface px-2 text-sm" /><label className="sr-only" htmlFor="riders-to">To</label><input id="riders-to" type="date" name="to" defaultValue={to} min={from} max={today} className="h-10 rounded-md border border-border bg-surface px-2 text-sm" /><button type="submit" className="h-10 rounded-md bg-orange-500 px-3 text-sm font-semibold text-ink">Apply</button></form>} filters={<p className="text-sm text-ink-subtle">{riders.length} riders · performance from {from} to {to}</p>} />
       <Card flush><DataTable rows={riders} columns={columns} rowKey={(rider) => rider.id} caption="Riders and their delivery activity" empty={<EmptyState icon={TruckIcon} title={query ? `No rider matches “${query}”` : "No riders yet"} description={query ? "Try a rider name, phone number, or branch." : "Create the first rider before assigning deliveries."} action={<ButtonLink href="/riders?new=1" variant="primary">New rider</ButtonLink>} />} /></Card>
     </AppShell>
   </>;

@@ -5,6 +5,7 @@ import { DatabaseUnavailable } from "@/components/customers/DatabaseUnavailable"
 import { ButtonLink, Card, DataTable, EmptyState, KpiCard, PageHeader, StatusBadge } from "@/components/ui";
 import type { DataColumn } from "@/components/ui";
 import { ReceiptIcon } from "@/components/icons";
+import { SalesReportCharts } from "@/components/reports/SalesReportCharts";
 import { currentStaff, stationName } from "@/lib/data";
 import { getCustomerContext } from "@/lib/db";
 import { formatKsh } from "@/lib/format";
@@ -121,6 +122,18 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
   const paid = posted.reduce((sum, sale) => sum + sale.paid, 0);
   const due = posted.reduce((sum, sale) => sum + sale.due, 0);
   const deliveries = posted.filter((sale) => sale.saleType === "delivery").length;
+  const dateFormatter = new Intl.DateTimeFormat("en-KE", { day: "numeric", month: "short", timeZone: "Africa/Nairobi" });
+  const dailyMap = new Map<string, { label: string; revenue: number; sales: number }>();
+  for (const sale of posted) {
+    const key = new Intl.DateTimeFormat("en-CA", { timeZone: "Africa/Nairobi" }).format(new Date(sale.saleDate));
+    const current = dailyMap.get(key) ?? { label: dateFormatter.format(new Date(sale.saleDate)), revenue: 0, sales: 0 };
+    current.revenue += sale.total; current.sales += 1; dailyMap.set(key, current);
+  }
+  const daily = [...dailyMap.entries()].sort(([a], [b]) => a.localeCompare(b)).map(([, point]) => point);
+  const paymentCounts = new Map<string, number>();
+  for (const sale of posted) for (const method of sale.paymentMethods.length ? sale.paymentMethods : [sale.due > 0 ? "credit" : "unrecorded"]) paymentCounts.set(method, (paymentCounts.get(method) ?? 0) + 1);
+  const paymentReceipts = [...paymentCounts.entries()].sort((a, b) => b[1] - a[1]).map(([method, count]) => ({ label: paymentNames[method] ?? (method === "unrecorded" ? "Unrecorded" : method), value: count, detail: `${count} receipt${count === 1 ? "" : "s"}` }));
+  const saleTypes = (["counter", "delivery"] as const).map((type) => { const total = posted.filter((sale) => sale.saleType === type).reduce((sum, sale) => sum + sale.total, 0); return { label: type === "counter" ? "Counter" : "Delivery", value: total, detail: formatKsh(total) }; }).filter((entry) => entry.value > 0);
 
   const columns: DataColumn<ReportSale>[] = [
     { key: "receipt", header: "Receipt", priority: 1, cell: (sale) => <span className="code font-semibold text-ink">{sale.receiptNo}</span> },
@@ -184,6 +197,7 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
       </form>
     </Card>
     <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4"><KpiCard label="Sales" value={String(posted.length)} subtext="Posted receipts" /><KpiCard label="Revenue" value={formatKsh(revenue)} subtext="Posted sales total" /><KpiCard label="Collected" value={formatKsh(paid)} subtext="Recorded payments" /><KpiCard label="Outstanding" value={formatKsh(due)} subtext={`${deliveries} delivery sale${deliveries === 1 ? "" : "s"}`} /></div>
+    <SalesReportCharts daily={daily} paymentReceipts={paymentReceipts} saleTypes={saleTypes} />
     <Card title="Sales report" subtitle={`${sales.length} receipt${sales.length === 1 ? "" : "s"} match these filters`} flush><DataTable rows={sales} columns={columns} rowKey={(sale) => sale.id} rowHref={(sale) => `/sales/${sale.id}`} caption="Filtered sales report" empty={<EmptyState icon={ReceiptIcon} title="No sales match these filters" description="Adjust the date range, customer, branch, rider, payment, or search code and try again." />} /></Card>
   </AppShell>;
 }
