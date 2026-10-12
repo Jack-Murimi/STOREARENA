@@ -149,9 +149,10 @@ async function demoContext(): Promise<CustomerContext | null> {
 }
 
 function demoAllowed(): boolean {
-  return (
-    process.env.NODE_ENV !== "production" || process.env.ALLOW_DEMO_STORE === "1"
-  );
+  // This portal no longer falls back to seeded/demo records. A missing or
+  // unreachable Supabase database is surfaced clearly instead of showing data
+  // that could be mistaken for live business information.
+  return false;
 }
 
 async function build(): Promise<CustomerContext> {
