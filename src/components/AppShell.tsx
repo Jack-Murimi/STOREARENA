@@ -3,6 +3,7 @@ import { BottomTabBar } from "./BottomTabBar";
 import { Sidebar } from "./Sidebar";
 import { Topbar } from "./Topbar";
 import type { StaffMember } from "@/lib/types";
+import { authenticatedStaff } from "@/lib/auth";
 
 /**
  * The frame every screen sits in.
@@ -10,7 +11,7 @@ import type { StaffMember } from "@/lib/types";
  * It existed as six lines copy-pasted into each page, which is how the pages
  * ended up with four different paddings and two different header heights.
  */
-export function AppShell({
+export async function AppShell({
   title,
   subtitle,
   staff,
@@ -27,11 +28,12 @@ export function AppShell({
   topbarAction?: ReactNode;
   children: ReactNode;
 }) {
+  const sessionStaff = await authenticatedStaff();
   return (
     <div className="flex min-h-screen bg-bg">
       <Sidebar activeHref={activeHref} />
       <div className="flex min-w-0 flex-1 flex-col">
-        <Topbar title={title} subtitle={subtitle} staff={staff} branch={branch} action={topbarAction} />
+        <Topbar title={title} subtitle={subtitle} staff={sessionStaff ?? staff} branch={branch} action={topbarAction} />
         <main className="page-shell flex-1 space-y-4 pb-20 md:pb-0">{children}</main>
       </div>
       <BottomTabBar activeHref={activeHref} />
