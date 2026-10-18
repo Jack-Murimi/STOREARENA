@@ -59,6 +59,7 @@ export function UserMenu({
           <div className="absolute right-0 z-20 mt-1 w-48 rounded-md border border-border bg-surface p-1 shadow-raised">
             <p className="px-2 py-1.5 text-sm font-semibold text-ink">{name}</p>
             <p className="px-2 pb-1.5 text-xs text-ink-subtle">{role}</p>
+            <a href="/profile" className="block rounded px-2 py-1.5 text-sm font-medium text-ink-muted hover:bg-surface-muted hover:text-ink">My profile</a>
             {role === "Admin" ? <a href="/users" className="block rounded px-2 py-1.5 text-sm font-medium text-ink-muted hover:bg-surface-muted hover:text-ink">Manage users</a> : null}<form action="/auth/signout" method="post" className="border-t border-border pt-1"><button type="submit" className="w-full rounded px-2 py-1.5 text-left text-sm font-medium text-ink-muted hover:bg-surface-muted hover:text-ink">Sign out</button></form>
           </div>
         </>
