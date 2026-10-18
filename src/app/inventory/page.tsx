@@ -118,10 +118,11 @@ export default async function InventoryPage({ searchParams }: PageProps) {
       priority: 1,
       cell: (line) => (
         <span className="block min-w-0">
-          <span className="block truncate font-medium text-ink">{line.variantName}</span>
+          <span className="block truncate font-medium text-ink">
+            {line.sizeKg === null ? line.variantName : `${line.sizeKg} KG · ${line.brandName}`}
+          </span>
           <span className="block truncate text-xs text-ink-subtle">
-            {line.brandName}
-            {line.sizeKg ? ` · ${line.sizeKg} kg` : ""}
+            {line.sizeKg === null ? line.brandName : line.variantName}
           </span>
         </span>
       ),

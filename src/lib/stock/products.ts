@@ -55,8 +55,10 @@ export interface NewProductInput {
   /** An existing brand, or a new one to create with the product. */
   brandId?: string | null;
   newBrandName?: string | null;
-  /** Required for a cylinder, forbidden for anything else. */
+  /** One cylinder size; retained for single-product callers. */
   sizeKg?: number | string | null;
+  /** Comma-separated cylinder sizes when several variants are created together. */
+  sizeKgs?: number | string | null;
   listPriceKsh?: number | string | null;
 }
 
@@ -73,6 +75,22 @@ const normalizeName = (value: unknown): string =>
 
 const sizeLabel = (sizeKg: number): string =>
   Number.isInteger(sizeKg) ? String(sizeKg) : String(sizeKg);
+
+function parseSizeList(raw: number | string | null | undefined): number[] {
+  if (raw === null || raw === undefined || String(raw).trim() === "") return [];
+  const parts = typeof raw === "number" ? [String(raw)] : String(raw).split(/[,;\n]+/);
+  const sizes = parts.map((part) => Number(part.trim()));
+  if (sizes.some((size) => !Number.isFinite(size) || size <= 0)) {
+    throw new ProductError(
+      "BAD_SIZE",
+      "Use positive kilogram sizes separated with commas, for example 3, 6, 13.",
+    );
+  }
+  if (new Set(sizes).size !== sizes.length) {
+    throw new ProductError("DUPLICATE_SIZE", "Enter each cylinder size only once.");
+  }
+  return sizes;
+}
 
 function isUniqueViolation(error: unknown): boolean {
   if (!error || typeof error !== "object") return false;
@@ -148,7 +166,7 @@ export class ProductService {
            JOIN categories c ON c.id = v.category_id
            JOIN brands b ON b.id = v.brand_id
            ${where}
-          ORDER BY c.name, v.size_kg NULLS LAST, b.name`,
+          ORDER BY v.size_kg NULLS LAST, b.name, c.name`,
         params,
       ),
       this.db.query<Row>(
@@ -247,66 +265,56 @@ export class ProductService {
   }
 
   /**
-   * Adds one catalogue variant. Cylinders are always named from their brand and
-   * nominal size: `AFRIGAS 13 KG`, never separate REFILL or EMPTY products.
+   * Adds one catalogue variant. Kept for callers that create a single item;
+   * the entry form can use createProducts for several cylinder sizes at once.
    */
   async createProduct(input: NewProductInput): Promise<ProductVariant> {
-    return this.db.transaction((tx) => this.createProductInTransaction(tx, input));
-  }
-
-  private async createProductInTransaction(db: Database, input: NewProductInput): Promise<ProductVariant> {
-    const category = await this.findCategory(db, input.categoryId);
-    const brand = await this.resolveBrand(db, input);
-
-    let sizeKg: number | null = null;
-    const rawSize = input.sizeKg;
-    if (rawSize !== null && rawSize !== undefined && String(rawSize).trim() !== "") {
-      sizeKg = Number(rawSize);
-      if (!Number.isFinite(sizeKg) || sizeKg <= 0) {
-        throw new ProductError("BAD_SIZE", "A size has to be a number of kilograms above zero.");
-      }
-    }
-
-    if (category.stockModel === StockModel.Cylinder && sizeKg === null) {
+    if (input.sizeKgs !== null && input.sizeKgs !== undefined && parseSizeList(input.sizeKgs).length > 1) {
       throw new ProductError(
-        "SIZE_REQUIRED",
-        `${category.name} are sold by size — say how many kilograms this cylinder holds.`,
+        "MULTIPLE_PRODUCTS",
+        "Use createProducts when adding more than one cylinder size.",
       );
     }
-    if (category.stockModel !== StockModel.Cylinder && sizeKg !== null) {
+    const created = await this.createProducts(input);
+    return created[0];
+  }
+
+  /**
+   * Adds one or many catalogue variants atomically. A cylinder's name always
+   * comes from its brand and size, e.g. `AFRIGAS 13 KG`; REFILL and EMPTY stay
+   * inventory states rather than becoming products.
+   */
+  async createProducts(input: NewProductInput): Promise<ProductVariant[]> {
+    return this.db.transaction((tx) => this.createProductsInTransaction(tx, input));
+  }
+
+  private async createProductsInTransaction(
+    db: Database,
+    input: NewProductInput,
+  ): Promise<ProductVariant[]> {
+    const category = await this.findCategory(db, input.categoryId);
+    const brand = await this.resolveBrand(db, input);
+    const rawSizes = input.sizeKgs ?? input.sizeKg;
+    const sizes = parseSizeList(rawSizes);
+
+    if (category.stockModel === StockModel.Cylinder && sizes.length === 0) {
+      throw new ProductError(
+        "SIZE_REQUIRED",
+        `${category.name} are sold by size — enter one or more kilogram sizes.`,
+      );
+    }
+    if (category.stockModel !== StockModel.Cylinder && sizes.length > 0) {
       throw new ProductError(
         "SIZE_FORBIDDEN",
         `${category.name} are not weighed, so they cannot have a kilogram size.`,
       );
     }
 
-    const name =
-      category.stockModel === StockModel.Cylinder
-        ? `${normalizeName(brand.name)} ${sizeLabel(sizeKg!)} KG`
-        : normalizeName(input.name);
-    if (name.length < 2) {
-      throw new ProductError(
-        "BAD_NAME",
-        category.stockModel === StockModel.Cylinder
-          ? "Choose a brand and cylinder size."
-          : "Give the product a name.",
-      );
-    }
-
-    const clash = await db.query<Row>(
-      category.stockModel === StockModel.Cylinder
-        ? "SELECT name FROM product_variants WHERE brand_id = $1 AND size_kg = $2"
-        : `SELECT name
-             FROM product_variants
-            WHERE brand_id = $1
-              AND category_id = $2
-              AND upper(btrim(name)) = $3`,
-      category.stockModel === StockModel.Cylinder
-        ? [brand.id, sizeKg]
-        : [brand.id, category.id, name],
-    );
-    if (clash.length > 0) {
-      throw new ProductError("DUPLICATE", `${str(clash[0].name)} is already on the catalogue.`);
+    const productSizes: Array<number | null> =
+      category.stockModel === StockModel.Cylinder ? sizes : [null];
+    const simpleName = normalizeName(input.name);
+    if (category.stockModel !== StockModel.Cylinder && simpleName.length < 2) {
+      throw new ProductError("BAD_NAME", "Give the product a name.");
     }
 
     let price: number | null = null;
@@ -318,48 +326,81 @@ export class ProductService {
       }
     }
 
-    const id = newId("var");
-    const code =
-      category.stockModel === StockModel.Cylinder
-        ? `${category.code}-${slug(brand.code)}-${String(sizeKg).replace(".", "-")}`
-        : `${category.code}-${slug(brand.code)}-${slug(name).slice(0, 24)}`;
+    const drafts: Array<{ id: string; code: string; name: string; sizeKg: number | null }> = [];
+    for (const sizeKg of productSizes) {
+      const name =
+        category.stockModel === StockModel.Cylinder
+          ? `${normalizeName(brand.name)} ${sizeLabel(sizeKg!)} KG`
+          : simpleName;
 
-    try {
-      await db.query(
-        `INSERT INTO product_variants (id, code, category_id, brand_id, name, size_kg, list_price_ksh)
-         VALUES ($1, $2, $3, $4, $5, $6, $7)`,
-        [id, code, category.id, brand.id, name, sizeKg, price],
+      const clash = await db.query<Row>(
+        category.stockModel === StockModel.Cylinder
+          ? "SELECT name FROM product_variants WHERE brand_id = $1 AND size_kg = $2"
+          : `SELECT name
+               FROM product_variants
+              WHERE brand_id = $1
+                AND category_id = $2
+                AND upper(btrim(name)) = $3`,
+        category.stockModel === StockModel.Cylinder
+          ? [brand.id, sizeKg]
+          : [brand.id, category.id, name],
       );
-    } catch (error) {
-      if (isUniqueViolation(error)) {
-        const existing = await db.query<Row>(
-          category.stockModel === StockModel.Cylinder
-            ? "SELECT name FROM product_variants WHERE brand_id = $1 AND size_kg = $2"
-            : `SELECT name
-                 FROM product_variants
-                WHERE brand_id = $1 AND category_id = $2 AND upper(btrim(name)) = $3`,
-          category.stockModel === StockModel.Cylinder
-            ? [brand.id, sizeKg]
-            : [brand.id, category.id, name],
-        );
-        if (existing.length > 0) {
-          throw new ProductError("DUPLICATE", `${str(existing[0].name)} is already on the catalogue.`);
-        }
-        throw new ProductError("DUPLICATE", "That product already exists on the catalogue.");
+      if (clash.length > 0) {
+        throw new ProductError("DUPLICATE", `${str(clash[0].name)} is already on the catalogue.`);
       }
-      throw error;
+
+      drafts.push({
+        id: newId("var"),
+        code:
+          category.stockModel === StockModel.Cylinder
+            ? `${category.code}-${slug(brand.code)}-${String(sizeKg).replace(".", "-")}`
+            : `${category.code}-${slug(brand.code)}-${slug(name).slice(0, 24)}`,
+        name,
+        sizeKg,
+      });
     }
 
-    return {
-      id,
-      code,
-      categoryId: category.id,
-      brandId: brand.id,
-      name,
-      sizeKg,
-      listPriceKsh: price,
-      active: true,
-    };
+    const created: ProductVariant[] = [];
+    for (const draft of drafts) {
+      try {
+        await db.query(
+          `INSERT INTO product_variants (id, code, category_id, brand_id, name, size_kg, list_price_ksh)
+           VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+          [draft.id, draft.code, category.id, brand.id, draft.name, draft.sizeKg, price],
+        );
+      } catch (error) {
+        if (isUniqueViolation(error)) {
+          const existing = await db.query<Row>(
+            category.stockModel === StockModel.Cylinder
+              ? "SELECT name FROM product_variants WHERE brand_id = $1 AND size_kg = $2"
+              : `SELECT name
+                   FROM product_variants
+                  WHERE brand_id = $1 AND category_id = $2 AND upper(btrim(name)) = $3`,
+            category.stockModel === StockModel.Cylinder
+              ? [brand.id, draft.sizeKg]
+              : [brand.id, category.id, draft.name],
+          );
+          if (existing.length > 0) {
+            throw new ProductError("DUPLICATE", `${str(existing[0].name)} is already on the catalogue.`);
+          }
+          throw new ProductError("DUPLICATE", "That product already exists on the catalogue.");
+        }
+        throw error;
+      }
+
+      created.push({
+        id: draft.id,
+        code: draft.code,
+        categoryId: category.id,
+        brandId: brand.id,
+        name: draft.name,
+        sizeKg: draft.sizeKg,
+        listPriceKsh: price,
+        active: true,
+      });
+    }
+
+    return created;
   }
 
   private async findCategory(db: Database, categoryId: string): Promise<Category> {

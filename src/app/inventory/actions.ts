@@ -64,23 +64,27 @@ export async function createCategory(form: FormData): Promise<void> {
 export async function createProduct(form: FormData): Promise<void> {
   const products = await requireProducts();
 
-  let name = "";
+  let names: string[] = [];
   try {
-    const created = await products.createProduct({
+    const created = await products.createProducts({
       name: text(form, "name") || null,
       categoryId: text(form, "categoryId"),
       brandId: text(form, "brandId") || null,
       newBrandName: text(form, "newBrandName") || null,
-      sizeKg: text(form, "sizeKg") || null,
+      sizeKgs: text(form, "sizeKgs") || null,
       listPriceKsh: text(form, "listPriceKsh") || null,
     });
-    name = created.name;
+    names = created.map((product) => product.name);
   } catch (error) {
     fail(error, "/inventory?new=1");
   }
 
+  const message =
+    names.length === 1
+      ? `${names[0]} added to the catalogue.`
+      : `${names.length} products added: ${names.join(", ")}.`;
   revalidatePath("/inventory");
-  redirect(withMessage("/inventory", "saved", `${name} added to the catalogue.`));
+  redirect(withMessage("/inventory", "saved", message));
 }
 
 /** Adds a branch, or a rider van that belongs to one. */

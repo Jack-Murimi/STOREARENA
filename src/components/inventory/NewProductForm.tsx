@@ -40,13 +40,19 @@ export function NewProductForm({
   );
   const [brandId, setBrandId] = useState("");
   const [newBrandName, setNewBrandName] = useState("");
-  const [sizeKg, setSizeKg] = useState("");
+  const [sizeKgs, setSizeKgs] = useState("");
 
   const category = categories.find((item) => item.id === categoryId);
   const isCylinder = category?.stockModel === StockModel.Cylinder;
   const selectedBrand = brands.find((brand) => brand.id === brandId);
   const brandForPreview = brandMode === "existing" ? selectedBrand?.name ?? "BRAND" : newBrandName || "BRAND";
-  const cylinderPreview = `${caps(brandForPreview)} ${sizeKg || "SIZE"} KG`;
+  const previewSizes = sizeKgs
+    .split(/[,;\n]+/)
+    .map((size) => size.trim())
+    .filter(Boolean);
+  const cylinderPreviews = (previewSizes.length > 0 ? previewSizes : ["SIZE"])
+    .map((size) => `${caps(brandForPreview)} ${size} KG`)
+    .join(", ");
 
   if (!open) {
     return (
@@ -232,19 +238,19 @@ export function NewProductForm({
 
         {isCylinder ? (
           <label className="space-y-1">
-            <span className="text-xs font-semibold uppercase tracking-wide text-ink-soft">Cylinder size (kg)</span>
+            <span className="text-xs font-semibold uppercase tracking-wide text-ink-soft">Cylinder sizes (kg)</span>
             <input
-              name="sizeKg"
-              inputMode="decimal"
+              name="sizeKgs"
+              inputMode="text"
               required
-              min="0.01"
-              step="0.01"
-              value={sizeKg}
-              onChange={(event) => setSizeKg(event.target.value)}
-              placeholder="13"
+              value={sizeKgs}
+              onChange={(event) => setSizeKgs(event.target.value)}
+              placeholder="3, 6, 13"
               className="w-full rounded-lg border border-line bg-white px-3 py-2 text-sm outline-none focus:border-flame-500"
             />
-            <span className="block text-xs text-ink-soft">Product name: <strong className="text-ink">{cylinderPreview}</strong></span>
+            <span className="block text-xs text-ink-soft">
+              Separate sizes with commas. Product names: <strong className="text-ink">{cylinderPreviews}</strong>
+            </span>
           </label>
         ) : (
           <label className="space-y-1">
@@ -272,7 +278,7 @@ export function NewProductForm({
             placeholder="Optional"
             className="w-full rounded-lg border border-line bg-white px-3 py-2 text-sm outline-none focus:border-flame-500"
           />
-          <span className="block text-xs text-ink-soft">Optional now; it can be set when you are ready to sell.</span>
+          <span className="block text-xs text-ink-soft">Optional now; if you add several sizes, this price applies to each of them.</span>
         </label>
       </div>
 

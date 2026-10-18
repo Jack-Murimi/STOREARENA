@@ -253,7 +253,7 @@ export class StockLedgerService {
          JOIN brands b ON b.id = v.brand_id
          LEFT JOIN inventory_positions p ON p.variant_id = v.id ${filter}
         GROUP BY v.id, c.id, b.id
-        ORDER BY c.name, v.size_kg NULLS LAST, b.name`,
+        ORDER BY v.size_kg NULLS LAST, b.name, c.name`,
       params,
     );
 

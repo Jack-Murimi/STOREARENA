@@ -173,6 +173,37 @@ describe("adding a product", () => {
     expect(brands.map((b) => b.name)).toContain("NEWGAS");
   });
 
+  it("creates several cylinder sizes atomically from one comma-separated entry", async () => {
+    const category = await products.createCategory({
+      name: "bulk lpg cylinders",
+      stockModel: "CYLINDER",
+    });
+    const created = await products.createProducts({
+      categoryId: category.id,
+      newBrandName: "multigas",
+      sizeKgs: "3, 6, 13",
+      listPriceKsh: "1200",
+    });
+
+    expect(created.map((product) => product.name)).toEqual([
+      "MULTIGAS 3 KG",
+      "MULTIGAS 6 KG",
+      "MULTIGAS 13 KG",
+    ]);
+    expect(created.every((product) => product.listPriceKsh === 1200)).toBe(true);
+
+    await expect(
+      products.createProducts({
+        categoryId: category.id,
+        brandId: created[0].brandId,
+        sizeKgs: "3, 20",
+      }),
+    ).rejects.toThrow(/MULTIGAS 3 KG/);
+    expect(
+      (await products.listInventory()).filter((line) => line.variant.name === "MULTIGAS 20 KG"),
+    ).toHaveLength(0);
+  });
+
   it("keeps AFRIGAS 3, 6 and 13 KG as one variant each, with separate refill and empty balances", async () => {
     const lpg = (await products.listCategories()).find((c) => c.name === "LPG CYLINDERS")!;
     const afrigas = (await products.listBrands()).find((b) => b.name === "AFRIGAS")!;
