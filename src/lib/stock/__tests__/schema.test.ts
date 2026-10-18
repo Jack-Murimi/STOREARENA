@@ -26,13 +26,13 @@ beforeAll(async () => {
   await db.exec(DDL);
   await db.exec(`
     INSERT INTO categories (id, code, name, stock_model) VALUES
-      ('cat-lpg-cylinder', 'LPG-CYL', 'LPG Cylinders', 'CYLINDER'),
-      ('cat-accessory',    'ACC',     'Accessories',   'SIMPLE');
+      ('cat-lpg-cylinder', 'LPG-CYL', 'LPG CYLINDERS', 'CYLINDER'),
+      ('cat-accessory',    'ACC',     'ACCESSORIES',   'SIMPLE');
 
     INSERT INTO brands (id, code, name, depot_name) VALUES
-      ('brand-afrigas', 'AFRIGAS', 'Afri Gas',       'Afri Gas Nairobi Depot'),
-      ('brand-total',   'TOTAL',   'TotalEnergies',  'TotalEnergies Kipevu Depot'),
-      ('brand-rubis',   'RUBIS',   'Rubis',          'Rubis Energy Depot');
+      ('brand-afrigas', 'AFRIGAS', 'AFRI GAS',       'Afri Gas Nairobi Depot'),
+      ('brand-total',   'TOTAL',   'TOTALENERGIES',  'TotalEnergies Kipevu Depot'),
+      ('brand-rubis',   'RUBIS',   'RUBIS',          'Rubis Energy Depot');
 
     INSERT INTO stock_locations (id, code, name, kind) VALUES
       ('loc-syokimau',   'SYK', 'Gateway Gas — Syokimau', 'BRANCH'),
@@ -45,13 +45,13 @@ beforeAll(async () => {
     INSERT INTO product_variants
       (id, code, category_id, brand_id, name, size_kg, list_price_ksh)
     VALUES
-      ('var-afrigas-13', 'AFRIGAS-13', 'cat-lpg-cylinder', 'brand-afrigas', 'Afri Gas 13 kg',      13, 2350),
-      ('var-total-13',   'TOTAL-13',   'cat-lpg-cylinder', 'brand-total',   'TotalEnergies 13 kg', 13, 2400);
+      ('var-afrigas-13', 'AFRIGAS-13', 'cat-lpg-cylinder', 'brand-afrigas', 'AFRI GAS 13 KG',      13, 2350),
+      ('var-total-13',   'TOTAL-13',   'cat-lpg-cylinder', 'brand-total',   'TOTALENERGIES 13 KG', 13, 2400);
 
     INSERT INTO product_variants
       (id, code, category_id, brand_id, name, list_price_ksh)
     VALUES
-      ('var-acc-regulator', 'ACC-REG', 'cat-accessory', 'brand-total', 'Low-pressure regulator', 1200);
+      ('var-acc-regulator', 'ACC-REG', 'cat-accessory', 'brand-total', 'LOW-PRESSURE REGULATOR', 1200);
   `);
 }, 120_000);
 
@@ -97,6 +97,30 @@ describe("schema shape", () => {
        WHERE table_schema = 'public' AND column_name LIKE '%deposit%'
     `);
     expect(rows).toEqual([]);
+  });
+});
+
+describe("catalogue name integrity", () => {
+  it("requires stored category, brand and product names to be uppercase", async () => {
+    const category = await expectFailure(`
+      INSERT INTO categories (id, code, name, stock_model)
+      VALUES ('cat-lowercase', 'LOWER-CAT', 'Lpg cylinders', 'CYLINDER')
+    `);
+    expect(category).toMatch(/categories_name_check/);
+
+    const brand = await expectFailure(`
+      INSERT INTO brands (id, code, name, depot_name)
+      VALUES ('brand-lowercase', 'LOWER-BRAND', 'Afrigas', 'AFRIGAS')
+    `);
+    expect(brand).toMatch(/brands_name_check/);
+  });
+
+  it("blocks a second category even if it has a different code", async () => {
+    const message = await expectFailure(`
+      INSERT INTO categories (id, code, name, stock_model)
+      VALUES ('cat-lpg-copy', 'LPG-OTHER', 'LPG CYLINDERS', 'CYLINDER')
+    `);
+    expect(message).toMatch(/uq_categories_normalized_name/);
   });
 });
 
@@ -319,7 +343,7 @@ describe("variant shape rule", () => {
       INSERT INTO product_variants
         (id, code, category_id, brand_id, name, list_price_ksh)
       VALUES ('var-rubis-x', 'RUBIS-X', 'cat-lpg-cylinder', 'brand-rubis',
-              'Mystery', 2350)
+              'MYSTERY', 2350)
     `);
     expect(message).toMatch(/positive size_kg/);
   });
@@ -329,7 +353,7 @@ describe("variant shape rule", () => {
       INSERT INTO product_variants
         (id, code, category_id, brand_id, name, size_kg, list_price_ksh)
       VALUES ('var-bad-hose', 'ACC-BAD', 'cat-accessory', 'brand-rubis',
-              'Confused hose', 6, 450)
+              'CONFUSED HOSE', 6, 450)
     `);
     expect(message).toMatch(/must not declare size_kg/);
   });
@@ -339,7 +363,7 @@ describe("variant shape rule", () => {
       INSERT INTO product_variants
         (id, code, category_id, brand_id, name, size_kg, list_price_ksh)
       VALUES ('var-afrigas-13b', 'AFRIGAS-13B', 'cat-lpg-cylinder', 'brand-afrigas',
-              'Afri Gas 13 kg copy', 13, 2350)
+              'AFRI GAS 13 KG COPY', 13, 2350)
     `);
     expect(message).toMatch(/duplicate key/i);
   });

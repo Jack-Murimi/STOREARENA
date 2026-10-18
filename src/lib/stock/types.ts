@@ -98,7 +98,7 @@ export interface ProductVariant {
   code: string;
   categoryId: string;
   brandId: string;
-  /** Display name, e.g. "Afri Gas 13 kg". */
+  /** Uppercase display name, e.g. "AFRIGAS 13 KG". */
   name: string;
   /** Nominal fill weight. Null for non-cylinder variants. */
   sizeKg: number | null;

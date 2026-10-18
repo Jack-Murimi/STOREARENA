@@ -67,12 +67,12 @@ describe("the price list", () => {
   it("keeps the three categories and knows which are weighed", async () => {
     const categories = await products.listCategories();
     expect(categories.map((c) => c.name).sort()).toEqual([
-      "Accessories & fittings",
-      "Drinking water",
-      "LPG cylinders",
+      "ACCESSORIES & FITTINGS",
+      "DRINKING WATER",
+      "LPG CYLINDERS",
     ]);
-    expect(categories.find((c) => c.name === "LPG cylinders")?.stockModel).toBe("CYLINDER");
-    expect(categories.find((c) => c.name === "Drinking water")?.stockModel).toBe("SIMPLE");
+    expect(categories.find((c) => c.name === "LPG CYLINDERS")?.stockModel).toBe("CYLINDER");
+    expect(categories.find((c) => c.name === "DRINKING WATER")?.stockModel).toBe("SIMPLE");
   });
 
   it("covers every size on the list", async () => {
@@ -85,7 +85,7 @@ describe("the price list", () => {
     const inventory = await products.listInventory();
     // "13KG AFRIGAS EMPTY" is on the price list, but it is the same product.
     expect(inventory.filter((l) => /empty/i.test(l.variant.name))).toHaveLength(0);
-    expect(inventory.filter((l) => l.variant.name === "Afrigas 13 kg")).toHaveLength(1);
+    expect(inventory.filter((l) => l.variant.name === "AFRIGAS 13 KG")).toHaveLength(1);
   });
 
   it("adds nothing when it is run a second time", async () => {
@@ -113,10 +113,10 @@ describe("stock by branch", () => {
          ('loc-a', 'AAA', 'Syokimau', 'BRANCH'),
          ('loc-b', 'BBB', 'Mlolongo', 'BRANCH')`,
     );
-    await stock("AAA", "Afrigas 13 kg", 20, 8);
-    await stock("BBB", "Afrigas 13 kg", 5, 2);
+    await stock("AAA", "AFRIGAS 13 KG", 20, 8);
+    await stock("BBB", "AFRIGAS 13 KG", 5, 2);
 
-    const line = (await products.listInventory()).find((l) => l.variant.name === "Afrigas 13 kg")!;
+    const line = (await products.listInventory()).find((l) => l.variant.name === "AFRIGAS 13 KG")!;
 
     expect(line.refills).toBe(25);
     expect(line.empties).toBe(10);
@@ -128,39 +128,86 @@ describe("stock by branch", () => {
   });
 
   it("filters to one category", async () => {
-    const water = (await products.listCategories()).find((c) => c.name === "Drinking water")!;
+    const water = (await products.listCategories()).find((c) => c.name === "DRINKING WATER")!;
     const only = await products.listInventory({ categoryId: water.id });
 
     expect(only.length).toBeGreaterThan(0);
-    expect(only.every((l) => l.categoryName === "Drinking water")).toBe(true);
+    expect(only.every((l) => l.categoryName === "DRINKING WATER")).toBe(true);
   });
 });
 
 describe("adding a product", () => {
+  it("creates an uppercase category and rejects a case-only duplicate", async () => {
+    const category = await products.createCategory({
+      name: "lpg depot cylinders",
+      stockModel: "CYLINDER",
+    });
+
+    expect(category.name).toBe("LPG DEPOT CYLINDERS");
+    expect(category.stockModel).toBe("CYLINDER");
+    await expect(
+      products.createCategory({ name: "Lpg Depot Cylinders", stockModel: "CYLINDER" }),
+    ).rejects.toThrow(/already exists/i);
+  });
+
   it("adds a cylinder, and a new brand in the same step", async () => {
-    const lpg = (await products.listCategories()).find((c) => c.name === "LPG cylinders")!;
+    const lpg = (await products.listCategories()).find((c) => c.name === "LPG CYLINDERS")!;
     const before = await products.listBrands();
 
     const created = await products.createProduct({
-      name: "Newgas 13 kg",
+      // Cylinder names are derived, so this typed name cannot create a
+      // separate REFILL/EMPTY-style product or preserve mixed casing.
+      name: "newgas refill 13",
       categoryId: lpg.id,
       newBrandName: "Newgas",
       sizeKg: "13",
       listPriceKsh: "2500",
     });
 
-    expect(created.name).toBe("Newgas 13 kg");
+    expect(created.name).toBe("NEWGAS 13 KG");
     expect(created.sizeKg).toBe(13);
     expect(created.listPriceKsh).toBe(2500);
 
     const brands = await products.listBrands();
     expect(brands.length).toBe(before.length + 1);
-    expect(brands.map((b) => b.name)).toContain("Newgas");
+    expect(brands.map((b) => b.name)).toContain("NEWGAS");
+  });
+
+  it("keeps AFRIGAS 3, 6 and 13 KG as one variant each, with separate refill and empty balances", async () => {
+    const lpg = (await products.listCategories()).find((c) => c.name === "LPG CYLINDERS")!;
+    const afrigas = (await products.listBrands()).find((b) => b.name === "AFRIGAS")!;
+
+    const threeKg = await products.createProduct({
+      categoryId: lpg.id,
+      brandId: afrigas.id,
+      sizeKg: "3",
+      listPriceKsh: "650",
+    });
+    expect(threeKg.name).toBe("AFRIGAS 3 KG");
+
+    await expect(
+      products.createProduct({
+        categoryId: lpg.id,
+        brandId: afrigas.id,
+        sizeKg: 3,
+      }),
+    ).rejects.toThrow(/AFRIGAS 3 KG/);
+
+    await stock("NXG", "AFRIGAS 3 KG", 8, 5);
+    const variants = (await products.listInventory()).filter(
+      (line) => line.brandName === "AFRIGAS" && [3, 6, 13].includes(line.variant.sizeKg ?? -1),
+    );
+    expect(variants.map((line) => line.variant.name).sort()).toEqual([
+      "AFRIGAS 13 KG",
+      "AFRIGAS 3 KG",
+      "AFRIGAS 6 KG",
+    ]);
+    expect(variants.find((line) => line.variant.sizeKg === 3)).toMatchObject({ refills: 8, empties: 5 });
   });
 
   it("refuses a cylinder with no size, and a size on something that is not weighed", async () => {
-    const lpg = (await products.listCategories()).find((c) => c.name === "LPG cylinders")!;
-    const water = (await products.listCategories()).find((c) => c.name === "Drinking water")!;
+    const lpg = (await products.listCategories()).find((c) => c.name === "LPG CYLINDERS")!;
+    const water = (await products.listCategories()).find((c) => c.name === "DRINKING WATER")!;
     const brand = (await products.listBrands())[0];
 
     await expect(
@@ -178,8 +225,8 @@ describe("adding a product", () => {
   });
 
   it("refuses the same brand and size twice, and says which product it clashes with", async () => {
-    const lpg = (await products.listCategories()).find((c) => c.name === "LPG cylinders")!;
-    const afrigas = (await products.listBrands()).find((b) => b.name === "Afrigas")!;
+    const lpg = (await products.listCategories()).find((c) => c.name === "LPG CYLINDERS")!;
+    const afrigas = (await products.listBrands()).find((b) => b.name === "AFRIGAS")!;
 
     let caught: unknown;
     try {
@@ -193,11 +240,11 @@ describe("adding a product", () => {
       caught = error;
     }
     expect(caught).toBeInstanceOf(ProductError);
-    expect((caught as ProductError).message).toContain("Afrigas 13 kg");
+    expect((caught as ProductError).message).toContain("AFRIGAS 13 KG");
   });
 
   it("insists on a brand, either picked or typed", async () => {
-    const lpg = (await products.listCategories()).find((c) => c.name === "LPG cylinders")!;
+    const lpg = (await products.listCategories()).find((c) => c.name === "LPG CYLINDERS")!;
     await expect(
       products.createProduct({ name: "Orphan 13 kg", categoryId: lpg.id, sizeKg: 13 }),
     ).rejects.toThrow(/Pick a brand/);

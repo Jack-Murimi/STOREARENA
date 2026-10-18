@@ -44,6 +44,9 @@ export default async function InventoryPage({ searchParams }: PageProps) {
   const query = str("q").trim().toLowerCase();
   const saved = str("saved") || null;
   const error = str("error") || null;
+  const creatingProduct = str("new") === "1";
+  const newCategoryId = str("newCategory");
+  const creatingCategory = str("createCategory") === "1";
 
   const { products, stock, notice, diagnostic } = await getCustomerContext();
 
@@ -222,9 +225,13 @@ export default async function InventoryPage({ searchParams }: PageProps) {
             branch ? `Stock at ${branch.name}` : "Every product, across every location"
           }
           action={
-            <ButtonLink href="/inventory?new=1" variant="primary">
-              New product
-            </ButtonLink>
+            creatingProduct ? (
+              <ButtonLink href="/inventory">Back to inventory</ButtonLink>
+            ) : (
+              <ButtonLink href="/inventory?new=1" variant="primary">
+                New product
+              </ButtonLink>
+            )
           }
           /* Admin-ish, rarely used: behind a gear, not a second button. */
           menu={
@@ -260,8 +267,9 @@ export default async function InventoryPage({ searchParams }: PageProps) {
           <SummaryStat label="Products" value={String(shown)} hint={showZero ? "shown" : "with stock"} />
         </dl>
 
-        <FilterBar
-          search={
+        {!creatingProduct ? (
+          <FilterBar
+            search={
             <form action="/inventory" method="get" role="search" className="w-full sm:w-64">
               <input type="hidden" name="cat" value={categoryFilter} />
               <input type="hidden" name="branch" value={branchFilter} />
@@ -310,15 +318,18 @@ export default async function InventoryPage({ searchParams }: PageProps) {
                 {showZero ? "Hide zero stock" : "Show zero stock"}
               </a>
             </>
-          }
-        />
+            }
+          />
+        ) : null}
 
-        {params.new === "1" ? (
-          <Card title="New product">
+        {creatingProduct ? (
+          <Card title="New product" subtitle="Create the catalogue item before receiving or selling stock.">
             <NewProductForm
               categories={categories}
               brands={brands}
               startOpen
+              initialCategoryId={newCategoryId}
+              startCategoryCreation={creatingCategory}
             />
           </Card>
         ) : null}

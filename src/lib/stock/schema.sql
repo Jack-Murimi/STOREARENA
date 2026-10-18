@@ -20,7 +20,7 @@ BEGIN;
 CREATE TABLE categories (
   id          TEXT PRIMARY KEY,
   code        TEXT NOT NULL UNIQUE,
-  name        TEXT NOT NULL,
+  name        TEXT NOT NULL CHECK (name = upper(btrim(name))),
   stock_model TEXT NOT NULL CHECK (stock_model IN ('CYLINDER', 'SIMPLE')),
   created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
 );
@@ -28,7 +28,7 @@ CREATE TABLE categories (
 CREATE TABLE brands (
   id         TEXT PRIMARY KEY,
   code       TEXT NOT NULL UNIQUE,
-  name       TEXT NOT NULL,
+  name       TEXT NOT NULL CHECK (name = upper(btrim(name))),
   depot_name TEXT NOT NULL,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
@@ -59,7 +59,7 @@ CREATE TABLE product_variants (
   code           TEXT NOT NULL UNIQUE,
   category_id    TEXT NOT NULL REFERENCES categories (id),
   brand_id       TEXT NOT NULL REFERENCES brands (id),
-  name           TEXT NOT NULL,
+  name           TEXT NOT NULL CHECK (name = upper(btrim(name))),
   size_kg        NUMERIC(6, 2) CHECK (size_kg IS NULL OR size_kg > 0),
   -- The standard price. What a customer actually pays lives on the sale line,
   -- so a discount is always the visible gap between the two.
@@ -68,6 +68,15 @@ CREATE TABLE product_variants (
   created_at     TIMESTAMPTZ NOT NULL DEFAULT now(),
   UNIQUE (brand_id, size_kg)
 );
+
+-- Names are shown in uppercase and a different casing must not make a second
+-- category, brand, or same-brand item possible.
+CREATE UNIQUE INDEX uq_categories_normalized_name
+  ON categories ((upper(btrim(name))));
+CREATE UNIQUE INDEX uq_brands_normalized_name
+  ON brands ((upper(btrim(name))));
+CREATE UNIQUE INDEX uq_product_variants_normalized_name
+  ON product_variants (brand_id, category_id, (upper(btrim(name))));
 
 -- A cylinder variant must declare a size; an accessory must not. The rule spans
 -- two tables, so it lives in a trigger rather than a CHECK.

@@ -25,11 +25,13 @@ export interface CatalogueCounts {
  * everything else alone. It never touches quantities.
  */
 export async function seedCatalogue(db: Database): Promise<CatalogueCounts> {
+  const catalogueName = (value: string) => value.trim().replace(/\s+/g, " ").toUpperCase();
+
   for (const category of CATALOGUE_CATEGORIES) {
     await db.query(
       `INSERT INTO categories (id, code, name, stock_model) VALUES ($1, $2, $3, $4)
        ON CONFLICT DO NOTHING`,
-      [category.id, category.code, category.name, category.stockModel],
+      [category.id, category.code, catalogueName(category.name), category.stockModel],
     );
   }
 
@@ -37,7 +39,7 @@ export async function seedCatalogue(db: Database): Promise<CatalogueCounts> {
   const addBrand = async (code: string) => {
     const slug = brandSlug(code);
     const id = `brand-${slug}`;
-    const name = brandDisplayName(code);
+    const name = catalogueName(brandDisplayName(code));
     if (!brands.has(id)) {
       await db.query(
         `INSERT INTO brands (id, code, name, depot_name) VALUES ($1, $2, $3, $4)
@@ -62,7 +64,7 @@ export async function seedCatalogue(db: Database): Promise<CatalogueCounts> {
           `var-${brandSlug(code)}-${sizeSlug(size)}`,
           `LPG-${brandSlug(code).toUpperCase()}-${sizeSlug(size)}`,
           brand.id,
-          cylinderName(code, size),
+          catalogueName(cylinderName(code, size)),
           size,
         ],
       );
@@ -78,7 +80,13 @@ export async function seedCatalogue(db: Database): Promise<CatalogueCounts> {
       `INSERT INTO product_variants (id, code, category_id, brand_id, name)
        VALUES ($1, $2, $3, $4, $5)
        ON CONFLICT DO NOTHING`,
-      [`var-${suffix}`, `${prefix}-${suffix.toUpperCase()}`, product.categoryId, brand.id, product.name],
+      [
+        `var-${suffix}`,
+        `${prefix}-${suffix.toUpperCase()}`,
+        product.categoryId,
+        brand.id,
+        catalogueName(product.name),
+      ],
     );
     products += 1;
   }

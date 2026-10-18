@@ -113,7 +113,7 @@ export default async function ProductStockPage({ params, searchParams }: PagePro
               {product.name}
             </h1>
             <div className="mt-1 flex flex-wrap items-center gap-2">
-              <StatusBadge tone={product.categoryName === "LPG cylinders" ? "info" : "neutral"}>
+              <StatusBadge tone={product.categoryName === "LPG CYLINDERS" ? "info" : "neutral"}>
                 {product.categoryName}
               </StatusBadge>
               <span className="text-xs text-ink-soft">

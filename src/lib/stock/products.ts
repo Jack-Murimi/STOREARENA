@@ -43,8 +43,14 @@ export interface InventoryLine {
   byLocation: StockAt[];
 }
 
-export interface NewProductInput {
+export interface NewCategoryInput {
   name: string;
+  stockModel: StockModel | string;
+}
+
+export interface NewProductInput {
+  /** Required for a SIMPLE item. Cylinder names are derived from brand + size. */
+  name?: string | null;
   categoryId: string;
   /** An existing brand, or a new one to create with the product. */
   brandId?: string | null;
@@ -60,6 +66,19 @@ function newId(prefix: string): string {
 
 const slug = (value: string): string =>
   value.toUpperCase().replace(/[^A-Z0-9]+/g, "-").replace(/^-|-$/g, "");
+
+/** Catalogue names are deliberately identifiers, not title-cased prose. */
+const normalizeName = (value: unknown): string =>
+  str(value).trim().replace(/\s+/g, " ").toUpperCase();
+
+const sizeLabel = (sizeKg: number): string =>
+  Number.isInteger(sizeKg) ? String(sizeKg) : String(sizeKg);
+
+function isUniqueViolation(error: unknown): boolean {
+  if (!error || typeof error !== "object") return false;
+  const candidate = error as { code?: unknown; message?: unknown };
+  return candidate.code === "23505" || /unique|duplicate/i.test(String(candidate.message ?? ""));
+}
 
 /**
  * The product catalogue and what each branch is holding.
@@ -189,16 +208,55 @@ export class ProductService {
 
   // ------------------------------------------------------------- creating
 
+  /** Adds a category before its first product is created. */
+  async createCategory(input: NewCategoryInput): Promise<Category> {
+    const name = normalizeName(input.name);
+    if (name.length < 2) {
+      throw new ProductError("BAD_CATEGORY_NAME", "Give the category a name of at least two characters.");
+    }
+
+    const stockModel = str(input.stockModel).toUpperCase();
+    if (stockModel !== StockModel.Cylinder && stockModel !== StockModel.Simple) {
+      throw new ProductError("BAD_STOCK_MODEL", "Choose Cylinder or Simple item for this category.");
+    }
+
+    const existing = await this.findCategoryByName(this.db, name);
+    if (existing) {
+      throw new ProductError("DUPLICATE_CATEGORY", `${existing.name} already exists. Choose it from the list.`);
+    }
+
+    const code = await this.nextAvailableCode(this.db, "categories", slug(name), "CAT");
+    const id = newId("cat");
+    try {
+      await this.db.query(
+        "INSERT INTO categories (id, code, name, stock_model) VALUES ($1, $2, $3, $4)",
+        [id, code, name, stockModel],
+      );
+    } catch (error) {
+      if (isUniqueViolation(error)) {
+        const raced = await this.findCategoryByName(this.db, name);
+        if (raced) {
+          throw new ProductError("DUPLICATE_CATEGORY", `${raced.name} already exists. Choose it from the list.`);
+        }
+        throw new ProductError("DUPLICATE_CATEGORY", "A category with that code already exists. Try a more specific name.");
+      }
+      throw error;
+    }
+
+    return { id, code, name, stockModel: stockModel as StockModel };
+  }
+
   /**
-   * Adds a product. A brand can be created in the same step, because "we have
-   * started stocking Mengas" is one decision, not two.
+   * Adds one catalogue variant. Cylinders are always named from their brand and
+   * nominal size: `AFRIGAS 13 KG`, never separate REFILL or EMPTY products.
    */
   async createProduct(input: NewProductInput): Promise<ProductVariant> {
-    const name = (input.name ?? "").trim();
-    if (name.length < 2) throw new ProductError("BAD_NAME", "Give the product a name.");
+    return this.db.transaction((tx) => this.createProductInTransaction(tx, input));
+  }
 
-    const category = await this.findCategory(input.categoryId);
-    const brand = await this.resolveBrand(input);
+  private async createProductInTransaction(db: Database, input: NewProductInput): Promise<ProductVariant> {
+    const category = await this.findCategory(db, input.categoryId);
+    const brand = await this.resolveBrand(db, input);
 
     let sizeKg: number | null = null;
     const rawSize = input.sizeKg;
@@ -209,7 +267,6 @@ export class ProductService {
       }
     }
 
-    // The same rule the database trigger enforces, said in words a form can show.
     if (category.stockModel === StockModel.Cylinder && sizeKg === null) {
       throw new ProductError(
         "SIZE_REQUIRED",
@@ -223,17 +280,33 @@ export class ProductService {
       );
     }
 
-    const clash = await this.db.query<Row>(
-      sizeKg === null
-        ? "SELECT name FROM product_variants WHERE brand_id = $1 AND size_kg IS NULL AND code = $2"
-        : "SELECT name FROM product_variants WHERE brand_id = $1 AND size_kg = $2",
-      sizeKg === null ? [brand.id, slug(name)] : [brand.id, sizeKg],
+    const name =
+      category.stockModel === StockModel.Cylinder
+        ? `${normalizeName(brand.name)} ${sizeLabel(sizeKg!)} KG`
+        : normalizeName(input.name);
+    if (name.length < 2) {
+      throw new ProductError(
+        "BAD_NAME",
+        category.stockModel === StockModel.Cylinder
+          ? "Choose a brand and cylinder size."
+          : "Give the product a name.",
+      );
+    }
+
+    const clash = await db.query<Row>(
+      category.stockModel === StockModel.Cylinder
+        ? "SELECT name FROM product_variants WHERE brand_id = $1 AND size_kg = $2"
+        : `SELECT name
+             FROM product_variants
+            WHERE brand_id = $1
+              AND category_id = $2
+              AND upper(btrim(name)) = $3`,
+      category.stockModel === StockModel.Cylinder
+        ? [brand.id, sizeKg]
+        : [brand.id, category.id, name],
     );
     if (clash.length > 0) {
-      throw new ProductError(
-        "DUPLICATE",
-        `${brand.name} already has ${str(clash[0].name)} on the list.`,
-      );
+      throw new ProductError("DUPLICATE", `${str(clash[0].name)} is already on the catalogue.`);
     }
 
     let price: number | null = null;
@@ -247,15 +320,35 @@ export class ProductService {
 
     const id = newId("var");
     const code =
-      sizeKg === null
-        ? `${category.code}-${slug(name).slice(0, 24)}`
-        : `${category.code}-${slug(brand.code)}-${String(sizeKg).replace(".", "-")}`;
+      category.stockModel === StockModel.Cylinder
+        ? `${category.code}-${slug(brand.code)}-${String(sizeKg).replace(".", "-")}`
+        : `${category.code}-${slug(brand.code)}-${slug(name).slice(0, 24)}`;
 
-    await this.db.query(
-      `INSERT INTO product_variants (id, code, category_id, brand_id, name, size_kg, list_price_ksh)
-       VALUES ($1, $2, $3, $4, $5, $6, $7)`,
-      [id, code, category.id, brand.id, name, sizeKg, price],
-    );
+    try {
+      await db.query(
+        `INSERT INTO product_variants (id, code, category_id, brand_id, name, size_kg, list_price_ksh)
+         VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+        [id, code, category.id, brand.id, name, sizeKg, price],
+      );
+    } catch (error) {
+      if (isUniqueViolation(error)) {
+        const existing = await db.query<Row>(
+          category.stockModel === StockModel.Cylinder
+            ? "SELECT name FROM product_variants WHERE brand_id = $1 AND size_kg = $2"
+            : `SELECT name
+                 FROM product_variants
+                WHERE brand_id = $1 AND category_id = $2 AND upper(btrim(name)) = $3`,
+          category.stockModel === StockModel.Cylinder
+            ? [brand.id, sizeKg]
+            : [brand.id, category.id, name],
+        );
+        if (existing.length > 0) {
+          throw new ProductError("DUPLICATE", `${str(existing[0].name)} is already on the catalogue.`);
+        }
+        throw new ProductError("DUPLICATE", "That product already exists on the catalogue.");
+      }
+      throw error;
+    }
 
     return {
       id,
@@ -269,56 +362,93 @@ export class ProductService {
     };
   }
 
-  private async findCategory(categoryId: string): Promise<Category> {
-    const rows = await this.db.query<Row>("SELECT * FROM categories WHERE id = $1", [
-      categoryId,
-    ]);
+  private async findCategory(db: Database, categoryId: string): Promise<Category> {
+    const rows = await db.query<Row>("SELECT * FROM categories WHERE id = $1", [categoryId]);
     if (rows.length === 0) {
       throw new ProductError("NO_CATEGORY", "Choose a category for this product.");
     }
+    return this.toCategory(rows[0]);
+  }
+
+  private async findCategoryByName(db: Database, name: string): Promise<Category | null> {
+    const rows = await db.query<Row>(
+      "SELECT * FROM categories WHERE upper(btrim(name)) = $1 LIMIT 1",
+      [name],
+    );
+    return rows.length === 0 ? null : this.toCategory(rows[0]);
+  }
+
+  private toCategory(row: Row): Category {
     return {
-      id: str(rows[0].id),
-      code: str(rows[0].code),
-      name: str(rows[0].name),
-      stockModel: str(rows[0].stock_model) as StockModel,
+      id: str(row.id),
+      code: str(row.code),
+      name: str(row.name),
+      stockModel: str(row.stock_model) as StockModel,
     };
   }
 
-  /** Uses the brand you picked, or creates the one you typed. */
-  private async resolveBrand(input: NewProductInput): Promise<Brand> {
+  private toBrand(row: Row): Brand {
+    return {
+      id: str(row.id),
+      code: str(row.code),
+      name: str(row.name),
+      depotName: str(row.depot_name),
+    };
+  }
+
+  private async nextAvailableCode(
+    db: Database,
+    table: "categories" | "brands",
+    rawBase: string,
+    fallback: string,
+  ): Promise<string> {
+    const base = rawBase.length >= 2 ? rawBase : fallback;
+    for (let suffix = 0; suffix < 1000; suffix += 1) {
+      const candidate = suffix === 0 ? base : `${base}-${suffix + 1}`;
+      const rows = await db.query<Row>(`SELECT 1 FROM ${table} WHERE code = $1 LIMIT 1`, [candidate]);
+      if (rows.length === 0) return candidate;
+    }
+    throw new ProductError("CODE_EXHAUSTED", "Could not assign a unique code. Try a more specific name.");
+  }
+
+  /** Uses the brand you picked, or creates the uppercase brand you typed. */
+  private async resolveBrand(db: Database, input: NewProductInput): Promise<Brand> {
     if (input.brandId) {
-      const rows = await this.db.query<Row>("SELECT * FROM brands WHERE id = $1", [
-        input.brandId,
-      ]);
+      const rows = await db.query<Row>("SELECT * FROM brands WHERE id = $1", [input.brandId]);
       if (rows.length === 0) throw new ProductError("NO_BRAND", "That brand no longer exists.");
-      return {
-        id: str(rows[0].id),
-        code: str(rows[0].code),
-        name: str(rows[0].name),
-        depotName: str(rows[0].depot_name),
-      };
+      return this.toBrand(rows[0]);
     }
 
-    const name = (input.newBrandName ?? "").trim();
+    const name = normalizeName(input.newBrandName);
     if (name.length < 2) {
       throw new ProductError("NO_BRAND", "Pick a brand, or type a new one.");
     }
-    const code = slug(name);
-    const existing = await this.db.query<Row>("SELECT * FROM brands WHERE code = $1", [code]);
-    if (existing.length > 0) {
-      return {
-        id: str(existing[0].id),
-        code: str(existing[0].code),
-        name: str(existing[0].name),
-        depotName: str(existing[0].depot_name),
-      };
-    }
-    const id = newId("brand");
-    await this.db.query(
-      "INSERT INTO brands (id, code, name, depot_name) VALUES ($1, $2, $3, $4)",
-      [id, code, name, name],
+
+    const existing = await db.query<Row>(
+      "SELECT * FROM brands WHERE upper(btrim(name)) = $1 LIMIT 1",
+      [name],
     );
-    return { id, code, name, depotName: name };
+    if (existing.length > 0) return this.toBrand(existing[0]);
+
+    const code = await this.nextAvailableCode(db, "brands", slug(name), "BRAND");
+    const id = newId("brand");
+    try {
+      await db.query(
+        "INSERT INTO brands (id, code, name, depot_name) VALUES ($1, $2, $3, $4)",
+        [id, code, name, name],
+      );
+      return { id, code, name, depotName: name };
+    } catch (error) {
+      if (isUniqueViolation(error)) {
+        const raced = await db.query<Row>(
+          "SELECT * FROM brands WHERE upper(btrim(name)) = $1 LIMIT 1",
+          [name],
+        );
+        if (raced.length > 0) return this.toBrand(raced[0]);
+        throw new ProductError("DUPLICATE_BRAND", "A brand with that code already exists. Try a more specific name.");
+      }
+      throw error;
+    }
   }
 
   /** Adds a branch or a rider van. */

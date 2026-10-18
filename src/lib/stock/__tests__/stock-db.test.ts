@@ -25,7 +25,7 @@ beforeEach(async () => {
   await seedCatalogue(adapter);
   stock = new StockLedgerService(adapter);
 
-  afrigas13 = await id("SELECT id FROM product_variants WHERE name = $1", ["Afrigas 13 kg"]);
+  afrigas13 = await id("SELECT id FROM product_variants WHERE name = $1", ["AFRIGAS 13 KG"]);
   nextgen = await id("SELECT id FROM stock_locations WHERE name = 'Nextgen'");
   lavington = await id("SELECT id FROM stock_locations WHERE name = 'Lavington'");
 });

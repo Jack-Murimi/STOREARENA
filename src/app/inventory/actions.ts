@@ -11,12 +11,18 @@ import { getCustomerContext } from "@/lib/db";
 
 const text = (form: FormData, key: string): string => String(form.get(key) ?? "").trim();
 
+function withMessage(backTo: string, key: "saved" | "error", message: string): string {
+  const url = new URL(backTo, "http://portal.local");
+  url.searchParams.set(key, message);
+  return `${url.pathname}${url.search}`;
+}
+
 function fail(error: unknown, backTo = "/inventory"): never {
   const message =
     error instanceof ProductError || error instanceof StockError
       ? error.message
       : "That could not be saved. Check the details and try again.";
-  redirect(`${backTo}?error=${encodeURIComponent(message)}`);
+  redirect(withMessage(backTo, "error", message));
 }
 
 async function requireProducts(): Promise<ProductService> {
@@ -27,6 +33,33 @@ async function requireProducts(): Promise<ProductService> {
   return products;
 }
 
+/** Creates a selectable category, including whether it is a cylinder lifecycle. */
+export async function createCategory(form: FormData): Promise<void> {
+  const products = await requireProducts();
+
+  let categoryId = "";
+  let name = "";
+  try {
+    const created = await products.createCategory({
+      name: text(form, "categoryName"),
+      stockModel: text(form, "stockModel"),
+    });
+    categoryId = created.id;
+    name = created.name;
+  } catch (error) {
+    fail(error, "/inventory?new=1&createCategory=1");
+  }
+
+  revalidatePath("/inventory");
+  redirect(
+    withMessage(
+      `/inventory?new=1&newCategory=${encodeURIComponent(categoryId)}`,
+      "saved",
+      `${name} is ready. Now add its first product.`,
+    ),
+  );
+}
+
 /** Adds a product to the catalogue. A brand can be created in the same step. */
 export async function createProduct(form: FormData): Promise<void> {
   const products = await requireProducts();
@@ -34,7 +67,7 @@ export async function createProduct(form: FormData): Promise<void> {
   let name = "";
   try {
     const created = await products.createProduct({
-      name: text(form, "name"),
+      name: text(form, "name") || null,
       categoryId: text(form, "categoryId"),
       brandId: text(form, "brandId") || null,
       newBrandName: text(form, "newBrandName") || null,
@@ -43,11 +76,11 @@ export async function createProduct(form: FormData): Promise<void> {
     });
     name = created.name;
   } catch (error) {
-    fail(error);
+    fail(error, "/inventory?new=1");
   }
 
   revalidatePath("/inventory");
-  redirect(`/inventory?saved=${encodeURIComponent(`${name} added to the catalogue.`)}`);
+  redirect(withMessage("/inventory", "saved", `${name} added to the catalogue.`));
 }
 
 /** Adds a branch, or a rider van that belongs to one. */
