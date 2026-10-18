@@ -8,6 +8,7 @@ import { StockError } from "@/lib/stock/stock-db";
 import type { StockLedgerService } from "@/lib/stock/stock-db";
 import { LocationKind } from "@/lib/stock/types";
 import { getCustomerContext } from "@/lib/db";
+import { authenticatedStaff } from "@/lib/auth";
 
 const text = (form: FormData, key: string): string => String(form.get(key) ?? "").trim();
 
@@ -65,6 +66,7 @@ export async function createProduct(form: FormData): Promise<void> {
   const products = await requireProducts();
 
   let names: string[] = [];
+  const isFirstCatalogueEntry = (await products.listInventory()).length === 0;
   try {
     const created = await products.createProducts({
       name: text(form, "name") || null,
@@ -84,7 +86,51 @@ export async function createProduct(form: FormData): Promise<void> {
       ? `${names[0]} added to the catalogue.`
       : `${names.length} products added: ${names.join(", ")}.`;
   revalidatePath("/inventory");
-  redirect(withMessage("/inventory", "saved", message));
+  redirect(withMessage(isFirstCatalogueEntry ? "/inventory?opening=1" : "/inventory", "saved", message));
+}
+
+/**
+ * Records all first-count values through one stock-ledger transaction. The
+ * actor is always the signed-in staff profile, never a name supplied by the
+ * browser.
+ */
+export async function saveOpeningStock(form: FormData): Promise<void> {
+  const { stock } = await getCustomerContext();
+  const backTo = "/inventory?opening=1";
+  if (!stock) fail(new Error("No database connection. Set DATABASE_URL and redeploy."), backTo);
+
+  const staff = await authenticatedStaff();
+  if (!staff) fail(new StockError("NO_ACTOR", "Your signed-in staff profile is required."), backTo);
+
+  try {
+    const rawEntries = text(form, "entries");
+    const entries: unknown = JSON.parse(rawEntries);
+    if (!Array.isArray(entries)) {
+      throw new StockError("BAD_OPENING_STOCK", "Opening-stock entries were not recognised. Try again.");
+    }
+    const result = await (stock as StockLedgerService).recordOpeningStock({
+      entries: entries as Array<{
+        locationId: string;
+        variantId: string;
+        refills: string | number | null;
+        empties: string | number | null;
+        unitCostKsh: string | number | null;
+      }>,
+      actor: staff.name,
+      reference: text(form, "reference") || null,
+      occurredOn: text(form, "occurredOn") || null,
+    });
+    revalidatePath("/inventory");
+    redirect(
+      withMessage(
+        "/inventory",
+        "saved",
+        `Opening stock saved for ${result.entries} branch-product entries: ${result.refills} refills and ${result.empties} empties.`,
+      ),
+    );
+  } catch (error) {
+    fail(error, backTo);
+  }
 }
 
 /** Adds a branch, or a rider van that belongs to one. */

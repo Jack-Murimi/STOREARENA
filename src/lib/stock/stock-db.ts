@@ -35,6 +35,15 @@ const dateOnly = (v: unknown): string => {
 const dateOrToday = (v?: string | null): string =>
   !v || !v.trim() ? new Date().toISOString().slice(0, 10) : v.trim().slice(0, 10);
 
+const wholeCount = (value: number | string | null | undefined, label: string): number => {
+  if (value === null || value === undefined || String(value).trim() === "") return 0;
+  const count = Number(value);
+  if (!Number.isInteger(count) || count < 0) {
+    throw new StockError("BAD_OPENING_COUNT", `${label} must be a whole number of zero or more.`);
+  }
+  return count;
+};
+
 export interface PurchaseInput {
   locationId: string;
   variantId: string;
@@ -43,6 +52,30 @@ export interface PurchaseInput {
   purchasedOn?: string | null;
   reference?: string | null;
   actor: string;
+}
+
+/** One product at one branch on the initial count sheet. */
+export interface OpeningStockEntry {
+  locationId: string;
+  variantId: string;
+  refills: number | string | null;
+  empties: number | string | null;
+  /** Required when a row has filled stock; empty-only rows carry no gas cost. */
+  unitCostKsh: number | string | null;
+}
+
+export interface OpeningStockInput {
+  entries: OpeningStockEntry[];
+  actor: string;
+  reference?: string | null;
+  occurredOn?: string | null;
+}
+
+export interface OpeningStockResult {
+  entries: number;
+  refills: number;
+  empties: number;
+  lots: number;
 }
 
 export interface FifoLine {
@@ -77,6 +110,7 @@ export interface StockRow {
   variantCode: string;
   categoryId: string;
   categoryName: string;
+  stockModel: "CYLINDER" | "SIMPLE";
   brandName: string;
   sizeKg: number | null;
   /** What the product usually sells for. */
@@ -178,6 +212,179 @@ export class StockLedgerService {
   }
 
   /**
+   * Sets the first counted stock for the business in one transaction.
+   *
+   * Filled stock becomes a FIFO lot at its opening unit cost. Empty cylinders
+   * have no gas cost, but do receive an EMPTY balance and branch custody. This
+   * command is deliberately unavailable after any stock movement exists: later
+   * corrections must use normal operational stock movements instead.
+   */
+  async recordOpeningStock(input: OpeningStockInput): Promise<OpeningStockResult> {
+    const actor = (input.actor ?? "").trim();
+    if (actor.length < 2) throw new StockError("NO_ACTOR", "A signed-in staff member is required.");
+    if (!Array.isArray(input.entries)) {
+      throw new StockError("BAD_OPENING_STOCK", "Enter at least one opening stock value.");
+    }
+
+    const entries = input.entries
+      .map((entry) => {
+        const refills = wholeCount(entry.refills, "Refill count");
+        const empties = wholeCount(entry.empties, "Empty count");
+        const rawCost = entry.unitCostKsh;
+        let unitCost: number | null = null;
+        if (refills > 0) {
+          if (rawCost === null || rawCost === undefined || String(rawCost).trim() === "") {
+            throw new StockError("OPENING_COST_REQUIRED", "Enter a unit cost for every opening refill count.");
+          }
+          unitCost = Number(rawCost);
+          if (!Number.isFinite(unitCost) || unitCost < 0) {
+            throw new StockError("BAD_COST", "An opening unit cost cannot be negative.");
+          }
+        }
+        return {
+          locationId: str(entry.locationId).trim(),
+          variantId: str(entry.variantId).trim(),
+          refills,
+          empties,
+          unitCost,
+        };
+      })
+      .filter((entry) => entry.refills > 0 || entry.empties > 0);
+
+    if (entries.length === 0) {
+      throw new StockError("EMPTY_OPENING_STOCK", "Enter at least one refill or empty count before saving.");
+    }
+
+    const seen = new Set<string>();
+    for (const entry of entries) {
+      if (!entry.locationId || !entry.variantId) {
+        throw new StockError("BAD_OPENING_STOCK", "Each opening-stock value needs a branch and product.");
+      }
+      const key = `${entry.locationId}:${entry.variantId}`;
+      if (seen.has(key)) {
+        throw new StockError("DUPLICATE_OPENING_STOCK", "A product can only have one opening entry per branch.");
+      }
+      seen.add(key);
+    }
+
+    const occurredAt = `${dateOrToday(input.occurredOn)}T00:00:00.000Z`;
+    const reference = strOrNull(input.reference) ?? "OPENING-STOCK";
+
+    return this.db.transaction(async (tx) => {
+      const movementExists = await tx.query<Row>("SELECT 1 FROM stock_movements LIMIT 1");
+      if (movementExists.length > 0) {
+        throw new StockError(
+          "OPENING_STOCK_CLOSED",
+          "Opening stock can only be set before the first stock movement. Use a stocktake for later corrections.",
+        );
+      }
+
+      let totalRefills = 0;
+      let totalEmpties = 0;
+      let lots = 0;
+
+      for (const entry of entries) {
+        const variant = await tx.query<Row>(
+          `SELECT c.stock_model
+             FROM product_variants v
+             JOIN categories c ON c.id = v.category_id
+            WHERE v.id = $1`,
+          [entry.variantId],
+        );
+        const location = await tx.query<Row>(
+          "SELECT 1 FROM stock_locations WHERE id = $1 AND active",
+          [entry.locationId],
+        );
+        if (variant.length === 0 || location.length === 0) {
+          throw new StockError("NOT_FOUND", "One of the selected products or active branches no longer exists.");
+        }
+        const isCylinder = str(variant[0].stock_model) === "CYLINDER";
+        if (!isCylinder && entry.empties > 0) {
+          throw new StockError("EMPTY_SIMPLE_ITEM", "Only cylinder products can have an opening empty count.");
+        }
+
+        if (entry.refills > 0) {
+          const before = await this.position(tx, entry.locationId, entry.variantId, "REFILL");
+          const [lot] = await tx.query<Row>(
+            `INSERT INTO stock_lots
+               (location_id, variant_id, purchased_on, unit_cost_ksh, quantity, remaining, reference)
+             VALUES ($1, $2, $3, $4, $5, $5, $6)
+             RETURNING id`,
+            [
+              entry.locationId,
+              entry.variantId,
+              dateOrToday(input.occurredOn),
+              entry.unitCost,
+              entry.refills,
+              reference,
+            ],
+          );
+          if (!lot) throw new StockError("NOT_FOUND", "That product or branch does not exist.");
+          lots += 1;
+          await this.bump(tx, entry.locationId, entry.variantId, "REFILL", entry.refills);
+          await this.writeMovement(tx, {
+            ledgerKind: "GAS",
+            operation: "STOCKTAKE",
+            occurredAt,
+            locationId: entry.locationId,
+            variantId: entry.variantId,
+            state: "REFILL",
+            quantity: entry.refills,
+            balanceBefore: before,
+            reason: "Opening stock — refill count",
+            reference,
+            actor,
+            unitCostKsh: entry.unitCost,
+          });
+          totalRefills += entry.refills;
+        }
+
+        if (entry.empties > 0) {
+          const before = await this.position(tx, entry.locationId, entry.variantId, "EMPTY");
+          await this.bump(tx, entry.locationId, entry.variantId, "EMPTY", entry.empties);
+          await this.writeMovement(tx, {
+            ledgerKind: "GAS",
+            operation: "STOCKTAKE",
+            occurredAt,
+            locationId: entry.locationId,
+            variantId: entry.variantId,
+            state: "EMPTY",
+            quantity: entry.empties,
+            balanceBefore: before,
+            reason: "Opening stock — empty count",
+            reference,
+            actor,
+            unitCostKsh: null,
+          });
+          totalEmpties += entry.empties;
+        }
+
+        if (isCylinder) {
+          const cylinders = entry.refills + entry.empties;
+          const before = await this.custodyPosition(tx, entry.locationId, entry.variantId, "BRANCH");
+          await this.bumpCustody(tx, entry.locationId, entry.variantId, "BRANCH", cylinders);
+          await this.writeMovement(tx, {
+            ledgerKind: "CYLINDER",
+            operation: "STOCKTAKE",
+            occurredAt,
+            locationId: entry.locationId,
+            variantId: entry.variantId,
+            custody: "BRANCH",
+            quantity: cylinders,
+            balanceBefore: before,
+            reason: "Opening stock — branch custody",
+            reference,
+            actor,
+            unitCostKsh: null,
+          });
+        }
+      }
+
+      return { entries: entries.length, refills: totalRefills, empties: totalEmpties, lots };
+    });
+  }
+
+  /**
    * Takes cylinders out of stock oldest batch first, and says what they cost.
    *
    * This is what a sale calls, so the margin on a sale is the margin on the
@@ -244,7 +451,7 @@ export class StockLedgerService {
 
     const rows = await this.db.query<Row>(
       `SELECT v.id, v.name, v.code, v.size_kg, v.list_price_ksh,
-              c.id AS category_id, c.name AS category_name, b.name AS brand_name,
+              c.id AS category_id, c.name AS category_name, c.stock_model, b.name AS brand_name,
               coalesce(sum(p.quantity) FILTER (WHERE p.state = 'REFILL'), 0) AS refills,
               coalesce(sum(p.quantity) FILTER (WHERE p.state = 'EMPTY'), 0)  AS empties,
               coalesce(sum(p.quantity), 0)                                   AS total
@@ -302,6 +509,7 @@ export class StockLedgerService {
         variantCode: str(row.code),
         categoryId: str(row.category_id),
         categoryName: str(row.category_name),
+        stockModel: str(row.stock_model) as "CYLINDER" | "SIMPLE",
         brandName: str(row.brand_name),
         sizeKg: numOrNull(row.size_kg),
         sellingPrice: numOrNull(row.list_price_ksh),
@@ -424,6 +632,19 @@ export class StockLedgerService {
     const rows = await db.query<Row>(
       "SELECT quantity FROM inventory_positions WHERE location_id = $1 AND variant_id = $2 AND state = $3",
       [locationId, variantId, state],
+    );
+    return rows.length === 0 ? 0 : num(rows[0].quantity);
+  }
+
+  private async custodyPosition(
+    db: Database,
+    locationId: string,
+    variantId: string,
+    custody: string,
+  ): Promise<number> {
+    const rows = await db.query<Row>(
+      "SELECT quantity FROM cylinder_custody WHERE location_id = $1 AND variant_id = $2 AND custody = $3",
+      [locationId, variantId, custody],
     );
     return rows.length === 0 ? 0 : num(rows[0].quantity);
   }

@@ -5,6 +5,7 @@ import { DatabaseUnavailable } from "@/components/customers/DatabaseUnavailable"
 import { SavedToast } from "@/components/customers/SavedToast";
 import { SubmitButton } from "@/components/customers/SubmitButton";
 import { NewProductForm } from "@/components/inventory/NewProductForm";
+import { OpeningStockSetup } from "@/components/inventory/OpeningStockSetup";
 import {
   ButtonLink,
   Card,
@@ -45,6 +46,7 @@ export default async function InventoryPage({ searchParams }: PageProps) {
   const saved = str("saved") || null;
   const error = str("error") || null;
   const creatingProduct = str("new") === "1";
+  const openingSetup = str("opening") === "1";
   const newCategoryId = str("newCategory");
   const creatingCategory = str("createCategory") === "1";
 
@@ -226,12 +228,17 @@ export default async function InventoryPage({ searchParams }: PageProps) {
             branch ? `Stock at ${branch.name}` : "Every product, across every location"
           }
           action={
-            creatingProduct ? (
+            creatingProduct || openingSetup ? (
               <ButtonLink href="/inventory">Back to inventory</ButtonLink>
             ) : (
-              <ButtonLink href="/inventory?new=1" variant="primary">
-                New product
-              </ButtonLink>
+              <div className="flex flex-wrap items-center gap-2">
+                {inventory.length > 0 ? (
+                  <ButtonLink href="/inventory?opening=1">Opening stock</ButtonLink>
+                ) : null}
+                <ButtonLink href="/inventory?new=1" variant="primary">
+                  New product
+                </ButtonLink>
+              </div>
             )
           }
           /* Admin-ish, rarely used: behind a gear, not a second button. */
@@ -268,7 +275,7 @@ export default async function InventoryPage({ searchParams }: PageProps) {
           <SummaryStat label="Products" value={String(shown)} hint={showZero ? "shown" : "with stock"} />
         </dl>
 
-        {!creatingProduct ? (
+        {!creatingProduct && !openingSetup ? (
           <FilterBar
             search={
             <form action="/inventory" method="get" role="search" className="w-full sm:w-64">
@@ -331,6 +338,18 @@ export default async function InventoryPage({ searchParams }: PageProps) {
               startOpen
               initialCategoryId={newCategoryId}
               startCategoryCreation={creatingCategory}
+            />
+          </Card>
+        ) : null}
+
+        {openingSetup ? (
+          <Card
+            title="Opening stock"
+            subtitle="Set the first full and empty counts for every branch in one save."
+          >
+            <OpeningStockSetup
+              products={inventory}
+              branches={activeLocations.filter((location) => location.kind === LocationKind.Branch)}
             />
           </Card>
         ) : null}

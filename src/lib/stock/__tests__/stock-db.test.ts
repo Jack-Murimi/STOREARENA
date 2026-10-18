@@ -84,6 +84,68 @@ describe("receiving a delivery", () => {
   });
 });
 
+describe("opening stock", () => {
+  it("sets refill, empty and FIFO opening values across branches in one transaction", async () => {
+    const result = await stock.recordOpeningStock({
+      actor: "Jack Murimi",
+      occurredOn: "2026-10-18",
+      reference: "OPEN-001",
+      entries: [
+        { locationId: nextgen, variantId: afrigas13, refills: 12, empties: 7, unitCostKsh: 2100 },
+        { locationId: lavington, variantId: afrigas13, refills: 4, empties: 3, unitCostKsh: 2200 },
+      ],
+    });
+
+    expect(result).toEqual({ entries: 2, refills: 16, empties: 10, lots: 2 });
+    const nextgenLine = (await stock.stockRows({ locationId: nextgen })).find(
+      (line) => line.variantId === afrigas13,
+    )!;
+    const lavingtonLine = (await stock.stockRows({ locationId: lavington })).find(
+      (line) => line.variantId === afrigas13,
+    )!;
+    expect(nextgenLine).toMatchObject({ refills: 12, empties: 7, costOnHand: 12 * 2100 });
+    expect(lavingtonLine).toMatchObject({ refills: 4, empties: 3, costOnHand: 4 * 2200 });
+
+    const { rows: custody } = await db.query<{ quantity: number }>(
+      "SELECT quantity FROM cylinder_custody WHERE location_id = $1 AND variant_id = $2 AND custody = 'BRANCH'",
+      [nextgen, afrigas13],
+    );
+    expect(Number(custody[0].quantity)).toBe(19);
+    expect(await stock.lots(afrigas13, { locationId: nextgen })).toMatchObject([
+      { purchasedOn: "2026-10-18", unitCostKsh: 2100, remaining: 12 },
+    ]);
+    expect((await stock.movements(afrigas13)).every((movement) => movement.operation === "STOCKTAKE")).toBe(true);
+  });
+
+  it("rolls back every entry when one item in the opening sheet is invalid", async () => {
+    await expect(
+      stock.recordOpeningStock({
+        actor: "Jack Murimi",
+        entries: [
+          { locationId: nextgen, variantId: afrigas13, refills: 12, empties: 7, unitCostKsh: 2100 },
+          { locationId: lavington, variantId: "missing-product", refills: 2, empties: 0, unitCostKsh: 2200 },
+        ],
+      }),
+    ).rejects.toThrow(/no longer exists/);
+
+    const line = (await stock.stockRows({ locationId: nextgen })).find((row) => row.variantId === afrigas13)!;
+    expect(line).toMatchObject({ refills: 0, empties: 0, costOnHand: 0 });
+    expect(await stock.lots(afrigas13, { locationId: nextgen })).toHaveLength(0);
+  });
+
+  it("refuses opening stock after a stock movement has begun", async () => {
+    await stock.recordPurchase({
+      locationId: nextgen, variantId: afrigas13, quantity: 1, unitCostKsh: 2100, actor: "Sam K.",
+    });
+    await expect(
+      stock.recordOpeningStock({
+        actor: "Jack Murimi",
+        entries: [{ locationId: nextgen, variantId: afrigas13, refills: 1, empties: 0, unitCostKsh: 2100 }],
+      }),
+    ).rejects.toThrow(/before the first stock movement/);
+  });
+});
+
 describe("the cost the list shows, and the cost a sale takes", () => {
   it("shows the last buy price, but sells from the oldest batch", async () => {
     // October at 2,100, then November at 2,300 — the price went up.
