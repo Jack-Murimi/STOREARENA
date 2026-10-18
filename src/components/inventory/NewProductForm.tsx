@@ -190,10 +190,14 @@ export function NewProductForm({
                   checked={brandMode === "new"}
                   onChange={() => setBrandMode("new")}
                 />
-                New brand
+                Create new brand
               </label>
             </div>
-          ) : null}
+          ) : (
+            <p className="text-xs leading-5 text-ink-soft">
+              No brands exist yet. Enter the first one below; it will be created with this product.
+            </p>
+          )}
 
           {brandMode === "existing" ? (
             <select
@@ -211,15 +215,18 @@ export function NewProductForm({
               ))}
             </select>
           ) : (
-            <input
-              name="newBrandName"
-              required
-              minLength={2}
-              value={newBrandName}
-              onChange={(event) => setNewBrandName(caps(event.target.value))}
-              placeholder="AFRIGAS"
-              className="w-full rounded-lg border border-line bg-white px-3 py-2 text-sm uppercase outline-none focus:border-flame-500"
-            />
+            <label className="block space-y-1">
+              <span className="text-xs font-medium text-ink-soft">New brand name</span>
+              <input
+                name="newBrandName"
+                required
+                minLength={2}
+                value={newBrandName}
+                onChange={(event) => setNewBrandName(caps(event.target.value))}
+                placeholder="AFRIGAS"
+                className="w-full rounded-lg border border-line bg-white px-3 py-2 text-sm uppercase outline-none focus:border-flame-500"
+              />
+            </label>
           )}
         </fieldset>
 
