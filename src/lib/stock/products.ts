@@ -59,6 +59,9 @@ export interface NewProductInput {
   sizeKg?: number | string | null;
   /** Comma-separated cylinder sizes when several variants are created together. */
   sizeKgs?: number | string | null;
+  /** Optional per-size prices, keyed by a normalized kilogram size such as "13". */
+  sizePrices?: Record<string, number | string | null> | null;
+  /** Price for one simple item, or a compatibility fallback for cylinders. */
   listPriceKsh?: number | string | null;
 }
 
@@ -317,21 +320,41 @@ export class ProductService {
       throw new ProductError("BAD_NAME", "Give the product a name.");
     }
 
-    let price: number | null = null;
-    const rawPrice = input.listPriceKsh;
-    if (rawPrice !== null && rawPrice !== undefined && String(rawPrice).trim() !== "") {
-      price = Number(rawPrice);
-      if (!Number.isFinite(price) || price < 0) {
-        throw new ProductError("BAD_PRICE", "A price cannot be negative.");
+    const resolvePrice = (rawPrice: number | string | null | undefined): number | null => {
+      if (rawPrice === null || rawPrice === undefined || String(rawPrice).trim() === "") return null;
+      const price = Number(rawPrice);
+      if (!Number.isFinite(price) || price <= 0) {
+        throw new ProductError("BAD_PRICE", "A selling price must be greater than zero.");
       }
-    }
+      return price;
+    };
 
-    const drafts: Array<{ id: string; code: string; name: string; sizeKg: number | null }> = [];
+    const drafts: Array<{
+      id: string;
+      code: string;
+      name: string;
+      sizeKg: number | null;
+      listPriceKsh: number | null;
+    }> = [];
     for (const sizeKg of productSizes) {
       const name =
         category.stockModel === StockModel.Cylinder
           ? `${normalizeName(brand.name)} ${sizeLabel(sizeKg!)} KG`
           : simpleName;
+      const priceKey = sizeKg === null ? "" : sizeLabel(sizeKg);
+      const hasPerSizePrices =
+        category.stockModel === StockModel.Cylinder && input.sizePrices !== null && input.sizePrices !== undefined;
+      const hasPriceForSize = Boolean(
+        input.sizePrices && Object.prototype.hasOwnProperty.call(input.sizePrices, priceKey),
+      );
+      const rawPrice = hasPriceForSize ? input.sizePrices![priceKey] : input.listPriceKsh;
+      if (
+        hasPerSizePrices &&
+        (!hasPriceForSize || rawPrice === null || rawPrice === undefined || String(rawPrice).trim() === "")
+      ) {
+        throw new ProductError("BAD_PRICE", `Enter a selling price for ${sizeLabel(sizeKg!)} KG.`);
+      }
+      const listPriceKsh = resolvePrice(rawPrice);
 
       const clash = await db.query<Row>(
         category.stockModel === StockModel.Cylinder
@@ -357,6 +380,7 @@ export class ProductService {
             : `${category.code}-${slug(brand.code)}-${slug(name).slice(0, 24)}`,
         name,
         sizeKg,
+        listPriceKsh,
       });
     }
 
@@ -366,7 +390,15 @@ export class ProductService {
         await db.query(
           `INSERT INTO product_variants (id, code, category_id, brand_id, name, size_kg, list_price_ksh)
            VALUES ($1, $2, $3, $4, $5, $6, $7)`,
-          [draft.id, draft.code, category.id, brand.id, draft.name, draft.sizeKg, price],
+          [
+            draft.id,
+            draft.code,
+            category.id,
+            brand.id,
+            draft.name,
+            draft.sizeKg,
+            draft.listPriceKsh,
+          ],
         );
       } catch (error) {
         if (isUniqueViolation(error)) {
@@ -395,7 +427,7 @@ export class ProductService {
         brandId: brand.id,
         name: draft.name,
         sizeKg: draft.sizeKg,
-        listPriceKsh: price,
+        listPriceKsh: draft.listPriceKsh,
         active: true,
       });
     }

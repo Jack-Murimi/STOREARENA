@@ -51,6 +51,8 @@ export interface PurchaseInput {
   unitCostKsh: number | string;
   purchasedOn?: string | null;
   reference?: string | null;
+  /** Stable per browser submission; makes a retry safe. */
+  idempotencyKey?: string | null;
   actor: string;
 }
 
@@ -160,9 +162,28 @@ export class StockLedgerService {
 
     const purchasedOn = dateOrToday(input.purchasedOn);
     const reference = strOrNull(input.reference);
+    const idempotencyKey = strOrNull(input.idempotencyKey);
     const now = new Date().toISOString();
 
     return this.db.transaction(async (tx) => {
+      if (idempotencyKey) {
+        const replay = await tx.query<Row>(
+          `SELECT balance_after
+             FROM stock_movements
+            WHERE idempotency_key = $1
+              AND location_id = $2
+              AND variant_id = $3
+              AND ledger_kind = 'GAS'
+              AND operation = 'PURCHASE'
+              AND state = 'REFILL'
+            LIMIT 1`,
+          [idempotencyKey, input.locationId, input.variantId],
+        );
+        if (replay.length > 0) {
+          return { lotId: 0, balance: num(replay[0].balance_after) };
+        }
+      }
+
       const before = await this.position(tx, input.locationId, input.variantId, "REFILL");
 
       const [lot] = await tx.query<Row>(
@@ -191,6 +212,7 @@ export class StockLedgerService {
         reference,
         actor,
         unitCostKsh: unitCost,
+        idempotencyKey,
       });
       await this.writeMovement(tx, {
         ledgerKind: "CYLINDER",
@@ -205,6 +227,7 @@ export class StockLedgerService {
         reference,
         actor,
         unitCostKsh: unitCost,
+        idempotencyKey,
       });
 
       return { lotId: num(lot.id), balance: before + quantity };
@@ -697,6 +720,7 @@ export class StockLedgerService {
       reference: string | null;
       actor: string;
       unitCostKsh: number | null;
+      idempotencyKey?: string | null;
       counterpartyLocationId?: string | null;
     },
   ): Promise<void> {
@@ -704,8 +728,8 @@ export class StockLedgerService {
       `INSERT INTO stock_movements
          (ledger_kind, operation, occurred_at, location_id, counterparty_location_id,
           variant_id, state, custody, quantity, balance_before, balance_after,
-          reason, reference, actor, unit_cost_ksh)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)`,
+          reason, reference, actor, unit_cost_ksh, idempotency_key)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)`,
       [
         m.ledgerKind,
         m.operation,
@@ -722,6 +746,7 @@ export class StockLedgerService {
         m.reference,
         m.actor,
         m.unitCostKsh,
+        m.idempotencyKey ?? null,
       ],
     );
   }

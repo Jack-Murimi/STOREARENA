@@ -24,6 +24,7 @@ import { LocationKind } from "@/lib/stock/types";
 import type { StockLocation } from "@/lib/stock/types";
 import type { StockRow } from "@/lib/stock/stock-db";
 import { CylinderIcon, SearchIcon } from "@/components/icons";
+import { canManageCatalogue, currentStaffAccess } from "@/lib/auth";
 
 export const metadata: Metadata = {
   title: "Inventory",
@@ -68,12 +69,14 @@ export default async function InventoryPage({ searchParams }: PageProps) {
 
   if (!stock) return null;
 
-  const [categories, brands, locations, inventory] = await Promise.all([
+  const [categories, brands, locations, inventory, staffAccess] = await Promise.all([
     products.listCategories(),
     products.listBrands(),
     products.listLocations(),
     stock.stockRows({ locationId: branchFilter || null }),
+    currentStaffAccess(),
   ]);
+  const catalogueAdmin = staffAccess !== null && canManageCatalogue(staffAccess);
 
   const activeLocations = locations.filter((l) => l.active);
   const branch = activeLocations.find((l) => l.id === branchFilter) ?? null;
@@ -230,7 +233,7 @@ export default async function InventoryPage({ searchParams }: PageProps) {
           action={
             creatingProduct || openingSetup ? (
               <ButtonLink href="/inventory">Back to inventory</ButtonLink>
-            ) : (
+            ) : catalogueAdmin ? (
               <div className="flex flex-wrap items-center gap-2">
                 {inventory.length > 0 ? (
                   <ButtonLink href="/inventory?opening=1">Opening stock</ButtonLink>
@@ -239,11 +242,11 @@ export default async function InventoryPage({ searchParams }: PageProps) {
                   New product
                 </ButtonLink>
               </div>
-            )
+            ) : null
           }
           /* Admin-ish, rarely used: behind a gear, not a second button. */
           menu={
-            <details className="relative">
+            catalogueAdmin ? <details className="relative">
               <summary
                 className="grid h-9 w-9 cursor-pointer list-none place-items-center rounded-md border border-border text-ink-muted hover:bg-surface-muted"
                 aria-label="Manage locations"
@@ -259,7 +262,7 @@ export default async function InventoryPage({ searchParams }: PageProps) {
                   branches={locations.filter((l) => l.kind === LocationKind.Branch)}
                 />
               </div>
-            </details>
+            </details> : null
           }
         />
 
@@ -330,7 +333,7 @@ export default async function InventoryPage({ searchParams }: PageProps) {
           />
         ) : null}
 
-        {creatingProduct ? (
+        {creatingProduct && catalogueAdmin ? (
           <Card title="New product" subtitle="Create the catalogue item before receiving or selling stock.">
             <NewProductForm
               categories={categories}
@@ -342,7 +345,7 @@ export default async function InventoryPage({ searchParams }: PageProps) {
           </Card>
         ) : null}
 
-        {openingSetup ? (
+        {openingSetup && catalogueAdmin ? (
           <Card
             title="Opening stock"
             subtitle="Set the first full and empty counts for every branch in one save."
@@ -380,7 +383,7 @@ export default async function InventoryPage({ searchParams }: PageProps) {
                       : "Nothing here has stock on it. Turn on zero stock to see the whole catalogue."
                 }
                 action={
-                  inventory.length === 0 ? (
+                  inventory.length === 0 && catalogueAdmin ? (
                     <ButtonLink href="/inventory?new=1" variant="primary">
                       New product
                     </ButtonLink>

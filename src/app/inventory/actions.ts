@@ -8,9 +8,30 @@ import { StockError } from "@/lib/stock/stock-db";
 import type { StockLedgerService } from "@/lib/stock/stock-db";
 import { LocationKind } from "@/lib/stock/types";
 import { getCustomerContext } from "@/lib/db";
-import { authenticatedStaff } from "@/lib/auth";
+import {
+  canManageCatalogue,
+  canReceiveStock,
+  currentStaffAccess,
+  type StaffAccess,
+} from "@/lib/auth";
 
 const text = (form: FormData, key: string): string => String(form.get(key) ?? "").trim();
+
+function sizePrices(form: FormData): Record<string, string> | null {
+  const raw = text(form, "sizePrices");
+  if (!raw) return null;
+  try {
+    const parsed: unknown = JSON.parse(raw);
+    if (!parsed || Array.isArray(parsed) || typeof parsed !== "object") {
+      throw new Error("not an object");
+    }
+    return Object.fromEntries(
+      Object.entries(parsed as Record<string, unknown>).map(([size, price]) => [size, String(price ?? "")]),
+    );
+  } catch {
+    throw new ProductError("BAD_PRICE", "The prices for the selected cylinder sizes could not be read. Try again.");
+  }
+}
 
 function withMessage(backTo: string, key: "saved" | "error", message: string): string {
   const url = new URL(backTo, "http://portal.local");
@@ -34,8 +55,30 @@ async function requireProducts(): Promise<ProductService> {
   return products;
 }
 
+async function requireCatalogueAccess(backTo: string): Promise<StaffAccess> {
+  const staff = await currentStaffAccess();
+  if (!staff) fail(new StockError("NO_ACTOR", "Your signed-in staff profile is required."), backTo);
+  if (!canManageCatalogue(staff)) {
+    fail(new StockError("FORBIDDEN", "Only an Admin or Director can manage the catalogue."), backTo);
+  }
+  return staff;
+}
+
+async function requireReceiptAccess(locationId: string, backTo: string): Promise<StaffAccess> {
+  const staff = await currentStaffAccess();
+  if (!staff) fail(new StockError("NO_ACTOR", "Your signed-in staff profile is required."), backTo);
+  if (!canReceiveStock(staff, locationId)) {
+    fail(
+      new StockError("FORBIDDEN", "You can only receive stock at a branch assigned to you."),
+      backTo,
+    );
+  }
+  return staff;
+}
+
 /** Creates a selectable category, including whether it is a cylinder lifecycle. */
 export async function createCategory(form: FormData): Promise<void> {
+  await requireCatalogueAccess("/inventory?new=1&createCategory=1");
   const products = await requireProducts();
 
   let categoryId = "";
@@ -61,12 +104,41 @@ export async function createCategory(form: FormData): Promise<void> {
   );
 }
 
-/** Adds a product to the catalogue. A brand can be created in the same step. */
-export async function createProduct(form: FormData): Promise<void> {
-  const products = await requireProducts();
+export type CreateProductState = {
+  error?: string;
+  field?: "category" | "brand" | "name" | "size" | "price" | "product";
+};
 
-  let names: string[] = [];
+const productErrorField = (error: unknown): CreateProductState["field"] => {
+  if (!(error instanceof ProductError)) return "product";
+  if (error.code.includes("SIZE")) return "size";
+  if (error.code === "BAD_PRICE") return "price";
+  if (error.code.includes("BRAND")) return "brand";
+  if (error.code === "BAD_NAME") return "name";
+  if (error.code.includes("CATEGORY")) return "category";
+  return "product";
+};
+
+/**
+ * Adds a product while returning validation errors to the progressive client
+ * form, so a bad price or duplicate does not discard the entry in progress.
+ * A successful creation redirects into the normal catalogue flow.
+ */
+export async function createProductState(
+  _previous: CreateProductState,
+  form: FormData,
+): Promise<CreateProductState> {
+  const staff = await currentStaffAccess();
+  if (!staff) return { error: "Your signed-in staff profile is required.", field: "product" };
+  if (!canManageCatalogue(staff)) {
+    return { error: "Only an Admin or Director can manage the catalogue.", field: "product" };
+  }
+
+  const { products } = await getCustomerContext();
+  if (!products) return { error: "No database connection. Set DATABASE_URL and redeploy.", field: "product" };
+
   const isFirstCatalogueEntry = (await products.listInventory()).length === 0;
+  let names: string[];
   try {
     const created = await products.createProducts({
       name: text(form, "name") || null,
@@ -74,11 +146,15 @@ export async function createProduct(form: FormData): Promise<void> {
       brandId: text(form, "brandId") || null,
       newBrandName: text(form, "newBrandName") || null,
       sizeKgs: text(form, "sizeKgs") || null,
+      sizePrices: sizePrices(form),
       listPriceKsh: text(form, "listPriceKsh") || null,
     });
     names = created.map((product) => product.name);
   } catch (error) {
-    fail(error, "/inventory?new=1");
+    return {
+      error: error instanceof ProductError ? error.message : "That could not be saved. Check the details and try again.",
+      field: productErrorField(error),
+    };
   }
 
   const message =
@@ -95,12 +171,10 @@ export async function createProduct(form: FormData): Promise<void> {
  * browser.
  */
 export async function saveOpeningStock(form: FormData): Promise<void> {
-  const { stock } = await getCustomerContext();
   const backTo = "/inventory?opening=1";
+  const staff = await requireCatalogueAccess(backTo);
+  const { stock } = await getCustomerContext();
   if (!stock) fail(new Error("No database connection. Set DATABASE_URL and redeploy."), backTo);
-
-  const staff = await authenticatedStaff();
-  if (!staff) fail(new StockError("NO_ACTOR", "Your signed-in staff profile is required."), backTo);
 
   try {
     const rawEntries = text(form, "entries");
@@ -116,7 +190,7 @@ export async function saveOpeningStock(form: FormData): Promise<void> {
         empties: string | number | null;
         unitCostKsh: string | number | null;
       }>,
-      actor: staff.name,
+      actor: staff.fullName,
       reference: text(form, "reference") || null,
       occurredOn: text(form, "occurredOn") || null,
     });
@@ -135,6 +209,7 @@ export async function saveOpeningStock(form: FormData): Promise<void> {
 
 /** Adds a branch, or a rider van that belongs to one. */
 export async function createLocation(form: FormData): Promise<void> {
+  await requireCatalogueAccess("/inventory");
   const products = await requireProducts();
 
   let name = "";
@@ -162,16 +237,19 @@ export async function receiveStock(form: FormData): Promise<void> {
 
   const variantId = text(form, "variantId");
   const backTo = `/inventory/${variantId}`;
+  const locationId = text(form, "locationId");
+  const staff = await requireReceiptAccess(locationId, backTo);
 
   try {
     await (stock as StockLedgerService).recordPurchase({
-      locationId: text(form, "locationId"),
+      locationId,
       variantId,
       quantity: text(form, "quantity"),
       unitCostKsh: text(form, "unitCostKsh"),
       purchasedOn: text(form, "purchasedOn") || null,
       reference: text(form, "reference") || null,
-      actor: text(form, "actor"),
+      actor: staff.fullName,
+      idempotencyKey: text(form, "idempotencyKey") || null,
     });
   } catch (error) {
     fail(error, backTo);

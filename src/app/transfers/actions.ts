@@ -4,6 +4,7 @@ import { randomUUID } from "node:crypto";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { getCustomerContext } from "@/lib/db";
+import { canTransferFrom, currentStaffAccess } from "@/lib/auth";
 
 const value = (form: FormData, key: string) => typeof form.get(key) === "string" ? String(form.get(key)).trim() : "";
 const quantities = (form: FormData, key: string): number[] => form.getAll(key).map((entry) => Math.max(0, Math.floor(Number(String(entry) || 0))));
@@ -27,6 +28,11 @@ export async function postTransfer(form: FormData): Promise<void> {
   const workflow = value(form, "workflow");
   const from = value(form, "from_branch_id");
   const to = value(form, "to_branch_id");
+  const staff = await currentStaffAccess();
+  if (!staff) redirect(`/transfers?error=${encodeURIComponent("Your signed-in staff profile is required.")}`);
+  if (!canTransferFrom(staff, from)) {
+    redirect(`/transfers?error=${encodeURIComponent("You can only send stock from a branch assigned to you.")}`);
+  }
   const variants = form.getAll("variant_id").map(String);
   const refills = quantities(form, "refills_sent");
   const emptiesSent = quantities(form, "empties_sent");
@@ -35,7 +41,7 @@ export async function postTransfer(form: FormData): Promise<void> {
   const payload = {
     workflow, from_branch_id: from, to_branch_id: to,
     delivery_note: value(form, "delivery_note") || null, notes: value(form, "notes") || null,
-    actor: "Portal staff", idempotency_key: randomUUID(), lines,
+    actor: staff.fullName, idempotency_key: randomUUID(), lines,
   };
   try {
     const result = await products.db.query<{ create_stock_transfer: { transfer_no: string } }>("select public.create_stock_transfer($1::jsonb)", [payload]);

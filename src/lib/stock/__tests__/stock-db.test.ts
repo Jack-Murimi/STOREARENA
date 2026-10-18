@@ -72,6 +72,26 @@ describe("receiving a delivery", () => {
     expect(movements.some((m) => m.custody === "BRANCH")).toBe(true);
   });
 
+  it("makes a retried receipt idempotent without adding a lot or balances twice", async () => {
+    const receipt = {
+      locationId: nextgen,
+      variantId: afrigas13,
+      quantity: 5,
+      unitCostKsh: 2000,
+      actor: "Sam K.",
+      idempotencyKey: "e4ac5070-ae60-4cc7-b3bb-48caed667c7e",
+    };
+    const first = await stock.recordPurchase(receipt);
+    const retry = await stock.recordPurchase(receipt);
+
+    expect(first.balance).toBe(5);
+    expect(retry).toEqual({ lotId: 0, balance: 5 });
+    expect(await stock.lots(afrigas13, { locationId: nextgen })).toHaveLength(1);
+    const line = (await stock.stockRows({ locationId: nextgen })).find((row) => row.variantId === afrigas13)!;
+    expect(line.refills).toBe(5);
+    expect((await stock.movements(afrigas13)).filter((movement) => movement.operation === "PURCHASE")).toHaveLength(2);
+  });
+
   it("refuses a part cylinder, a negative cost and an anonymous delivery", async () => {
     const base = { locationId: nextgen, variantId: afrigas13, unitCostKsh: 2000, actor: "Sam K." };
     await expect(stock.recordPurchase({ ...base, quantity: 2.5 })).rejects.toThrow(/whole number/);

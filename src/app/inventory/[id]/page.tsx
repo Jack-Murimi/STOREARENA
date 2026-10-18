@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import type { Metadata } from "next";
 import { AppShell } from "@/components/AppShell";
 import Link from "next/link";
@@ -9,6 +10,7 @@ import { StatusBadge } from "@/components/ui";
 import { currentStaff, stationName } from "@/lib/data";
 import { getCustomerContext } from "@/lib/db";
 import { LocationKind } from "@/lib/stock/types";
+import { canReceiveStock, currentStaffAccess } from "@/lib/auth";
 
 export const metadata: Metadata = {
   title: "Stock movements",
@@ -81,12 +83,18 @@ export default async function ProductStockPage({ params, searchParams }: PagePro
 
   const line = rows.find((r) => r.variantId === id);
   const branches = locations.filter((l) => l.active && l.kind === LocationKind.Branch);
+  const staffAccess = await currentStaffAccess();
+  const receiptBranches = branches.filter(
+    (location) => staffAccess !== null && canReceiveStock(staffAccess, location.id),
+  );
   const branch = locations.find((l) => l.id === branchFilter) ?? null;
 
   const full = line?.refills ?? 0;
   const empty = line?.empties ?? 0;
   const costOnHand = line?.costOnHand ?? 0;
   const averageCost = full > 0 ? costOnHand / full : 0;
+  // Kept in the rendered form so a duplicate tap/retry posts the same request.
+  const receiveRequestKey = randomUUID();
 
   const queryFor = (locationId: string) =>
     locationId ? `/inventory/${id}?branch=${encodeURIComponent(locationId)}` : `/inventory/${id}`;
@@ -245,8 +253,9 @@ export default async function ProductStockPage({ params, searchParams }: PagePro
             )}
           </section>
 
-          {/* ---- receive stock ---- */}
-          <section className="overflow-hidden rounded-xl border border-line bg-card shadow-card">
+          {/* ---- receive stock: only trusted roles with an eligible branch see this control ---- */}
+          {receiptBranches.length > 0 ? (
+            <section className="overflow-hidden rounded-xl border border-line bg-card shadow-card">
             <div className="border-b border-line px-5 py-3">
               <h2 className="text-base font-semibold tracking-tight text-ink">
                 Receive a delivery
@@ -258,33 +267,42 @@ export default async function ProductStockPage({ params, searchParams }: PagePro
             </div>
             <form
               action={receiveStock}
-              className="grid gap-2 px-5 py-4 sm:grid-cols-[170px_100px_130px_150px_1fr_150px_auto]"
+              className="grid gap-2 px-5 py-4 sm:grid-cols-2 lg:grid-cols-[170px_100px_130px_150px_minmax(0,1fr)_auto]"
             >
               <input type="hidden" name="variantId" value={id} />
+              <input type="hidden" name="idempotencyKey" value={receiveRequestKey} />
               <select
                 name="locationId"
                 required
                 className="rounded-lg border border-line bg-white px-3 py-2 text-sm outline-none focus:border-flame-500"
               >
                 <option value="">Branch…</option>
-                {branches.map((location) => (
+                {receiptBranches.map((location) => (
                   <option key={location.id} value={location.id}>
                     {location.name}
                   </option>
                 ))}
               </select>
               <input
+                type="number"
                 name="quantity"
                 required
+                min="1"
+                step="1"
                 inputMode="numeric"
-                placeholder="Qty"
+                placeholder="Quantity"
+                aria-label="Quantity received"
                 className="rounded-lg border border-line bg-white px-3 py-2 text-sm outline-none focus:border-flame-500"
               />
               <input
+                type="number"
                 name="unitCostKsh"
                 required
+                min="0"
+                step="0.01"
                 inputMode="decimal"
-                placeholder="Unit cost"
+                placeholder="Unit cost (KSh)"
+                aria-label="Unit cost in Kenyan shillings"
                 className="rounded-lg border border-line bg-white px-3 py-2 text-sm outline-none focus:border-flame-500"
               />
               <input
@@ -298,15 +316,10 @@ export default async function ProductStockPage({ params, searchParams }: PagePro
                 placeholder="Delivery note / depot ref"
                 className="rounded-lg border border-line bg-white px-3 py-2 text-sm outline-none focus:border-flame-500"
               />
-              <input
-                name="actor"
-                required
-                placeholder="Who received it"
-                className="rounded-lg border border-line bg-white px-3 py-2 text-sm outline-none focus:border-flame-500"
-              />
               <SubmitButton pendingLabel="Saving…">Receive</SubmitButton>
             </form>
-          </section>
+            </section>
+          ) : null}
 
           {/* ---- the movement trail ---- */}
           <section className="overflow-hidden rounded-xl border border-line bg-card shadow-card">

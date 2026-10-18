@@ -1,11 +1,18 @@
 "use client";
 
-import { useState } from "react";
-import { createCategory, createProduct } from "@/app/inventory/actions";
+import { useActionState, useState } from "react";
+import { createCategory, createProductState } from "@/app/inventory/actions";
 import { SubmitButton } from "@/components/customers/SubmitButton";
 import { StockModel, type Brand, type Category } from "@/lib/stock/types";
 
 const caps = (value: string) => value.replace(/\s+/g, " ").toUpperCase();
+const PRESET_SIZES = ["3", "6", "13", "22.5", "50"];
+
+function normaliseSize(value: string): string | null {
+  const parsed = Number(value.trim().replace(/\s*kg$/i, ""));
+  if (!Number.isFinite(parsed) || parsed <= 0) return null;
+  return String(parsed);
+}
 
 /**
  * Catalogue entry is intentionally short. A cylinder is one brand + one size;
@@ -40,19 +47,45 @@ export function NewProductForm({
   );
   const [brandId, setBrandId] = useState("");
   const [newBrandName, setNewBrandName] = useState("");
-  const [sizeKgs, setSizeKgs] = useState("");
+  const [simpleName, setSimpleName] = useState("");
+  const [simplePrice, setSimplePrice] = useState("");
+  const [selectedSizes, setSelectedSizes] = useState<string[]>([]);
+  const [customSize, setCustomSize] = useState("");
+  const [customSizeError, setCustomSizeError] = useState("");
+  const [sizePrices, setSizePrices] = useState<Record<string, string>>({});
+  const [sizeError, setSizeError] = useState("");
+  const [productState, productAction] = useActionState(createProductState, {});
 
   const category = categories.find((item) => item.id === categoryId);
   const isCylinder = category?.stockModel === StockModel.Cylinder;
   const selectedBrand = brands.find((brand) => brand.id === brandId);
   const brandForPreview = brandMode === "existing" ? selectedBrand?.name ?? "BRAND" : newBrandName || "BRAND";
-  const previewSizes = sizeKgs
-    .split(/[,;\n]+/)
-    .map((size) => size.trim())
-    .filter(Boolean);
-  const cylinderPreviews = (previewSizes.length > 0 ? previewSizes : ["SIZE"])
+  const orderedSizes = [...selectedSizes].sort((left, right) => Number(left) - Number(right));
+  const cylinderPreviews = (orderedSizes.length > 0 ? orderedSizes : ["SIZE"])
     .map((size) => `${caps(brandForPreview)} ${size} KG`)
     .join(", ");
+  const toggleSize = (size: string) => {
+    setSizeError("");
+    setSelectedSizes((current) =>
+      current.includes(size) ? current.filter((item) => item !== size) : [...current, size],
+    );
+    setSizePrices((current) => {
+      const next = { ...current };
+      if (size in next) delete next[size];
+      return next;
+    });
+  };
+  const addCustomSize = () => {
+    const size = normaliseSize(customSize);
+    if (!size) {
+      setCustomSizeError("Enter a cylinder size greater than zero.");
+      return;
+    }
+    setCustomSizeError("");
+    setSizeError("");
+    setSelectedSizes((current) => (current.includes(size) ? current : [...current, size]));
+    setCustomSize("");
+  };
 
   if (!open) {
     return (
@@ -133,7 +166,13 @@ export function NewProductForm({
 
   return (
     <form
-      action={createProduct}
+      action={productAction}
+      onSubmit={(event) => {
+        if (isCylinder && selectedSizes.length === 0) {
+          event.preventDefault();
+          setSizeError("Choose at least one cylinder size.");
+        }
+      }}
       className="space-y-4 rounded-xl border border-line bg-card p-4 shadow-card"
     >
       <div className="flex flex-wrap items-start justify-between gap-3">
@@ -152,6 +191,12 @@ export function NewProductForm({
         </button>
       </div>
 
+      {productState.error ? (
+        <p role="alert" className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm font-medium text-red-800">
+          {productState.error}
+        </p>
+      ) : null}
+
       <label className="block max-w-md space-y-1">
         <span className="text-xs font-semibold uppercase tracking-wide text-ink-soft">Category</span>
         <select
@@ -168,6 +213,7 @@ export function NewProductForm({
             </option>
           ))}
         </select>
+        {productState.field === "category" ? <span className="block text-xs font-medium text-red-700">{productState.error}</span> : null}
       </label>
 
       {isCylinder ? (
@@ -234,52 +280,127 @@ export function NewProductForm({
               />
             </label>
           )}
+          {productState.field === "brand" ? <p className="text-xs font-medium text-red-700">{productState.error}</p> : null}
         </fieldset>
 
         {isCylinder ? (
-          <label className="space-y-1">
-            <span className="text-xs font-semibold uppercase tracking-wide text-ink-soft">Cylinder sizes (kg)</span>
-            <input
-              name="sizeKgs"
-              inputMode="text"
-              required
-              value={sizeKgs}
-              onChange={(event) => setSizeKgs(event.target.value)}
-              placeholder="3, 6, 13"
-              className="w-full rounded-lg border border-line bg-white px-3 py-2 text-sm outline-none focus:border-flame-500"
-            />
+          <div className="space-y-3 sm:col-span-2">
+            <input type="hidden" name="sizeKgs" value={orderedSizes.join(",")} />
+            <input type="hidden" name="sizePrices" value={JSON.stringify(sizePrices)} />
+            <div className="space-y-1">
+              <span className="text-xs font-semibold uppercase tracking-wide text-ink-soft">Cylinder sizes (kg)</span>
+              <div className="flex flex-wrap gap-2">
+                {PRESET_SIZES.map((size) => {
+                  const selected = selectedSizes.includes(size);
+                  return (
+                    <button
+                      key={size}
+                      type="button"
+                      aria-pressed={selected}
+                      onClick={() => toggleSize(size)}
+                      className={`rounded-full border px-3 py-1.5 text-xs font-semibold transition ${
+                        selected
+                          ? "border-flame-600 bg-flame-600 text-white"
+                          : "border-line bg-white text-ink hover:border-flame-400"
+                      }`}
+                    >
+                      {size} KG
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+            <div className="flex max-w-sm gap-2">
+              <input
+                inputMode="decimal"
+                value={customSize}
+                aria-invalid={customSizeError ? true : undefined}
+                aria-describedby={customSizeError ? "custom-size-error" : undefined}
+                onChange={(event) => {
+                  setCustomSize(event.target.value);
+                  setCustomSizeError("");
+                }}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") {
+                    event.preventDefault();
+                    addCustomSize();
+                  }
+                }}
+                placeholder="Custom size"
+                className="min-w-0 flex-1 rounded-lg border border-line bg-white px-3 py-2 text-sm outline-none focus:border-flame-500"
+              />
+              <button
+                type="button"
+                onClick={addCustomSize}
+                className="rounded-lg border border-line px-3 py-2 text-xs font-semibold text-ink hover:bg-canvas"
+              >
+                Add size
+              </button>
+            </div>
+            {customSizeError ? <p id="custom-size-error" role="alert" className="text-xs font-medium text-red-700">{customSizeError}</p> : null}
+            {sizeError ? <p role="alert" className="text-xs font-medium text-red-700">{sizeError}</p> : null}
+            {productState.field === "size" ? <p className="text-xs font-medium text-red-700">{productState.error}</p> : null}
+            {orderedSizes.length === 0 ? (
+              <p className="text-xs text-ink-soft">Choose at least one size to set its selling price.</p>
+            ) : (
+              <div className="grid gap-3 rounded-lg border border-line bg-canvas/40 p-3 sm:grid-cols-2 lg:grid-cols-3">
+                {orderedSizes.map((size) => (
+                  <label key={size} className="space-y-1">
+                    <span className="text-xs font-semibold text-ink">{size} KG selling price (KSh)</span>
+                    <input
+                      type="number"
+                      inputMode="decimal"
+                      min="0.01"
+                      step="0.01"
+                      required
+                      value={sizePrices[size] ?? ""}
+                      onChange={(event) =>
+                        setSizePrices((current) => ({ ...current, [size]: event.target.value }))
+                      }
+                      placeholder="e.g. 2500"
+                      className="w-full rounded-lg border border-line bg-white px-3 py-2 text-sm outline-none focus:border-flame-500"
+                    />
+                  </label>
+                ))}
+              </div>
+            )}
+            {productState.field === "price" ? <p className="text-xs font-medium text-red-700">{productState.error}</p> : null}
             <span className="block text-xs text-ink-soft">
-              Separate sizes with commas. Product names: <strong className="text-ink">{cylinderPreviews}</strong>
+              Product names: <strong className="text-ink">{cylinderPreviews}</strong>
             </span>
-          </label>
+          </div>
         ) : (
-          <label className="space-y-1">
-            <span className="text-xs font-semibold uppercase tracking-wide text-ink-soft">Product name</span>
-            <input
-              name="name"
-              required
-              minLength={2}
-              placeholder="REGULATOR"
-              onInput={(event) => {
-                event.currentTarget.value = caps(event.currentTarget.value);
-              }}
-              className="w-full rounded-lg border border-line bg-white px-3 py-2 text-sm uppercase outline-none focus:border-flame-500"
-            />
-          </label>
+          <>
+            <label className="space-y-1">
+              <span className="text-xs font-semibold uppercase tracking-wide text-ink-soft">Product name</span>
+              <input
+                name="name"
+                required
+                minLength={2}
+                placeholder="REGULATOR"
+                value={simpleName}
+                onChange={(event) => setSimpleName(caps(event.currentTarget.value))}
+                className="w-full rounded-lg border border-line bg-white px-3 py-2 text-sm uppercase outline-none focus:border-flame-500"
+              />
+              {productState.field === "name" ? <span className="block text-xs font-medium text-red-700">{productState.error}</span> : null}
+            </label>
+            <label className="space-y-1">
+              <span className="text-xs font-semibold uppercase tracking-wide text-ink-soft">Standard selling price (KSh)</span>
+              <input
+                type="number"
+                name="listPriceKsh"
+                inputMode="decimal"
+                min="0.01"
+                step="0.01"
+                value={simplePrice}
+                onChange={(event) => setSimplePrice(event.target.value)}
+                placeholder="Optional"
+                className="w-full rounded-lg border border-line bg-white px-3 py-2 text-sm outline-none focus:border-flame-500"
+              />
+              {productState.field === "price" ? <span className="block text-xs font-medium text-red-700">{productState.error}</span> : null}
+            </label>
+          </>
         )}
-
-        <label className="space-y-1 sm:col-span-2 sm:max-w-sm">
-          <span className="text-xs font-semibold uppercase tracking-wide text-ink-soft">Standard selling price (KSh)</span>
-          <input
-            name="listPriceKsh"
-            inputMode="decimal"
-            min="0"
-            step="0.01"
-            placeholder="Optional"
-            className="w-full rounded-lg border border-line bg-white px-3 py-2 text-sm outline-none focus:border-flame-500"
-          />
-          <span className="block text-xs text-ink-soft">Optional now; if you add several sizes, this price applies to each of them.</span>
-        </label>
       </div>
 
       <div className="flex flex-wrap items-center gap-3 border-t border-line pt-3">
