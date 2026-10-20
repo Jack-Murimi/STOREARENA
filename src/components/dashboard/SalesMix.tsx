@@ -17,8 +17,15 @@ export function SalesMix({ sales }: { sales: SaleRecord[] }) {
   const byPayment = new Map<PaymentMethod, number>();
   for (const sale of sales) {
     const value = metrics.saleValueKsh(sale);
-    const size = bySize.get(sale.sizeKg) ?? { units: 0, revenue: 0 };
-    bySize.set(sale.sizeKg, { units: size.units + sale.quantity, revenue: size.revenue + value });
+    // 0 is the "not a cylinder" bucket (water, regulators, fittings). Those
+    // lines still count towards takings and the payment split, but they must
+    // not be reported as a cylinder size.
+    const sizeKg = sale.isCylinder && sale.sizeKg ? sale.sizeKg : 0;
+    const size = bySize.get(sizeKg) ?? { units: 0, revenue: 0 };
+    bySize.set(sizeKg, {
+      units: size.units + (sale.isCylinder ? sale.quantity : 0),
+      revenue: size.revenue + value,
+    });
     byPayment.set(sale.payment, (byPayment.get(sale.payment) ?? 0) + value);
   }
 
@@ -56,7 +63,11 @@ export function SalesMix({ sales }: { sales: SaleRecord[] }) {
             ) : (
               <ul className="space-y-2.5">
                 {sizeRows.map(([size, value]) =>
-                  bar(`${size} kg`, value.revenue, `${value.units} sold`),
+                  bar(
+                    size === 0 ? "Other items" : `${size} kg`,
+                    value.revenue,
+                    size === 0 ? "water, fittings" : `${value.units} sold`,
+                  ),
                 )}
               </ul>
             ),

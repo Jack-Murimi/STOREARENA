@@ -1,5 +1,12 @@
 # RLS plan for the existing tables
 
+> **Status, October 2026.** The policies described here now exist in
+> `supabase/migrations/`. They are still inert, because the app connects as
+> `postgres` (`BYPASSRLS`). The application layer enforces the same rules in
+> `src/lib/access-policy.ts`, and `SECURITY.md` records the gap. The restriction
+> below still stands: do not assume a policy is doing anything until the
+> connection role changes.
+
 Review this before anything is applied. Nothing here has been run against any
 database.
 

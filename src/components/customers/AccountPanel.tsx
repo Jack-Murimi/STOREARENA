@@ -1,4 +1,4 @@
-import { recordPayment } from "@/app/customers/actions";
+import { recordPayment } from "@/app/(portal)/customers/actions";
 import { PAYMENT_METHODS, PAYMENT_METHOD_LABELS } from "@/lib/billing";
 import type { CustomerBalance, Invoice, Payment } from "@/lib/billing";
 import { SubmitButton } from "./SubmitButton";

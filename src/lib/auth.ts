@@ -7,8 +7,11 @@ import type { AppRole, StaffAccess } from "@/lib/access-policy";
 export {
   APP_ROLES,
   canManageCatalogue,
+  canManageCustomers,
   canReceiveStock,
+  canSellFrom,
   canTransferFrom,
+  canViewBilling,
 } from "@/lib/access-policy";
 export type { AppRole, StaffAccess } from "@/lib/access-policy";
 

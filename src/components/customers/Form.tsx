@@ -102,9 +102,12 @@ export function Checkbox({
 export function SubmitButton({
   children,
   tone = "primary",
+  disabled = false,
 }: {
   children: ReactNode;
   tone?: "primary" | "ghost" | "danger";
+  /** For a form that is shown but no longer applies (e.g. already inactive). */
+  disabled?: boolean;
 }) {
   const tones = {
     primary:
@@ -116,7 +119,8 @@ export function SubmitButton({
   return (
     <button
       type="submit"
-      className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-2 text-xs font-semibold transition ${tones[tone]}`}
+      disabled={disabled}
+      className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-2 text-xs font-semibold transition disabled:cursor-not-allowed disabled:opacity-60 ${tones[tone]}`}
     >
       {children}
     </button>

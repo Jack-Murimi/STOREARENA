@@ -117,6 +117,8 @@ export interface StockRow {
   sizeKg: number | null;
   /** What the product usually sells for. */
   sellingPrice: number | null;
+  /** Below this many filled cylinders the branch must reorder. 0 = no alert. */
+  reorderLevel: number;
   /** The most recent buy price — the number worth knowing when setting a price. */
   lastCost: number | null;
   lastPurchasedOn: string | null;
@@ -473,7 +475,7 @@ export class StockLedgerService {
     }
 
     const rows = await this.db.query<Row>(
-      `SELECT v.id, v.name, v.code, v.size_kg, v.list_price_ksh,
+      `SELECT v.id, v.name, v.code, v.size_kg, v.list_price_ksh, v.reorder_level,
               c.id AS category_id, c.name AS category_name, c.stock_model, b.name AS brand_name,
               coalesce(sum(p.quantity) FILTER (WHERE p.state = 'REFILL'), 0) AS refills,
               coalesce(sum(p.quantity) FILTER (WHERE p.state = 'EMPTY'), 0)  AS empties,
@@ -536,6 +538,7 @@ export class StockLedgerService {
         brandName: str(row.brand_name),
         sizeKg: numOrNull(row.size_kg),
         sellingPrice: numOrNull(row.list_price_ksh),
+        reorderLevel: num(row.reorder_level),
         lastCost: cost ? numOrNull(cost.last_cost) : null,
         lastPurchasedOn: cost && cost.last_on ? dateOnly(cost.last_on) : null,
         costOnHand: cost ? num(cost.cost_on_hand) : 0,

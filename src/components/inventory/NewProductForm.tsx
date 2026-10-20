@@ -1,7 +1,7 @@
 "use client";
 
 import { useActionState, useState } from "react";
-import { createCategory, createProductState } from "@/app/inventory/actions";
+import { createCategory, createProductState } from "@/app/(portal)/inventory/actions";
 import { SubmitButton } from "@/components/customers/SubmitButton";
 import { StockModel, type Brand, type Category } from "@/lib/stock/types";
 

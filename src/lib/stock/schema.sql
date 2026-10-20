@@ -64,6 +64,9 @@ CREATE TABLE product_variants (
   -- The standard price. What a customer actually pays lives on the sale line,
   -- so a discount is always the visible gap between the two.
   list_price_ksh NUMERIC(12, 2) CHECK (list_price_ksh IS NULL OR list_price_ksh > 0),
+  -- Below this many filled cylinders the dashboard raises a reorder alert.
+  -- 0 means "never alert": useful for accessories.
+  reorder_level  INTEGER NOT NULL DEFAULT 10 CHECK (reorder_level >= 0),
   active         BOOLEAN NOT NULL DEFAULT true,
   created_at     TIMESTAMPTZ NOT NULL DEFAULT now(),
   UNIQUE (brand_id, size_kg)

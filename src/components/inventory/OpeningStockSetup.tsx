@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { saveOpeningStock } from "@/app/inventory/actions";
+import { saveOpeningStock } from "@/app/(portal)/inventory/actions";
 import { SubmitButton } from "@/components/customers/SubmitButton";
 import type { StockRow } from "@/lib/stock/stock-db";
 import type { StockLocation } from "@/lib/stock/types";

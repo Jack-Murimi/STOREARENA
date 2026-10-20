@@ -67,9 +67,13 @@ export function describeDatabaseConfig(): string {
   }
   try {
     const url = new URL(raw);
-    return `DATABASE_URL: present (host ${url.hostname}, database ${
-      url.pathname.replace(/^\//, "") || "postgres"
-    }, user ${url.username}).`;
+    // Host and user are deliberately not echoed: this string is rendered on
+    // screen, and a screenshot of it used to hand over the database endpoint
+    // and role name.
+    const scheme = url.protocol.replace(":", "") || "postgres";
+    return `DATABASE_URL: present (a valid ${scheme} connection string with ${
+      url.password ? "a password" : "no password"
+    }; host and user are not shown).`;
   } catch {
     return "DATABASE_URL: present, but it is not a valid connection string.";
   }

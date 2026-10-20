@@ -55,10 +55,24 @@ const nullable = (v: unknown): string | null => {
 };
 const money = (v: unknown): number => Number(v ?? 0);
 
-/** Branch sales history without cost_at_sale. Cost never crosses this boundary. */
+export interface SalesTotals {
+  /** Receipts and money for the *whole* filter, not just the rows shown. */
+  receipts: number;
+  revenue: number;
+  collected: number;
+  credit: number;
+}
+
+/**
+ * Branch sales history without cost_at_sale. Cost never crosses this boundary.
+ *
+ * `branchIds` is the set of branches the viewer may act in (all branches for an
+ * admin/director), so nobody is pinned to a hardcoded default branch. Pass an
+ * empty array for "every branch".
+ */
 export async function listSales(
   db: Database,
-  branchId: string,
+  branchIds: string[],
   search = "",
 ): Promise<SaleListRow[]> {
   const term = search.trim();
@@ -73,14 +87,14 @@ export async function listSales(
   left join riders r on r.id = s.rider_id
   left join sale_lines l on l.sale_id = s.id
   left join sale_payments p on p.sale_id = s.id
-      where s.branch_id = $1
+      where (cardinality($1::text[]) = 0 or s.branch_id = any($1::text[]))
         and ($2 = '' or s.receipt_no ilike '%' || $2 || '%'
           or c.name ilike '%' || $2 || '%'
           or r.name ilike '%' || $2 || '%')
       group by s.id, c.name, r.name
       order by s.sale_date desc
       limit 100`,
-    [branchId, term],
+    [branchIds, term],
   );
   return rows.map((row) => ({
     id: value(row.id),
@@ -188,5 +202,41 @@ export async function getSaleDetail(db: Database, saleId: string): Promise<SaleD
       amount: money(payment.amount),
       reference: nullable(payment.reference),
     })),
+  };
+}
+
+/**
+ * Totals for the same filter as `listSales`, computed by the database.
+ *
+ * The page used to add up the 100 rows it had fetched, so on a busy branch the
+ * "Posted sales" and "Credit due" cards silently under-reported everything
+ * beyond the first page.
+ */
+export async function salesTotals(
+  db: Database,
+  branchIds: string[],
+  search = "",
+): Promise<SalesTotals> {
+  const term = search.trim();
+  const rows = await db.query<Record<string, unknown>>(
+    `select count(*)::int as receipts,
+            coalesce(sum(s.total) filter (where s.status = 'posted'), 0) as revenue,
+            coalesce(sum(s.amount_paid) filter (where s.status = 'posted'), 0) as collected,
+            coalesce(sum(s.balance_due) filter (where s.status = 'posted'), 0) as credit
+       from sales s
+  left join customers c on c.id = s.customer_id
+  left join riders r on r.id = s.rider_id
+      where (cardinality($1::text[]) = 0 or s.branch_id = any($1::text[]))
+        and ($2 = '' or s.receipt_no ilike '%' || $2 || '%'
+          or c.name ilike '%' || $2 || '%'
+          or r.name ilike '%' || $2 || '%')`,
+    [branchIds, term],
+  );
+  const row = rows[0] ?? {};
+  return {
+    receipts: Number(row.receipts ?? 0),
+    revenue: money(row.revenue),
+    collected: money(row.collected),
+    credit: money(row.credit),
   };
 }

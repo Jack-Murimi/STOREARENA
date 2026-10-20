@@ -1,16 +1,6 @@
 import type { Metadata, Viewport } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import type { ReactNode } from "react";
 import "./globals.css";
-
-const geistSans = Geist({
-  variable: "--font-geist-sans",
-  subsets: ["latin"],
-});
-
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
-  subsets: ["latin"],
-});
 
 export const metadata: Metadata = {
   title: {
@@ -27,12 +17,17 @@ export const viewport: Viewport = {
   themeColor: "#1c1917",
 };
 
-export default function RootLayout({ children }: LayoutProps<"/">) {
+/**
+ * The font stack is the platform's own sans (see --font-sans in globals.css).
+ *
+ * This used to pull Geist from Google Fonts at build time, which made the
+ * build fail with no network - including in CI sandboxes and on an air-gapped
+ * deploy host. A staff portal on Kenyan mobile connections gains nothing from
+ * a downloaded webfont, so the system stack wins on reliability.
+ */
+export default function RootLayout({ children }: { children: ReactNode }) {
   return (
-    <html
-      lang="en"
-      className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
-    >
+    <html lang="en" className="h-full antialiased">
       <body className="min-h-full">{children}</body>
     </html>
   );

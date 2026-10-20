@@ -1,5 +1,5 @@
 import type { CylinderStock } from "@/lib/types";
-import { fillPercent, stockStatus } from "@/lib/metrics";
+import { filledSharePercent, stockStatus } from "@/lib/metrics";
 import { STOCK_STATUS_META, stockStatus as statusOf } from "@/lib/status";
 import { formatCylinder, formatKsh } from "@/lib/format";
 import { DataTable, StatusBadge, Button } from "@/components/ui";
@@ -65,11 +65,14 @@ export function StockTable({ items }: { items: CylinderStock[] }) {
   return <DataTable columns={columns} rows={worstFirst} rowKey={(item) => String(item.sizeKg)} />;
 }
 
-/** Fill against capacity, with a marker where the reorder level sits. */
+/**
+ * Filled share of this size's cylinders.
+ *
+ * There is no storage "capacity" in the database, so the bar shows what the
+ * branch actually knows: how many of the cylinders it holds are full.
+ */
 function LevelBar({ item }: { item: CylinderStock }) {
-  const percent = fillPercent(item);
-  const reorderPercent =
-    item.capacity > 0 ? Math.min(100, (item.reorderLevel / item.capacity) * 100) : 0;
+  const percent = filledSharePercent(item);
   const status = statusOf(item.onHand, item.reorderLevel);
   const fill =
     status === "critical" ? "bg-critical" : status === "low" ? "bg-warn" : "bg-ok";
@@ -78,12 +81,6 @@ function LevelBar({ item }: { item: CylinderStock }) {
     <div className="flex min-w-[96px] items-center gap-2">
       <div className="relative h-1.5 flex-1 overflow-hidden rounded-pill bg-surface-muted">
         <div className={`h-full rounded-pill ${fill}`} style={{ width: `${percent}%` }} />
-        <span
-          aria-hidden="true"
-          title={`Reorder at ${item.reorderLevel}`}
-          className="absolute top-0 h-full w-px bg-ink-subtle"
-          style={{ left: `${reorderPercent}%` }}
-        />
       </div>
       <span className="num w-8 text-right text-xs text-ink-subtle">{percent}%</span>
     </div>

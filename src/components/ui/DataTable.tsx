@@ -40,6 +40,12 @@ interface Shared<T> {
   rowKey: (row: T) => string;
   /** Makes the whole row a link, so no per-row "Open" button is needed. */
   rowHref?: (row: T) => string;
+  /**
+   * What a screen reader says instead of "Open <uuid>". A raw row key is
+   * meaningless read aloud; give the row's human label (a receipt number, a
+   * customer name).
+   */
+  rowLabel?: (row: T) => string;
   /** Rendered when there is nothing to show. */
   empty?: ReactNode;
   caption?: string;
@@ -70,11 +76,13 @@ function Body<T>({
   columns,
   rowKey,
   rowHref,
+  rowLabel,
 }: {
   rows: T[];
   columns: DataColumn<T>[];
   rowKey: (row: T) => string;
   rowHref?: (row: T) => string;
+  rowLabel?: (row: T) => string;
 }) {
   return (
     <tbody>
@@ -98,7 +106,7 @@ function Body<T>({
                   <a
                     href={href}
                     className="absolute inset-0 z-10"
-                    aria-label={`Open ${rowKey(row)}`}
+                    aria-label={`Open ${rowLabel ? rowLabel(row) : "this row"}`}
                   >
                     <span className="sr-only">Open</span>
                   </a>
@@ -119,11 +127,13 @@ function Cards<T>({
   columns,
   rowKey,
   rowHref,
+  rowLabel,
 }: {
   rows: T[];
   columns: DataColumn<T>[];
   rowKey: (row: T) => string;
   rowHref?: (row: T) => string;
+  rowLabel?: (row: T) => string;
 }) {
   const primary = columns.filter((c) => c.priority);
   const rest = columns.filter((c) => !c.priority);
@@ -142,7 +152,7 @@ function Cards<T>({
                 <a
                   href={href}
                   className="absolute inset-0 z-10"
-                  aria-label={`Open ${rowKey(row)}`}
+                  aria-label={`Open ${rowLabel ? rowLabel(row) : "this row"}`}
                 >
                   <span className="sr-only">Open</span>
                 </a>
@@ -194,12 +204,14 @@ function Table<T>({
   columns,
   rowKey,
   rowHref,
+  rowLabel,
   caption,
 }: {
   rows: T[];
   columns: DataColumn<T>[];
   rowKey: (row: T) => string;
   rowHref?: (row: T) => string;
+  rowLabel?: (row: T) => string;
   caption?: string;
 }) {
   return (
@@ -208,16 +220,28 @@ function Table<T>({
         <table className="w-full border-collapse">
           {caption ? <caption className="sr-only">{caption}</caption> : null}
           <Head columns={columns} />
-          <Body rows={rows} columns={columns} rowKey={rowKey} rowHref={rowHref} />
+          <Body
+            rows={rows}
+            columns={columns}
+            rowKey={rowKey}
+            rowHref={rowHref}
+            rowLabel={rowLabel}
+          />
         </table>
       </div>
-      <Cards rows={rows} columns={columns} rowKey={rowKey} rowHref={rowHref} />
+      <Cards
+        rows={rows}
+        columns={columns}
+        rowKey={rowKey}
+        rowHref={rowHref}
+        rowLabel={rowLabel}
+      />
     </>
   );
 }
 
 export function DataTable<T>(props: Shared<T> & { rows?: T[]; groups?: DataGroup<T>[] }) {
-  const { columns, rowKey, rowHref, empty, caption } = props;
+  const { columns, rowKey, rowHref, rowLabel, empty, caption } = props;
   const rows = props.rows ?? [];
   const groups = props.groups;
 
@@ -231,6 +255,7 @@ export function DataTable<T>(props: Shared<T> & { rows?: T[]; groups?: DataGroup
         columns={columns}
         rowKey={rowKey}
         rowHref={rowHref}
+        rowLabel={rowLabel}
         caption={caption}
       />
     );

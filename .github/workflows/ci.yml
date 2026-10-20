@@ -1,0 +1,34 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+# Cancel a superseded run on the same ref: the tests boot a real Postgres
+# (PGlite) and take about a minute, so there is no value running two.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm run lint
+      - run: npm test
+
+      # The build runs last: it is the slowest step and the earlier ones fail
+      # with a clearer message. No secrets are needed because the build never
+      # connects to a database and no longer downloads a webfont.
+      - run: npm run build

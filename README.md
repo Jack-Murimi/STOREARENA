@@ -58,7 +58,10 @@ now applied:
   it against a real Postgres engine (PGlite) to prove the constraints fire.
 
 ```bash
-npm test      # 198 tests, including both SQL schemas
+npm run typecheck   # tsc --noEmit, strict
+npm run lint        # eslint, next/core-web-vitals
+npm test            # 249 tests, including both SQL schemas against PGlite
+npm run build       # production build, no network access required
 ```
 
 Read [`docs/STOCK_ARCHITECTURE.md`](docs/STOCK_ARCHITECTURE.md) for the model,
@@ -66,8 +69,10 @@ the operation-to-ledger matrix and the open decisions.
 
 ## Customers (live CRUD)
 
-`/customers` is a working screen, not a mockup: create, read, update and delete
-customers, their delivery places and the people to call.
+`/customers` is a working screen, not a mockup: create and read customers, their
+delivery places and the people to call. Existing records are edited by managers
+and above, and a customer is *deactivated* rather than deleted so that their
+sales and invoices keep pointing at a real row.
 
 A customer is a household or a business, and one customer can have:
 
@@ -207,10 +212,42 @@ The demo store never runs in a production build (PGlite is a devDependency and a
 function has no writable filesystem). Without a reachable database the customer
 screens show what to configure instead of failing.
 
-If `DATABASE_URL` is missing or the database cannot be reached, the app falls
-back to a temporary in-process PostgreSQL seeded with demo customers and says so
-in a banner at the top of the screen. Nothing is silently written to the wrong
-place.
+If `DATABASE_URL` is missing or the database cannot be reached, the portal says
+so in a banner and the screens explain what to configure. There is no silent
+fallback to demo data: an empty screen that could be a broken query and a quiet
+trading day looked identical, which is how a wrong revenue figure went unnoticed.
+
+Every variable the app reads is documented in [`.env.example`](.env.example).
+Security posture, including the current limits of row-level security, is in
+[`SECURITY.md`](SECURITY.md).
+
+## How the portal decides who may do what
+
+Three layers, outermost first:
+
+1. **`middleware.ts`** keeps unauthenticated visitors out of every route except
+   `/login`, `/auth/*` and `/no-access`.
+2. **`src/app/(portal)/layout.tsx`** requires a live `app_users` row. A Supabase
+   session alone is not enough: an invited account that was never provisioned,
+   or a deactivated member of staff, is sent to `/no-access`.
+3. **Server actions and pages** check the role from `app_users` on every write
+   (`src/lib/access-policy.ts`). Attendants record sales and receipts; managers
+   and above handle customers, suppliers, invoices, payments and reports.
+
+Row-level security policies exist in `supabase/migrations/` and are correct, but
+the app connects with `DATABASE_URL`, whose role bypasses RLS. They become
+enforcement only when the portal connects as a non-`BYPASSRLS` role. Until then
+the checks above are the enforcement, which is why they live in one small module
+with tests rather than being repeated inline. `SECURITY.md` records this
+plainly.
+
+## Dates and time zones
+
+The business day is **Africa/Nairobi**. Every "today" comparison casts
+`sale_date at time zone 'Africa/Nairobi'` before truncating to a date, and the
+sales terminal sends a full timestamp. Sending a bare date used to mean midnight
+UTC (03:00 EAT), which both misfiled the sale on the previous day and tripped the
+ten-minute backdating guard for every attendant.
 
 ## Roadmap
 
@@ -227,7 +264,7 @@ place.
 | Reports and exports (CSV/XLSX), incl. discount report | Planned |
 | Stock database + API | Planned |
 
-The dashboard still renders sample data from `src/lib/data.ts`. The stock domain
+The dashboard reads live sales, stock and takings. The stock domain
 is settled, so the screens can now be built once against it.
 
 One open decision before the screens go in: **actor identity**. Every movement and

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { createCustomer } from "@/app/customers/actions";
+import { createCustomer } from "@/app/(portal)/customers/actions";
 import { SubmitButton } from "./SubmitButton";
 
 const controlClass =

@@ -1,8 +1,9 @@
 # Gateway Gas Enterprises — Stock & Sales Architecture
 
-Status: **reviewed with the owner, answers applied.** Schema + tests only, no UI yet.
-144 tests pass. Everything below is implemented in `src/lib/stock/` and verified by
-`src/lib/stock/__tests__/`.
+Status: **reviewed with the owner, answers applied.** The domain below is
+implemented in `src/lib/stock/` and verified by `src/lib/stock/__tests__/`, which
+hold 175 of the repository's tests. The portal UI now uses the same schema for
+inventory, transfers and sale posting.
 
 ---
 

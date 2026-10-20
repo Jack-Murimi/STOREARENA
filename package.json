@@ -10,7 +10,9 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:stock": "vitest run src/lib/stock",
-    "sync-schema": "node scripts/sync-schema.mjs"
+    "sync-schema": "node scripts/sync-schema.mjs",
+    "typecheck": "tsc --noEmit",
+    "check": "npm run typecheck && npm run lint && npm test"
   },
   "dependencies": {
     "@supabase/ssr": "^0.12.7",

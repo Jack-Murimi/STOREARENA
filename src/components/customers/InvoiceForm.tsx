@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { raiseInvoice } from "@/app/customers/actions";
+import { raiseInvoice } from "@/app/(portal)/customers/actions";
 import { SubmitButton } from "./SubmitButton";
 
 interface Row {

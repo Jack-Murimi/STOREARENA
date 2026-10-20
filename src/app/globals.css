@@ -17,8 +17,8 @@
 @theme {
   /* Type. Existing sans (Geist) is kept — adding Inter would be a new
      dependency for no functional gain. */
-  --font-sans: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
-  --font-mono: var(--font-geist-mono), ui-monospace, monospace;
+  --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
 
   /* The only permitted sizes: 12 / 13 / 14 / 16 / 20 / 24. */
   --text-xs: 12px;

@@ -13,10 +13,13 @@ export function SubmitButton({
   children,
   tone = "primary",
   pendingLabel = "Saving…",
+  disabled = false,
 }: {
   children: ReactNode;
   tone?: "primary" | "ghost" | "danger";
   pendingLabel?: string;
+  /** For a form that is shown but no longer applies (e.g. already inactive). */
+  disabled?: boolean;
 }) {
   const { pending } = useFormStatus();
 
@@ -29,7 +32,7 @@ export function SubmitButton({
   return (
     <button
       type="submit"
-      disabled={pending}
+      disabled={pending || disabled}
       aria-busy={pending}
       className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-2 text-xs font-semibold transition disabled:cursor-wait disabled:opacity-60 ${tones[tone]}`}
     >

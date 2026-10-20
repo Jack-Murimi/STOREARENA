@@ -1,8 +1,11 @@
 import { describe, expect, it } from "vitest";
 import {
   canManageCatalogue,
+  canManageCustomers,
   canReceiveStock,
+  canSellFrom,
   canTransferFrom,
+  canViewBilling,
   type StaffAccess,
 } from "../access-policy";
 
@@ -27,6 +30,23 @@ describe("staff access policy", () => {
     expect(canReceiveStock(staff("manager", ["branch-a"]), "branch-a")).toBe(true);
     expect(canReceiveStock(staff("manager", ["branch-a"]), "branch-b")).toBe(false);
     expect(canReceiveStock(staff("attendant", ["branch-a"]), "branch-a")).toBe(false);
+  });
+
+  it("keeps balances and supplier spend to managers and above", () => {
+    expect(canViewBilling(staff("manager"))).toBe(true);
+    expect(canViewBilling(staff("admin"))).toBe(true);
+    expect(canViewBilling(staff("director"))).toBe(true);
+    expect(canViewBilling(staff("attendant"))).toBe(false);
+    expect(canManageCustomers(staff("manager"))).toBe(true);
+    expect(canManageCustomers(staff("attendant"))).toBe(false);
+  });
+
+  it("posts a sale only to a branch the staff member may sell from", () => {
+    expect(canSellFrom(staff("attendant", ["branch-a"]), "branch-a")).toBe(true);
+    expect(canSellFrom(staff("attendant", ["branch-a"]), "branch-b")).toBe(false);
+    expect(canSellFrom(staff("manager", []), "branch-b")).toBe(false);
+    expect(canSellFrom(staff("admin", []), "branch-b")).toBe(true);
+    expect(canSellFrom(staff("director", []), "branch-c")).toBe(true);
   });
 
   it("allows operational transfers only out of the staff member's granted source branch", () => {
