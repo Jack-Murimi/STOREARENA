@@ -259,3 +259,27 @@ export async function receiveStock(form: FormData): Promise<void> {
   revalidatePath("/inventory");
   redirect(`${backTo}?saved=${encodeURIComponent("Delivery received and costed.")}`);
 }
+
+/** Updates product name and/or selling price. */
+export async function updateProduct(form: FormData): Promise<void> {
+  const id = text(form, "id");
+  const backTo = `/inventory/${id}`;
+  await requireCatalogueAccess(backTo);
+  const products = await requireProducts();
+
+  const name = text(form, "name");
+  const listPriceKsh = text(form, "listPriceKsh");
+
+  try {
+    await products.updateProduct(id, {
+      name,
+      listPriceKsh: listPriceKsh || null,
+    });
+    revalidatePath("/inventory");
+    revalidatePath(backTo);
+  } catch (error) {
+    fail(error, backTo);
+  }
+
+  redirect(withMessage(backTo, "saved", "Product updated."));
+}

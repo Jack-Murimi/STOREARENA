@@ -312,6 +312,32 @@ describe("adding a product", () => {
       products.createProduct({ name: "Orphan 13 kg", categoryId: lpg.id, sizeKg: 13 }),
     ).rejects.toThrow(/Pick a brand/);
   });
+
+  it("updates product name and selling price", async () => {
+    const accessory = (await products.listCategories()).find((c) => c.name === "ACCESSORIES & FITTINGS")!;
+    const brand = (await products.listBrands())[0];
+    const created = await products.createProduct({
+      categoryId: accessory.id,
+      brandId: brand.id,
+      name: "OLD REGULATOR",
+      listPriceKsh: "1200",
+    });
+
+    const updated = await products.updateProduct(created.id, {
+      name: "NEW REGULATOR",
+      listPriceKsh: "1500",
+    });
+    expect(updated.name).toBe("NEW REGULATOR");
+    expect(updated.listPriceKsh).toBe(1500);
+
+    const reloaded = (await products.listInventory()).find((l) => l.variant.id === created.id);
+    expect(reloaded?.variant.name).toBe("NEW REGULATOR");
+    expect(reloaded?.variant.listPriceKsh).toBe(1500);
+
+    await expect(
+      products.updateProduct(created.id, { name: "x" }),
+    ).rejects.toThrow(/at least 2 characters/);
+  });
 });
 
 describe("adding a branch", () => {

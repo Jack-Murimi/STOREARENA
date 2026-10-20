@@ -291,6 +291,67 @@ export class ProductService {
     return this.db.transaction((tx) => this.createProductsInTransaction(tx, input));
   }
 
+  /**
+   * Updates an existing catalogue variant's name and/or list price.
+   */
+  async updateProduct(
+    id: string,
+    input: { name?: string | null; listPriceKsh?: number | string | null },
+  ): Promise<ProductVariant> {
+    const rows = await this.db.query<Row>(
+      "SELECT id, code, category_id, brand_id, name, size_kg, list_price_ksh, active FROM product_variants WHERE id = $1",
+      [id],
+    );
+    if (rows.length === 0) {
+      throw new ProductError("NOT_FOUND", "Product not found.");
+    }
+    const current = rows[0];
+    const newName =
+      input.name !== undefined && input.name !== null
+        ? normalizeName(input.name)
+        : str(current.name);
+
+    if (newName.length < 2) {
+      throw new ProductError("BAD_NAME", "Product name must be at least 2 characters.");
+    }
+
+    let price: number | null = numOrNull(current.list_price_ksh);
+    if (input.listPriceKsh !== undefined) {
+      if (input.listPriceKsh === null || String(input.listPriceKsh).trim() === "") {
+        price = null;
+      } else {
+        const parsed = Number(input.listPriceKsh);
+        if (!Number.isFinite(parsed) || parsed <= 0) {
+          throw new ProductError("BAD_PRICE", "A selling price must be greater than zero.");
+        }
+        price = parsed;
+      }
+    }
+
+    try {
+      await this.db.query(
+        "UPDATE product_variants SET name = $2, list_price_ksh = $3 WHERE id = $1",
+        [id, newName, price],
+      );
+    } catch (error) {
+      if (isUniqueViolation(error)) {
+        throw new ProductError("DUPLICATE", `A product named "${newName}" already exists in this category.`);
+      }
+      throw error;
+    }
+
+    return {
+      id: str(current.id),
+      code: str(current.code),
+      categoryId: str(current.category_id),
+      brandId: str(current.brand_id),
+      name: newName,
+      sizeKg: numOrNull(current.size_kg),
+      listPriceKsh: price,
+      active: bool(current.active),
+    };
+  }
+
   private async createProductsInTransaction(
     db: Database,
     input: NewProductInput,

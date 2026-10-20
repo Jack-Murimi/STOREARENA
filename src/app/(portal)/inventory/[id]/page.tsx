@@ -2,15 +2,15 @@ import { randomUUID } from "node:crypto";
 import type { Metadata } from "next";
 import { AppShell } from "@/components/AppShell";
 import Link from "next/link";
-import { receiveStock } from "../actions";
+import { receiveStock, updateProduct } from "../actions";
 import { DatabaseUnavailable } from "@/components/customers/DatabaseUnavailable";
 import { SavedToast } from "@/components/customers/SavedToast";
 import { SubmitButton } from "@/components/customers/SubmitButton";
-import { StatusBadge } from "@/components/ui";
+import { ButtonLink, Card, StatusBadge } from "@/components/ui";
 import { currentStaff, stationName } from "@/lib/data";
 import { getCustomerContext } from "@/lib/db";
 import { LocationKind } from "@/lib/stock/types";
-import { canReceiveStock, currentStaffAccess } from "@/lib/auth";
+import { canManageCatalogue, canReceiveStock, currentStaffAccess } from "@/lib/auth";
 
 export const metadata: Metadata = {
   title: "Stock movements",
@@ -41,6 +41,7 @@ export default async function ProductStockPage({ params, searchParams }: PagePro
   const { id } = await params;
   const query = await searchParams;
   const branchFilter = typeof query.branch === "string" ? query.branch : "";
+  const editing = query.edit === "1";
   const saved = typeof query.saved === "string" ? query.saved : null;
   const error = typeof query.error === "string" ? query.error : null;
 
@@ -127,6 +128,7 @@ export default async function ProductStockPage({ params, searchParams }: PagePro
   const line = rows.find((r) => r.variantId === id);
   const branches = locations.filter((l) => l.active && l.kind === LocationKind.Branch);
   const staffAccess = await currentStaffAccess();
+  const catalogueAdmin = staffAccess !== null && canManageCatalogue(staffAccess);
   const receiptBranches = branches.filter(
     (location) => staffAccess !== null && canReceiveStock(staffAccess, location.id),
   );
@@ -153,26 +155,89 @@ export default async function ProductStockPage({ params, searchParams }: PagePro
             </p>
           ) : null}
 
-          <div>
-            <Link
-              href="/inventory"
-              className="text-xs font-medium text-ink-soft hover:text-ink"
-            >
-              ← Inventory
-            </Link>
-            <h1 className="mt-1 text-lg font-semibold tracking-tight text-ink">
-              {product.name}
-            </h1>
-            <div className="mt-1 flex flex-wrap items-center gap-2">
-              <StatusBadge tone={product.categoryName === "LPG CYLINDERS" ? "info" : "neutral"}>
-                {product.categoryName}
-              </StatusBadge>
-              <span className="text-xs text-ink-soft">
-                {product.brandName}
-                {product.sizeKg ? ` · ${product.sizeKg} kg` : ""} · {product.code}
-              </span>
+          <div className="flex flex-wrap items-start justify-between gap-4">
+            <div>
+              <Link
+                href="/inventory"
+                className="text-xs font-medium text-ink-soft hover:text-ink"
+              >
+                ← Inventory
+              </Link>
+              <h1 className="mt-1 text-lg font-semibold tracking-tight text-ink">
+                {product.name}
+              </h1>
+              <div className="mt-1 flex flex-wrap items-center gap-2">
+                <StatusBadge tone={product.categoryName === "LPG CYLINDERS" ? "info" : "neutral"}>
+                  {product.categoryName}
+                </StatusBadge>
+                <span className="text-xs text-ink-soft">
+                  {product.brandName}
+                  {product.sizeKg ? ` · ${product.sizeKg} kg` : ""} · {product.code}
+                </span>
+              </div>
             </div>
+
+            {catalogueAdmin ? (
+              <ButtonLink
+                href={
+                  editing
+                    ? `/inventory/${id}${branchFilter ? `?branch=${encodeURIComponent(branchFilter)}` : ""}`
+                    : `/inventory/${id}?edit=1${branchFilter ? `&branch=${encodeURIComponent(branchFilter)}` : ""}`
+                }
+                variant={editing ? "ghost" : "secondary"}
+              >
+                {editing ? "Cancel edit" : "Edit product"}
+              </ButtonLink>
+            ) : null}
           </div>
+
+          {editing && catalogueAdmin ? (
+            <Card
+              title="Edit product"
+              subtitle="Change the item name and standard selling price in the catalogue."
+            >
+              <form action={updateProduct} className="space-y-4">
+                <input type="hidden" name="id" value={product.id} />
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <label className="space-y-1">
+                    <span className="text-xs font-semibold uppercase tracking-wide text-ink-soft">
+                      Product name
+                    </span>
+                    <input
+                      name="name"
+                      required
+                      minLength={2}
+                      defaultValue={product.name}
+                      className="w-full rounded-lg border border-line bg-white px-3 py-2 text-sm uppercase outline-none focus:border-flame-500"
+                    />
+                  </label>
+                  <label className="space-y-1">
+                    <span className="text-xs font-semibold uppercase tracking-wide text-ink-soft">
+                      Selling price (KSh)
+                    </span>
+                    <input
+                      type="number"
+                      name="listPriceKsh"
+                      step="0.01"
+                      min="0.01"
+                      defaultValue={product.sellingPrice ?? ""}
+                      placeholder="Optional"
+                      className="w-full rounded-lg border border-line bg-white px-3 py-2 text-sm outline-none focus:border-flame-500"
+                    />
+                  </label>
+                </div>
+                <div className="flex items-center gap-3 border-t border-line pt-3">
+                  <SubmitButton>Save changes</SubmitButton>
+                  <Link
+                    href={`/inventory/${id}${branchFilter ? `?branch=${encodeURIComponent(branchFilter)}` : ""}`}
+                    className="rounded-lg border border-line px-4 py-2 text-xs font-semibold text-ink hover:bg-canvas"
+                  >
+                    Cancel
+                  </Link>
+                </div>
+              </form>
+            </Card>
+          ) : null}
 
           {/* ---- what is on the shelf, and what it cost ---- */}
           <div className="grid gap-3 sm:grid-cols-5">
