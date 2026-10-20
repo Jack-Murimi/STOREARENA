@@ -103,6 +103,25 @@ async function tryDatabase(url: string): Promise<CustomerContext | null> {
         ),
       ),
     ]);
+    // Say which role the portal actually connected as. Policies in
+    // supabase/migrations only apply to a role without BYPASSRLS; if this logs
+    // `bypasses_rls: true`, the database is not enforcing them and the checks
+    // in src/lib/access-policy.ts are the only control in force.
+    try {
+      const [identity] = await sql<
+        { role: string; bypasses_rls: boolean }[]
+      >`select current_user as role,
+               coalesce((select rolbypassrls from pg_roles where rolname = current_user), false) as bypasses_rls`;
+      if (identity?.bypasses_rls) {
+        console.warn(
+          `[db] connected as "${identity.role}", which bypasses row-level security. ` +
+            "App-layer checks are the only access control. See SECURITY.md.",
+        );
+      }
+    } catch {
+      // Reporting is best effort; never fail the connection over it.
+    }
+
     const db = postgresDatabase(sql);
     return {
       service: new CustomerService(db),

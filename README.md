@@ -234,12 +234,13 @@ Three layers, outermost first:
    (`src/lib/access-policy.ts`). Attendants record sales and receipts; managers
    and above handle customers, suppliers, invoices, payments and reports.
 
-Row-level security policies exist in `supabase/migrations/` and are correct, but
-the app connects with `DATABASE_URL`, whose role bypasses RLS. They become
-enforcement only when the portal connects as a non-`BYPASSRLS` role. Until then
-the checks above are the enforcement, which is why they live in one small module
-with tests rather than being repeated inline. `SECURITY.md` records this
-plainly.
+Row-level security is enabled and forced on every table, and the public Data
+API is closed: no `anon` or `authenticated` request can read a table or call a
+function. The portal connects with `DATABASE_URL`, and if that role has
+`BYPASSRLS` (the `postgres` owner does) then database policies do not apply to
+it — the checks above are the control. A `portal_app` role with no `BYPASSRLS`,
+no `DELETE` and no DDL is provisioned for switching that off; `SECURITY.md`
+explains how, and what it does and does not cover.
 
 ## Dates and time zones
 

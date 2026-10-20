@@ -83,7 +83,7 @@ export default async function DashboardPage() {
                   to_char(s.sale_date at time zone 'Africa/Nairobi', 'HH24:MI') as time,
                   coalesce(c.name, 'Walk-in') as customer,
                   pv.size_kg,
-                  cat.stock_model,
+                  public.is_gas_cylinder(cat.code, cat.stock_model) as is_cylinder,
                   l.line_type,
                   l.quantity,
                   l.unit_price,
@@ -130,7 +130,7 @@ export default async function DashboardPage() {
                  join sale_lines l on l.sale_id = s.id
                  join product_variants pv on pv.id = l.variant_id
                  join categories cat on cat.id = pv.category_id
-                where s.status = 'posted' and cat.stock_model = 'CYLINDER'
+                where s.status = 'posted' and public.is_gas_cylinder(cat.code, cat.stock_model)
                 group by 1
              ) cyl on cyl.day = d.day::date
             order by d.day`,
@@ -182,10 +182,11 @@ export default async function DashboardPage() {
         .sort((a, b) => a.sizeKg - b.sizeKg);
 
       salesToday = salesRows.map((r) => {
-        // The category's stock model is what makes a line a cylinder; its
-        // `code` is a display label and differs between seed files ("LPG" vs
-        // "LPG-CYL").
-        const isCylinder = String(r.stock_model ?? "") === "CYLINDER";
+        // One definition, shared with create_sale: a catalogue is organised
+        // either by product type ("LPG") or by size ("13KG"), and the size
+        // codes are created by staff, so neither the code nor stock_model alone
+        // is enough.
+        const isCylinder = r.is_cylinder === true;
         return {
           id: String(r.sale_id),
           lineId: String(r.line_id),

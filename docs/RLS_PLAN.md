@@ -1,11 +1,13 @@
 # RLS plan for the existing tables
 
-> **Status, October 2026.** The policies described here now exist in
-> `supabase/migrations/`. They are still inert, because the app connects as
-> `postgres` (`BYPASSRLS`). The application layer enforces the same rules in
-> `src/lib/access-policy.ts`, and `SECURITY.md` records the gap. The restriction
-> below still stands: do not assume a policy is doing anything until the
-> connection role changes.
+> **Status, October 2026.** The policies described here exist in
+> `supabase/migrations/`, RLS is now forced on all 31 tables, and the Data API
+> has been closed to `anon` and `authenticated` entirely (migration 0029) — the
+> portal never used it. A non-`BYPASSRLS` role, `portal_app`, is provisioned so
+> the app can be moved off the `postgres` owner connection; until that switch is
+> made, the app-layer checks in `src/lib/access-policy.ts` remain the control.
+> `SECURITY.md` records this precisely. Do not assume a policy constrains the
+> portal's own connection.
 
 Review this before anything is applied. Nothing here has been run against any
 database.
