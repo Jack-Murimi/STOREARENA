@@ -62,7 +62,44 @@ export default async function ProductStockPage({ params, searchParams }: PagePro
     return shell(<DatabaseUnavailable notice={notice} diagnostic={diagnostic} />);
   }
 
-  const product = await stock.product(id);
+  /* ---- reading the record ------------------------------------------------
+     A query that throws used to escape this component, and because the loading
+     skeleton in loading.tsx has already been streamed by then, the staff member
+     was left with a skeleton that never resolved. Catching the failure here
+     turns it into a sentence they can act on — and, for whoever is on call, a
+     server log line naming the query that broke. */
+  const loadFailure = (error: unknown) => {
+    const detail = (error instanceof Error ? error.message : String(error)).split("\n")[0];
+    console.error(`[inventory] could not load the stock record for ${id}: ${detail}`);
+    return shell(
+      <section className="rounded-xl border border-warn/25 bg-warn-soft px-5 py-8 text-center">
+        <p className="text-sm font-semibold text-ink">
+          This product’s stock could not be loaded.
+        </p>
+        <p className="mx-auto mt-2 max-w-xl break-words font-mono text-xs text-ink-soft">
+          {detail}
+        </p>
+        <p className="mt-2 text-sm text-ink-soft">
+          Nothing was changed — a failed read saves nothing. Reload to try again, and if it keeps
+          happening quote the message above to a manager.
+        </p>
+        <Link
+          href="/inventory"
+          className="mt-4 inline-block text-sm font-semibold text-flame-700 hover:underline"
+        >
+          Back to the inventory
+        </Link>
+      </section>,
+    );
+  };
+
+  const productOutcome = await stock.product(id).then(
+    (value) => ({ ok: true as const, value }),
+    (error: unknown) => ({ ok: false as const, error }),
+  );
+  if (!productOutcome.ok) return loadFailure(productOutcome.error);
+
+  const product = productOutcome.value;
   if (!product) {
     return shell(
       <p className="rounded-xl border border-line bg-card px-5 py-8 text-center text-sm text-ink-soft">
@@ -74,12 +111,18 @@ export default async function ProductStockPage({ params, searchParams }: PagePro
     );
   }
 
-  const [locations, rows, movements, lots] = await Promise.all([
+  const stockOutcome = await Promise.all([
     products.listLocations(),
     stock.stockRows({ locationId: branchFilter || null }),
     stock.movements(id, { locationId: branchFilter || null }),
     stock.lots(id, { locationId: branchFilter || null }),
-  ]);
+  ]).then(
+    (value) => ({ ok: true as const, value }),
+    (error: unknown) => ({ ok: false as const, error }),
+  );
+  if (!stockOutcome.ok) return loadFailure(stockOutcome.error);
+
+  const [locations, rows, movements, lots] = stockOutcome.value;
 
   const line = rows.find((r) => r.variantId === id);
   const branches = locations.filter((l) => l.active && l.kind === LocationKind.Branch);
