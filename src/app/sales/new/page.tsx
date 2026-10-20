@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { AppShell } from "@/components/AppShell";
 import { DatabaseUnavailable } from "@/components/customers/DatabaseUnavailable";
 import { currentStaff, stationName } from "@/lib/data";
+import { currentStaffAccess } from "@/lib/auth";
 import { getCustomerContext } from "@/lib/db";
 import { getPosData } from "@/lib/sales/pos-data";
 import { SaleTerminal } from "./SaleTerminal";
@@ -10,7 +11,12 @@ export const metadata: Metadata = { title: "New sale" };
 export const dynamic = "force-dynamic";
 
 export default async function NewSalePage({ searchParams }: { searchParams: Promise<{ branch?: string }> }) {
-  const { products, notice, diagnostic } = await getCustomerContext();
+  const [context, staffAccess, params] = await Promise.all([
+    getCustomerContext(),
+    currentStaffAccess(),
+    searchParams,
+  ]);
+  const { products, notice, diagnostic } = context;
   if (!products) {
     return (
       <AppShell title="New sale" staff={currentStaff} branch={stationName} activeHref="/sales">
@@ -19,8 +25,10 @@ export default async function NewSalePage({ searchParams }: { searchParams: Prom
     );
   }
 
-  const requestedBranch = (await searchParams).branch;
-  const data = await getPosData(products.db, requestedBranch || process.env.SALES_BRANCH_ID || "loc-jam");
+  const requestedBranch = params.branch;
+  const userDefaultBranch = staffAccess?.branchIds[0];
+  const targetBranch = requestedBranch || userDefaultBranch || process.env.SALES_BRANCH_ID || "loc-jam";
+  const data = await getPosData(products.db, targetBranch);
   if (!data) {
     return (
       <AppShell title="New sale" staff={currentStaff} branch={stationName} activeHref="/sales">
@@ -32,6 +40,8 @@ export default async function NewSalePage({ searchParams }: { searchParams: Prom
     );
   }
 
+  const canChangeBranch = staffAccess !== null && (staffAccess.role === "admin" || staffAccess.role === "director");
+
   return (
     <AppShell
       title="Sales › New sale"
@@ -40,7 +50,7 @@ export default async function NewSalePage({ searchParams }: { searchParams: Prom
       branch={data.branch.name}
       activeHref="/sales"
     >
-      <SaleTerminal key={data.branch.id} data={data} canChangeBranch={["Admin", "Director"].includes(currentStaff.role)} />
+      <SaleTerminal key={data.branch.id} data={data} canChangeBranch={canChangeBranch} />
     </AppShell>
   );
 }

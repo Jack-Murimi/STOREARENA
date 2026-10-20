@@ -178,7 +178,19 @@ async function build(): Promise<CustomerContext> {
 }
 
 /** The customer service for this request, and where it is pointed. */
-export function getCustomerContext(): Promise<CustomerContext> {
-  globalThis.__gatewayCustomerContext ??= build();
-  return globalThis.__gatewayCustomerContext;
+export async function getCustomerContext(): Promise<CustomerContext> {
+  if (globalThis.__gatewayCustomerContext) {
+    const ctx = await globalThis.__gatewayCustomerContext;
+    if (ctx.mode !== "unavailable") {
+      return ctx;
+    }
+    globalThis.__gatewayCustomerContext = undefined;
+  }
+
+  const promise = build();
+  const ctx = await promise;
+  if (ctx.mode !== "unavailable") {
+    globalThis.__gatewayCustomerContext = promise;
+  }
+  return ctx;
 }

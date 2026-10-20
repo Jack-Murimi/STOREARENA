@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { getCustomerContext } from "@/lib/db";
+import { currentStaffAccess } from "@/lib/auth";
 
 const clean = (form: FormData, field: string): string => {
   const value = form.get(field);
@@ -22,6 +23,8 @@ async function riderDatabase() {
 /** Adds a rider to one branch. No rider stock location is created: branch stock
  * stays branch stock, and a rider is simply a delivery assignment. */
 export async function createRider(form: FormData): Promise<void> {
+  const staff = await currentStaffAccess();
+  if (!staff) destination("Sign in is required.");
   const name = clean(form, "name");
   const phone = clean(form, "phone");
   const branchId = clean(form, "branch_id");
@@ -52,6 +55,8 @@ export async function createRider(form: FormData): Promise<void> {
 /** Riders remain in history forever. Changing active status only controls
  * whether POS can assign future deliveries; it never removes past receipts. */
 export async function setRiderActive(form: FormData): Promise<void> {
+  const staff = await currentStaffAccess();
+  if (!staff) destination("Sign in is required.");
   const id = clean(form, "id");
   const active = clean(form, "active") === "true";
   if (!id) destination("Choose a rider to update.");

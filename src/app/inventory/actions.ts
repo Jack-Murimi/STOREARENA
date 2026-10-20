@@ -176,6 +176,7 @@ export async function saveOpeningStock(form: FormData): Promise<void> {
   const { stock } = await getCustomerContext();
   if (!stock) fail(new Error("No database connection. Set DATABASE_URL and redeploy."), backTo);
 
+  let savedUrl = "";
   try {
     const rawEntries = text(form, "entries");
     const entries: unknown = JSON.parse(rawEntries);
@@ -195,16 +196,15 @@ export async function saveOpeningStock(form: FormData): Promise<void> {
       occurredOn: text(form, "occurredOn") || null,
     });
     revalidatePath("/inventory");
-    redirect(
-      withMessage(
-        "/inventory",
-        "saved",
-        `Opening stock saved for ${result.entries} branch-product entries: ${result.refills} refills and ${result.empties} empties.`,
-      ),
+    savedUrl = withMessage(
+      "/inventory",
+      "saved",
+      `Opening stock saved for ${result.entries} branch-product entries: ${result.refills} refills and ${result.empties} empties.`,
     );
   } catch (error) {
     fail(error, backTo);
   }
+  redirect(savedUrl);
 }
 
 /** Adds a branch, or a rider van that belongs to one. */

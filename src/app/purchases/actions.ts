@@ -3,20 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { getCustomerContext } from "@/lib/db";
-
-/**
- * Until Supabase Auth is live the app has no signed-in user, so auth.uid()
- * resolves to nothing and the role checks in the RPC correctly refuse the
- * call. This names the acting user explicitly for the duration of the
- * transaction.
- *
- * TEMPORARY. It is replaced by the real session the moment @supabase/ssr
- * lands, and it must not survive that change.
- */
-const ACTOR_UID =
-  process.env.PURCHASES_ACTOR_UID ?? "11111111-2222-3333-4444-555555555555";
-
-const claims = JSON.stringify({ sub: ACTOR_UID, role: "authenticated" });
+import { currentStaffAccess } from "@/lib/auth";
 
 export interface PurchaseFormState {
   error?: string;
@@ -26,6 +13,9 @@ export async function createPurchase(
   _prev: PurchaseFormState,
   formData: FormData,
 ): Promise<PurchaseFormState> {
+  const staff = await currentStaffAccess();
+  if (!staff) return { error: "Your signed-in staff profile is required." };
+
   const { products } = await getCustomerContext();
   if (!products) return { error: "The database is not reachable." };
 
@@ -47,10 +37,12 @@ export async function createPurchase(
     due_date: String(formData.get("due_date") ?? "") || null,
     vat_rate: Number(formData.get("vat_rate") ?? 0),
     notes: String(formData.get("notes") ?? "") || null,
-    actor: String(formData.get("actor") ?? "Portal"),
+    actor: staff.fullName,
     lines,
   };
 
+  const claims = JSON.stringify({ sub: staff.id, role: "authenticated" });
+  let newId: string | null = null;
   try {
     const rows = await products.db.transaction(async (tx) => {
       await tx.query("select set_config('request.jwt.claims', $1, true)", [claims]);
@@ -64,12 +56,13 @@ export async function createPurchase(
       );
       return r;
     });
-    const id = rows[0]?.id;
-    if (!id) return { error: "The invoice was not created." };
-    redirect(`/purchases/${id}?saved=1`);
+    newId = rows[0]?.id ?? null;
+    if (!newId) return { error: "The invoice was not created." };
+    revalidatePath("/purchases");
   } catch (error) {
     return { error: (error as Error).message.split("\n")[0] };
   }
+  redirect(`/purchases/${newId}?saved=1`);
 }
 
 export type PaymentState = { ok: boolean; error?: string };
@@ -86,6 +79,9 @@ export async function recordPayment(
   _prev: PaymentState,
   formData: FormData,
 ): Promise<PaymentState> {
+  const staff = await currentStaffAccess();
+  if (!staff) return { ok: false, error: "Your signed-in staff profile is required." };
+
   const invoiceId = String(formData.get("invoice_id") ?? "");
   const supplierId = String(formData.get("supplier_id") ?? "");
   const branchId = String(formData.get("branch_id") ?? "");

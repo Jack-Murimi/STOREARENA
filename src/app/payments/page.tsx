@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { AppShell } from "@/components/AppShell";
 import { DatabaseUnavailable } from "@/components/customers/DatabaseUnavailable";
+import { SavedToast } from "@/components/customers/SavedToast";
 import { DataTable, EmptyState, KpiCard, PageHeader, StatusBadge } from "@/components/ui";
 import type { DataColumn } from "@/components/ui";
 import { currentStaff, stationName } from "@/lib/data";
@@ -58,7 +59,12 @@ const columns: DataColumn<PaymentRow>[] = [
   },
 ];
 
-export default async function PaymentsPage() {
+export default async function PaymentsPage({
+  searchParams,
+}: {
+  searchParams?: Promise<{ saved?: string }>;
+}) {
+  const params = searchParams ? await searchParams : {};
   const { products, notice, diagnostic } = await getCustomerContext();
   if (!products) {
     return (
@@ -73,7 +79,9 @@ export default async function PaymentsPage() {
   const credit = live.reduce((s, r) => s + r.unallocated, 0);
 
   return (
-    <AppShell title="Payments" subtitle="Money paid to suppliers" staff={currentStaff} branch={stationName} activeHref="/payments">
+    <>
+      <SavedToast key={params.saved ?? "none"} message={params.saved ?? null} />
+      <AppShell title="Payments" subtitle="Money paid to suppliers" staff={currentStaff} branch={stationName} activeHref="/payments">
       <PageHeader
         title="Supplier payments"
         subtitle="One payment can cover several invoices; the rest is kept as credit"

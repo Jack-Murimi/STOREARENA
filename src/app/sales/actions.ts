@@ -2,16 +2,8 @@
 
 import { revalidatePath } from "next/cache";
 import { getCustomerContext } from "@/lib/db";
+import { currentStaffAccess } from "@/lib/auth";
 import type { SaleLineType } from "@/lib/sales/pos-data";
-
-/**
- * Temporary Auth bridge. Until Supabase Auth lands there is no cookie-backed
- * auth.uid(), so server actions set the seeded director's claims transaction-
- * locally. It is intentionally server-only and is replaced by the session
- * claim in the Auth phase.
- */
-const ACTOR_UID = process.env.SALES_ACTOR_UID ?? "11111111-2222-3333-4444-555555555555";
-const ACTOR_CLAIMS = JSON.stringify({ sub: ACTOR_UID, role: "authenticated" });
 
 export type PaymentMethod = "cash" | "mpesa" | "bank" | "card";
 
@@ -124,6 +116,9 @@ export async function completeSale(
   _previous: CompleteSaleState,
   input: CompleteSaleInput,
 ): Promise<CompleteSaleState> {
+  const staff = await currentStaffAccess();
+  if (!staff) return { error: "Your signed-in staff profile is required." };
+
   const { products, notice } = await getCustomerContext();
   if (!products) return { error: notice ?? "The database is not reachable." };
 
@@ -173,9 +168,11 @@ export async function completeSale(
     payments,
   };
 
+  const claims = JSON.stringify({ sub: staff.id, role: "authenticated" });
+
   try {
     const receipt = await products.db.transaction(async (tx) => {
-      await tx.query("select set_config('request.jwt.claims', $1, true)", [ACTOR_CLAIMS]);
+      await tx.query("select set_config('request.jwt.claims', $1, true)", [claims]);
       const created = await tx.query<{ id: string }>("select public.create_sale($1::jsonb) as id", [payload]);
       const saleId = created[0]?.id;
       if (!saleId) throw new Error("sale_not_created");
@@ -244,6 +241,12 @@ export async function voidSale(
   _previous: VoidSaleState,
   formData: FormData,
 ): Promise<VoidSaleState> {
+  const staff = await currentStaffAccess();
+  if (!staff) return { error: "Your signed-in staff profile is required." };
+  if (staff.role !== "admin" && staff.role !== "director") {
+    return { error: "Only an administrator or director can void a sale." };
+  }
+
   const saleId = String(formData.get("sale_id") ?? "").trim();
   const reason = String(formData.get("reason") ?? "").trim();
   if (!saleId) return { error: "This sale could not be identified." };
@@ -251,9 +254,10 @@ export async function voidSale(
 
   const { products, notice } = await getCustomerContext();
   if (!products) return { error: notice ?? "The database is not reachable." };
+  const claims = JSON.stringify({ sub: staff.id, role: "authenticated" });
   try {
     await products.db.transaction(async (tx) => {
-      await tx.query("select set_config('request.jwt.claims', $1, true)", [ACTOR_CLAIMS]);
+      await tx.query("select set_config('request.jwt.claims', $1, true)", [claims]);
       await tx.query("select public.void_sale($1::uuid, $2)", [saleId, reason]);
     });
     revalidatePath("/sales");

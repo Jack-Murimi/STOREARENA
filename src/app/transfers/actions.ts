@@ -43,14 +43,16 @@ export async function postTransfer(form: FormData): Promise<void> {
     delivery_note: value(form, "delivery_note") || null, notes: value(form, "notes") || null,
     actor: staff.fullName, idempotency_key: randomUUID(), lines,
   };
+  let savedMessage = "";
   try {
     const result = await products.db.query<{ create_stock_transfer: { transfer_no: string } }>("select public.create_stock_transfer($1::jsonb)", [payload]);
     const transfer = result[0]?.create_stock_transfer;
     revalidatePath("/transfers"); revalidatePath("/inventory"); revalidatePath("/reports");
-    redirect(`/transfers?saved=${encodeURIComponent(`Transfer ${transfer?.transfer_no ?? ""} posted.`)}`);
+    savedMessage = `Transfer ${transfer?.transfer_no ?? ""} posted.`;
   } catch (error) {
     const raw = (error as Error).message;
     const message = Object.entries(errors).find(([key]) => raw.includes(key))?.[1] ?? "The transfer could not be posted. Check the quantities and try again.";
     redirect(`/transfers?error=${encodeURIComponent(message)}`);
   }
+  redirect(`/transfers?saved=${encodeURIComponent(savedMessage)}`);
 }

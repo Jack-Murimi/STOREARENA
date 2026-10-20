@@ -8,6 +8,7 @@ import { CustomerError, CustomerKind } from "@/lib/customers";
 import type { NewContactInput, NewLocationInput } from "@/lib/customers";
 import type { CustomerService } from "@/lib/customers";
 import { getCustomerContext } from "@/lib/db";
+import { currentStaffAccess } from "@/lib/auth";
 
 /**
  * Customer CRUD, driven straight from the forms.
@@ -76,6 +77,8 @@ function kindFrom(form: FormData): CustomerKind {
  * DATABASE_URL must produce a message, never a crashed function.
  */
 async function requireService(backTo: string): Promise<CustomerService> {
+  const staff = await currentStaffAccess();
+  if (!staff) fail(new Error("Your signed-in staff profile is required."), backTo);
   const { service } = await getCustomerContext();
   if (!service) {
     fail(
@@ -282,6 +285,8 @@ export async function removeContact(form: FormData): Promise<void> {
 // ------------------------------------------------------------------- billing
 
 async function requireBilling(backTo: string): Promise<BillingService> {
+  const staff = await currentStaffAccess();
+  if (!staff) fail(new Error("Your signed-in staff profile is required."), backTo);
   const { billing } = await getCustomerContext();
   if (!billing) {
     fail(

@@ -5,6 +5,7 @@ import { DatabaseUnavailable } from "@/components/customers/DatabaseUnavailable"
 import { ButtonLink, DataTable, PageHeader, StatusBadge } from "@/components/ui";
 import type { DataColumn } from "@/components/ui";
 import { currentStaff, stationName } from "@/lib/data";
+import { currentStaffAccess } from "@/lib/auth";
 import { getCustomerContext } from "@/lib/db";
 import { formatKsh } from "@/lib/format";
 import { getSaleDetail, type SaleDetailLine } from "@/lib/sales/sales-db";
@@ -37,8 +38,13 @@ export default async function SaleDetailPage({ params }: { params: Promise<{ id:
     return <AppShell title="Sale receipt" staff={currentStaff} branch={stationName} activeHref="/sales"><DatabaseUnavailable notice={notice} diagnostic={diagnostic} /></AppShell>;
   }
   const { id } = await params;
-  const sale = await getSaleDetail(products.db, id);
+  const [sale, staffAccess] = await Promise.all([
+    getSaleDetail(products.db, id),
+    currentStaffAccess(),
+  ]);
   if (!sale) notFound();
+
+  const canVoid = staffAccess && (staffAccess.role === "admin" || staffAccess.role === "director");
 
   return (
     <AppShell title={`Receipt ${sale.receiptNo}`} subtitle="Sale detail" staff={currentStaff} branch={sale.branchName} activeHref="/sales">
@@ -54,7 +60,7 @@ export default async function SaleDetailPage({ params }: { params: Promise<{ id:
         <div className="rounded-lg border border-border bg-surface p-4 shadow-card"><h2 className="text-base font-semibold text-ink">Payment</h2><div className="divide-line mt-3">{sale.payments.length > 0 ? sale.payments.map((payment) => <div key={payment.id} className="flex justify-between gap-3 py-2 text-sm"><span>{paymentLabel[payment.method] ?? payment.method}{payment.reference ? <span className="block text-xs text-ink-subtle">{payment.reference}</span> : null}</span><span className="num font-medium">{formatKsh(payment.amount)}</span></div>) : <p className="py-2 text-sm text-ink-muted">No payment recorded — the balance is customer credit.</p>}</div></div>
         <dl className="num rounded-lg border border-border bg-surface p-4 shadow-card"><div className="flex justify-between gap-4 text-sm"><dt className="text-ink-muted">Total</dt><dd className="font-semibold">{formatKsh(sale.total)}</dd></div><div className="mt-2 flex justify-between gap-4 text-sm"><dt className="text-ink-muted">Paid</dt><dd>{formatKsh(sale.amountPaid)}</dd></div><div className="mt-2 flex justify-between gap-4 text-base font-semibold"><dt>Credit due</dt><dd className={sale.balanceDue > 0 ? "text-warn" : "text-ink"}>{formatKsh(sale.balanceDue)}</dd></div>{sale.creditDueDate ? <div className="mt-2 flex justify-between gap-4 text-sm text-ink-muted"><dt>Due date</dt><dd>{sale.creditDueDate}</dd></div> : null}</dl>
       </section>
-      {sale.status === "posted" ? <VoidSaleForm saleId={sale.id} /> : null}
+      {sale.status === "posted" && canVoid ? <VoidSaleForm saleId={sale.id} /> : null}
     </AppShell>
   );
 }

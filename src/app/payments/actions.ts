@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { getCustomerContext } from "@/lib/db";
+import { currentStaffAccess } from "@/lib/auth";
 
 export type AllocateState = { ok: boolean; error?: string };
 
@@ -18,6 +19,9 @@ export async function recordAllocatedPayment(
   _prev: AllocateState,
   formData: FormData,
 ): Promise<AllocateState> {
+  const staff = await currentStaffAccess();
+  if (!staff) return { ok: false, error: "Your signed-in staff profile is required." };
+
   const supplierId = String(formData.get("supplier_id") ?? "");
   const branchId = String(formData.get("branch_id") ?? "");
   const method = String(formData.get("method") ?? "");
@@ -50,7 +54,7 @@ export async function recordAllocatedPayment(
   if (!products) return { ok: false, error: notice ?? "Database unavailable" };
 
   try {
-    const id = await products.db.transaction(async (tx) => {
+    await products.db.transaction(async (tx) => {
       const rows = await tx.query<{ id: string }>(
         `insert into supplier_payments
            (supplier_id, invoice_id, branch_id, paid_on, amount, method, reference, status)
@@ -70,9 +74,9 @@ export async function recordAllocatedPayment(
     });
     revalidatePath("/payments");
     revalidatePath(`/suppliers/${supplierId}`);
-    redirect(`/payments/${id}`);
   } catch (e) {
     const message = e instanceof Error ? e.message.split("\n")[0] : "Could not record the payment";
     return { ok: false, error: message };
   }
+  redirect(`/payments?saved=Payment+recorded`);
 }
