@@ -66,6 +66,8 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
   const lookup = get("q").trim();
   const from = safeDate(get("from"), thirtyDaysAgo);
   const to = safeDate(get("to"), today);
+  const page = Math.max(1, Math.min(10000, Number.parseInt(get("page"), 10) || 1));
+  const pageSize = 50;
   const riderId = get("rider");
   const saleType = get("type") === "delivery" || get("type") === "counter" ? get("type") : "";
   const payment = ["cash", "mpesa", "bank", "card", "credit"].includes(get("payment")) ? get("payment") : "";
@@ -94,8 +96,8 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
     left join riders r on r.id = s.rider_id
     left join sale_payments p on p.sale_id = s.id
         where ($1 = '' or s.branch_id = $1)
-          and (s.sale_date at time zone 'Africa/Nairobi')::date >= $2::date
-          and (s.sale_date at time zone 'Africa/Nairobi')::date <= $3::date
+           and s.sale_date >= ($2::date::timestamp at time zone 'Africa/Nairobi')
+           and s.sale_date < (($3::date + 1)::timestamp at time zone 'Africa/Nairobi')
           and ($4 = '' or s.rider_id::text = $4)
           and ($5 = '' or s.sale_type = $5)
           and ($6 = 'all' or s.status = $6)
@@ -107,8 +109,8 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
                or exists (select 1 from sale_payments lookup_payment where lookup_payment.sale_id = s.id and coalesce(lookup_payment.reference, '') ilike '%' || $9 || '%'))
         group by s.id, b.name, c.name, r.name
         order by s.sale_date desc
-        limit 500`,
-      [branchId, from, to, riderId, saleType, status, payment, customerId, lookup],
+         limit $10 offset $11`,
+      [branchId, from, to, riderId, saleType, status, payment, customerId, lookup, pageSize + 1, (page - 1) * pageSize],
     ),
     // The headline cards must cover every matching receipt, not the 500 rows
     // that happen to be on the page.
@@ -121,8 +123,8 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
          from sales s
     left join customers c on c.id = s.customer_id
         where ($1 = '' or s.branch_id = $1)
-          and (s.sale_date at time zone 'Africa/Nairobi')::date >= $2::date
-          and (s.sale_date at time zone 'Africa/Nairobi')::date <= $3::date
+           and s.sale_date >= ($2::date::timestamp at time zone 'Africa/Nairobi')
+           and s.sale_date < (($3::date + 1)::timestamp at time zone 'Africa/Nairobi')
           and ($4 = '' or s.rider_id::text = $4)
           and ($5 = '' or s.sale_type = $5)
           and ($6 = 'all' or s.status = $6)
@@ -139,7 +141,8 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
   const branches: Branch[] = branchRows.map((row) => ({ id: text(row.id), name: text(row.name), code: text(row.code) }));
   const customers = customerRows.map((row) => ({ id: text(row.id), name: text(row.name) }));
   const riders: Rider[] = riderRows.map((row) => ({ id: text(row.id), name: text(row.name), branchId: text(row.branch_id), active: row.is_active === true || row.is_active === "t" }));
-  const sales: ReportSale[] = saleRows.map((row) => ({
+  const hasNextPage = saleRows.length > pageSize;
+  const sales: ReportSale[] = saleRows.slice(0, pageSize).map((row) => ({
     id: text(row.id), receiptNo: text(row.receipt_no), saleDate: text(row.sale_date), branchName: text(row.branch_name),
     customerName: row.customer_name ? text(row.customer_name) : null, riderName: row.rider_name ? text(row.rider_name) : null,
     saleType: row.sale_type === "delivery" ? "delivery" : "counter", paymentMethods: Array.isArray(row.payment_methods) ? row.payment_methods.map(text) : [],
@@ -218,6 +221,15 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
     return <AppShell title="Reports" subtitle="Management reporting across sales, customers, stock, purchases, and deliveries" staff={currentStaff} branch={stationName} activeHref="/reports"><PageHeader title={title} subtitle={subtitle} action={<ButtonLink href="/" variant="secondary">Back to dashboard</ButtonLink>} />{reportNavigation}<Card title="Filters" action={<a href={exportHref} className="text-sm font-medium text-orange-700 hover:underline">Download CSV</a>}>{baseFilters}</Card>{content}</AppShell>;
   }
 
+  const pageHref = (target: number) => {
+    const query = new URLSearchParams();
+    for (const [key, value] of Object.entries(params)) {
+      if (key !== "page" && typeof value === "string") query.set(key, value);
+    }
+    query.set("page", String(target));
+    return `/reports?${query}`;
+  };
+
   return <AppShell title="Reports" subtitle="Filter sales by branch, date, customer, rider, payment, and type" staff={currentStaff} branch={stationName} activeHref="/reports">
     <PageHeader title="Sales report" subtitle={`${from} to ${to}`} action={<ButtonLink href="/" variant="secondary">Back to dashboard</ButtonLink>} />
     {reportNavigation}
@@ -239,6 +251,6 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
     </Card>
     <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4"><KpiCard label="Sales" value={String(receipts)} subtext="Posted receipts" /><KpiCard label="Revenue" value={formatKsh(revenue)} subtext="Posted sales total" /><KpiCard label="Collected" value={formatKsh(paid)} subtext="Recorded payments" /><KpiCard label="Outstanding" value={formatKsh(due)} subtext={`${deliveries} delivery sale${deliveries === 1 ? "" : "s"}`} /></div>
     <SalesReportCharts daily={daily} paymentReceipts={paymentReceipts} saleTypes={saleTypes} />
-    <Card title="Sales report" subtitle={`${sales.length} receipt${sales.length === 1 ? "" : "s"} match these filters`} flush><DataTable rows={sales} columns={columns} rowKey={(sale) => sale.id} rowHref={(sale) => `/sales/${sale.id}`} rowLabel={(sale) => sale.receiptNo} caption="Filtered sales report" empty={<EmptyState icon={ReceiptIcon} title="No sales match these filters" description="Adjust the date range, customer, branch, rider, payment, or search code and try again." />} /></Card>
+     <Card title="Sales report" subtitle={`Page ${page}`} flush><DataTable rows={sales} columns={columns} rowKey={(sale) => sale.id} rowHref={(sale) => `/sales/${sale.id}`} rowLabel={(sale) => sale.receiptNo} caption="Filtered sales report" empty={<EmptyState icon={ReceiptIcon} title="No sales match these filters" description="Adjust the date range, customer, branch, rider, payment, or search code and try again." />} /><nav aria-label="Sales report pages" className="flex justify-end gap-3 border-t border-border p-3"><a aria-disabled={page === 1} className={page === 1 ? "pointer-events-none text-ink-subtle" : "text-orange-700"} href={pageHref(page - 1)}>Previous</a><a aria-disabled={!hasNextPage} className={!hasNextPage ? "pointer-events-none text-ink-subtle" : "text-orange-700"} href={pageHref(page + 1)}>Next</a></nav></Card>
   </AppShell>;
 }

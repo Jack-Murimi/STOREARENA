@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { performance } from "node:perf_hooks";
 import { AppShell } from "@/components/AppShell";
 import { SalesMix } from "@/components/dashboard/SalesMix";
 import { SalesTrendChart } from "@/components/dashboard/SalesTrendChart";
@@ -56,6 +57,7 @@ function saleType(row: Record<string, unknown>): SaleType {
 }
 
 export default async function DashboardPage() {
+  const renderStarted = performance.now();
   const now = new Date();
   const reportDate = (date: Date) =>
     new Intl.DateTimeFormat("en-CA", { timeZone: "Africa/Nairobi" }).format(date);
@@ -73,6 +75,7 @@ export default async function DashboardPage() {
 
   if (products && stockService) {
     try {
+      const queryStarted = performance.now();
       const [stockRows, salesRows, weekRows, todayRows] = await Promise.all([
         stockService.stockRows(),
         // One row per sale *line*, with the line's own totals. The category
@@ -101,7 +104,8 @@ export default async function DashboardPage() {
                select method from sale_payments where sale_id = s.id order by created_at limit 1
              ) sp on true
             where s.status = 'posted'
-              and (s.sale_date at time zone 'Africa/Nairobi')::date = ${NAIROBI_TODAY}
+               and s.sale_date >= (${NAIROBI_TODAY}::timestamp at time zone 'Africa/Nairobi')
+               and s.sale_date < ((${NAIROBI_TODAY} + 1)::timestamp at time zone 'Africa/Nairobi')
             order by s.sale_date desc, l.id`,
         ),
         // Takings per day, aggregated from `sales` alone. Joining sale_lines
@@ -143,9 +147,11 @@ export default async function DashboardPage() {
           `select count(*)::int as receipts, coalesce(sum(s.total), 0) as takings
              from sales s
             where s.status = 'posted'
-              and (s.sale_date at time zone 'Africa/Nairobi')::date = ${NAIROBI_TODAY}`,
+               and s.sale_date >= (${NAIROBI_TODAY}::timestamp at time zone 'Africa/Nairobi')
+               and s.sale_date < ((${NAIROBI_TODAY} + 1)::timestamp at time zone 'Africa/Nairobi')`,
         ),
       ]);
+      console.info(`[dashboard] data queries ${(performance.now() - queryStarted).toFixed(1)}ms`);
 
       const stockBySize = new Map<
         number,
@@ -233,6 +239,7 @@ export default async function DashboardPage() {
     loadError ??= `Today’s receipts disagree between queries (${receiptsToday} vs ${lineReceipts}).`;
   }
   const bestSeller = metrics.bestSellingSizeKg(salesToday);
+  console.info(`[dashboard] server render work ${(performance.now() - renderStarted).toFixed(1)}ms`);
 
   const kgOnHand = metrics.gasKgOnHand(stock);
   const cylindersOnHand = metrics.totalCylindersOnHand(stock);

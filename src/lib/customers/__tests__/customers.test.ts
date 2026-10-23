@@ -521,7 +521,7 @@ describe("the embedded schema", () => {
       "utf8",
     );
 
-    expect(CUSTOMER_SCHEMA).toBe(onDisk);
+    expect(CUSTOMER_SCHEMA).toBe(onDisk.replace(/\r\n/g, "\n"));
   });
 });
 

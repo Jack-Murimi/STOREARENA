@@ -474,7 +474,8 @@ export class StockLedgerService {
       filter = "AND p.location_id = $1";
     }
 
-    const rows = await this.db.query<Row>(
+    const [rows, positionRows, costs] = await Promise.all([
+      this.db.query<Row>(
       `SELECT v.id, v.name, v.code, v.size_kg, v.list_price_ksh, v.reorder_level,
               c.id AS category_id, c.name AS category_name, c.stock_model, b.name AS brand_name,
               coalesce(sum(p.quantity) FILTER (WHERE p.state = 'REFILL'), 0) AS refills,
@@ -486,32 +487,25 @@ export class StockLedgerService {
          LEFT JOIN inventory_positions p ON p.variant_id = v.id ${filter}
         GROUP BY v.id, c.id, b.id
         ORDER BY v.size_kg NULLS LAST, b.name, c.name`,
-      params,
-    );
-
-    const costParams: unknown[] = [];
-    let costFilter = "";
-    if (options.locationId) {
-      costParams.push(options.locationId);
-      costFilter = "WHERE location_id = $1";
-    }
-    const positionRows = await this.db.query<Row>(
+       params,
+      ),
+      this.db.query<Row>(
       `SELECT p.variant_id, p.state, p.quantity, l.id AS location_id, l.name AS location_name
          FROM inventory_positions p
          JOIN stock_locations l ON l.id = p.location_id
         WHERE p.quantity > 0
         ORDER BY l.name`,
-    );
-
-    const costs = await this.db.query<Row>(
+      ),
+      this.db.query<Row>(
       `SELECT variant_id,
               sum(cost_on_hand_ksh) AS cost_on_hand,
               max(last_purchase_ksh) AS last_cost,
               max(last_purchased_on) AS last_on
-         FROM v_stock_cost ${costFilter}
-        GROUP BY variant_id`,
-      costParams,
-    );
+         FROM v_stock_cost ${options.locationId ? "WHERE location_id = $1" : ""}
+         GROUP BY variant_id`,
+       options.locationId ? [options.locationId] : [],
+      ),
+    ]);
 
     return rows.map((row) => {
       const cost = costs.find((c) => str(c.variant_id) === str(row.id));

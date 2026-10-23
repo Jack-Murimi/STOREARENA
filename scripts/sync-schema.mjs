@@ -3,6 +3,7 @@ import { readFileSync, writeFileSync } from "node:fs";
 
 const embed = (file) =>
   readFileSync(file, "utf8")
+    .replace(/\r\n/g, "\n")
     .replace(/\\/g, "\\\\")
     .replace(/`/g, "\\`")
     .replace(/\$\{/g, "\\${");

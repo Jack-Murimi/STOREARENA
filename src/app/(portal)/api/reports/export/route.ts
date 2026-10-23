@@ -107,8 +107,8 @@ export async function GET(request: Request): Promise<Response> {
            from riders r
            join stock_locations b on b.id = r.branch_id
       left join sales s on s.rider_id = r.id
-                and (s.sale_date at time zone 'Africa/Nairobi')::date >= $2::date
-                and (s.sale_date at time zone 'Africa/Nairobi')::date <= $3::date
+                and s.sale_date >= ($2::date::timestamp at time zone 'Africa/Nairobi')
+                and s.sale_date < (($3::date + 1)::timestamp at time zone 'Africa/Nairobi')
           where ($1 = '' or r.branch_id = $1)
           group by r.id, b.name
           order by delivered_value desc
@@ -152,8 +152,8 @@ export async function GET(request: Request): Promise<Response> {
       left join customers c on c.id = s.customer_id
       left join riders r on r.id = s.rider_id
           where ($1 = '' or s.branch_id = $1)
-            and (s.sale_date at time zone 'Africa/Nairobi')::date >= $2::date
-            and (s.sale_date at time zone 'Africa/Nairobi')::date <= $3::date
+            and s.sale_date >= ($2::date::timestamp at time zone 'Africa/Nairobi')
+            and s.sale_date < (($3::date + 1)::timestamp at time zone 'Africa/Nairobi')
             and ($4 = '' or s.customer_id = $4)
             and ($5 = '' or s.rider_id::text = $5)
             and ($6 = '' or s.sale_type = $6)

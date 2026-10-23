@@ -2,7 +2,6 @@ import type { ReactNode } from "react";
 import { redirect } from "next/navigation";
 import { currentStaffAccess } from "@/lib/auth";
 import { getCustomerContext } from "@/lib/db";
-import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 /**
  * The authorisation gate for every portal screen.
@@ -23,17 +22,11 @@ import { createSupabaseServerClient } from "@/lib/supabase/server";
  * authenticated visitor on /login straight back to "/".
  */
 export default async function PortalLayout({ children }: { children: ReactNode }) {
-  // Run auth check and DB context in parallel — cuts sequential round-trips.
-  // getSession() reads the cookie — no network call. Middleware already verified
-  // the JWT via getUser() so a second network round-trip here is redundant.
-  const [supabase, { products, notice, diagnostic }] = await Promise.all([
-    createSupabaseServerClient(),
+  // currentStaffAccess is request-cached and verifies both session and staff record.
+  const [{ products, notice, diagnostic }, staff] = await Promise.all([
     getCustomerContext(),
+    currentStaffAccess(),
   ]);
-  const {
-    data: { session },
-  } = await supabase.auth.getSession();
-  if (!session) redirect("/login");
 
   // A database outage must not be reported as "you are not staff": that would
   // send a legitimate manager to a page telling them their account was
@@ -67,7 +60,6 @@ export default async function PortalLayout({ children }: { children: ReactNode }
     );
   }
 
-  const staff = await currentStaffAccess();
   if (!staff) redirect("/no-access");
 
   return children;
