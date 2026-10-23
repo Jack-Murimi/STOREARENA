@@ -8,7 +8,6 @@ import {
   DataTable,
   EmptyState,
   FilterBar,
-  KpiCard,
   PageHeader,
   SearchInput,
   SegmentedControl,
@@ -155,27 +154,39 @@ export default async function PurchasesPage({
         }
       />
 
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <KpiCard label="Billed this month" value={formatKsh(summary.billedThisMonth)} />
-        <KpiCard label="Paid this month" value={formatKsh(summary.paidThisMonth)} />
-        <KpiCard label="Outstanding" value={formatKsh(summary.outstanding)} />
-        <KpiCard
-          label="Overdue"
-          value={formatKsh(summary.overdue)}
-          subtext={summary.overdue > 0 ? "past due date" : "nothing past due"}
-          chip={
-            summary.overdue > 0 ? <StatusBadge tone="critical">Chase</StatusBadge> : undefined
-          }
-        />
+      {/* compact summary strip — replaces 4 equal-weight KPI cards */}
+      <div className="overflow-hidden rounded-xl border border-line bg-card px-5 py-3 shadow-card">
+        <dl className="flex flex-wrap items-center gap-x-5 gap-y-1 text-sm">
+          <div className="flex items-center gap-1.5">
+            <dt className="text-xs text-ink-soft">Billed this month</dt>
+            <dd className="num font-semibold text-ink">{formatKsh(summary.billedThisMonth)}</dd>
+          </div>
+          <span aria-hidden className="text-ink-soft/40">·</span>
+          <div className="flex items-center gap-1.5">
+            <dt className="text-xs text-ink-soft">Paid this month</dt>
+            <dd className="num font-semibold text-ink">{formatKsh(summary.paidThisMonth)}</dd>
+          </div>
+          <span aria-hidden className="text-ink-soft/40">·</span>
+          <div className="flex items-center gap-1.5">
+            <dt className="text-xs text-ink-soft">Outstanding</dt>
+            <dd className={`num font-semibold ${summary.outstanding > 0 ? "text-warn" : "text-ink"}`}>
+              {formatKsh(summary.outstanding)}
+            </dd>
+          </div>
+          <span aria-hidden className="text-ink-soft/40">·</span>
+          <div className="flex items-center gap-1.5">
+            <dt className="text-xs text-ink-soft">Overdue</dt>
+            <dd className={`num font-semibold ${summary.overdue > 0 ? "text-critical" : "text-ink-soft"}`}>
+              {summary.overdue > 0 ? formatKsh(summary.overdue) : "None"}
+            </dd>
+          </div>
+        </dl>
       </div>
 
+      {/* unified filter bar — single form preserving all params */}
       <FilterBar
         search={
-          <form action="/purchases" method="get" role="search">
-            <input type="hidden" name="status" value={status} />
-            <input type="hidden" name="supplier" value={supplierId} />
-            <input type="hidden" name="branch" value={branchId} />
-            {showVoid ? <input type="hidden" name="void" value="1" /> : null}
+          <form action="/purchases" method="get" role="search" id="purchases-filter">
             <SearchInput
               name="q"
               defaultValue={query}
@@ -200,28 +211,27 @@ export default async function PurchasesPage({
                 { value: "overdue", label: "Overdue" },
               ]}
             />
+            {/* supplier select lives in its own small link-based form to avoid nested form issues */}
             <form action="/purchases" method="get" className="flex items-center gap-2">
               <input type="hidden" name="q" value={query} />
               <input type="hidden" name="status" value={status} />
               <input type="hidden" name="branch" value={branchId} />
               {showVoid ? <input type="hidden" name="void" value="1" /> : null}
-              <label className="sr-only" htmlFor="supplier">
-                Filter by supplier
-              </label>
+              <label className="sr-only" htmlFor="supplier-filter">Filter by supplier</label>
               <select
-                id="supplier"
+                id="supplier-filter"
                 name="supplier"
                 defaultValue={supplierId}
-                onChange={undefined}
                 className="h-9 rounded-md border border-border bg-surface px-2 text-sm text-ink focus:border-orange-500 focus:outline-none"
               >
                 <option value="">All suppliers</option>
                 {suppliers.map((s) => (
-                  <option key={s.id} value={s.id}>
-                    {s.name}
-                  </option>
+                  <option key={s.id} value={s.id}>{s.name}</option>
                 ))}
               </select>
+              <button type="submit" className="h-9 rounded-md border border-border bg-surface px-3 text-sm text-ink hover:bg-surface-muted">
+                Filter
+              </button>
             </form>
             <a
               href={voidHref(query, status, supplierId, branchId, showVoid)}

@@ -32,26 +32,34 @@ const label = (role: string) => role.replace(/\b\w/g, (letter) => letter.toUpper
 export async function currentStaffAccess(): Promise<StaffAccess | null> {
   try {
     const supabase = await createSupabaseServerClient();
+    // getSession() reads the cookie — no network call. Middleware already
+    // verified the JWT, so a second getUser() round-trip is redundant here.
     const {
-      data: { user },
-    } = await supabase.auth.getUser();
-    if (!user) return null;
+      data: { session },
+    } = await supabase.auth.getSession();
+    if (!session) return null;
+    const userId = session.user.id;
 
     const { products } = await getCustomerContext();
     if (!products) return null;
-    const profiles = await products.db.query<{ full_name: string; role: string }>(
-      "select full_name, role from app_users where id = $1 and is_active",
-      [user.id],
-    );
+
+    // Run both DB queries in parallel.
+    const [profiles, grants] = await Promise.all([
+      products.db.query<{ full_name: string; role: string }>(
+        "select full_name, role from app_users where id = $1 and is_active",
+        [userId],
+      ),
+      products.db.query<{ branch_id: string }>(
+        "select branch_id from user_branches where user_id = $1 order by branch_id",
+        [userId],
+      ),
+    ]);
+
     const profile = profiles[0];
     if (!profile || !APP_ROLES.includes(profile.role as AppRole)) return null;
 
-    const grants = await products.db.query<{ branch_id: string }>(
-      "select branch_id from user_branches where user_id = $1 order by branch_id",
-      [user.id],
-    );
     return {
-      id: user.id,
+      id: userId,
       fullName: profile.full_name,
       role: profile.role as AppRole,
       branchIds: grants.map((grant) => grant.branch_id),

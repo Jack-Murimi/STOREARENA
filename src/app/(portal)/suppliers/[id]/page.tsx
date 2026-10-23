@@ -3,9 +3,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { AppShell } from "@/components/AppShell";
 import { DatabaseUnavailable } from "@/components/customers/DatabaseUnavailable";
-import {
-  Card, DataTable, EmptyState, KpiCard, PageHeader, Tabs,
-} from "@/components/ui";
+import { DataTable, EmptyState, StatusBadge, Tabs } from "@/components/ui";
 import type { DataColumn } from "@/components/ui";
 import { currentStaff, stationName } from "@/lib/data";
 import { getCustomerContext } from "@/lib/db";
@@ -24,7 +22,7 @@ const invoiceColumns: DataColumn<PurchaseRow>[] = [
   { key: "date", header: "Date", priority: 1, cell: (r) => r.invoiceDate },
   {
     key: "no", header: "Invoice", priority: 1,
-    cell: (r) => <span className="font-medium text-[var(--text-primary)]">{r.invoiceNo}</span>,
+    cell: (r) => <span className="font-medium text-ink">{r.invoiceNo}</span>,
   },
   { key: "branch", header: "Branch", priority: 3, cell: (r) => r.branchName },
   {
@@ -33,12 +31,12 @@ const invoiceColumns: DataColumn<PurchaseRow>[] = [
   },
   {
     key: "paid", header: "Paid", align: "right", num: true, priority: 2,
-    cell: (r) => <span className="text-[var(--text-secondary)]">{formatKsh(r.paid)}</span>,
+    cell: (r) => <span className="text-ink-soft">{formatKsh(r.paid)}</span>,
   },
   {
     key: "due", header: "Outstanding", align: "right", num: true, priority: 2,
     cell: (r) => (
-      <span className={r.due > 0 ? "font-medium text-[var(--warn)]" : "text-[var(--text-tertiary)]"}>
+      <span className={r.due > 0 ? "font-medium text-warn" : "text-ink-subtle"}>
         {formatKsh(r.due)}
       </span>
     ),
@@ -51,9 +49,9 @@ const statementColumns: DataColumn<StatementLine>[] = [
   {
     key: "ref", header: "Reference", priority: 1,
     cell: (r) => (
-      <span className="text-[var(--text-secondary)]">
+      <span className="text-ink-soft">
         {r.reference}
-        <span className="ml-2 text-[var(--text-xs)] text-[var(--text-tertiary)]">
+        <span className="ml-2 text-xs text-ink-subtle">
           {r.kind === "payment" ? "payment" : "invoice"}
         </span>
       </span>
@@ -61,16 +59,16 @@ const statementColumns: DataColumn<StatementLine>[] = [
   },
   {
     key: "debit", header: "Invoiced", align: "right", num: true, priority: 1,
-    cell: (r) => (r.debit > 0 ? formatKsh(r.debit) : <span className="text-[var(--text-tertiary)]">—</span>),
+    cell: (r) => (r.debit > 0 ? formatKsh(r.debit) : <span className="text-ink-subtle">—</span>),
   },
   {
     key: "credit", header: "Paid", align: "right", num: true, priority: 1,
-    cell: (r) => (r.credit > 0 ? formatKsh(r.credit) : <span className="text-[var(--text-tertiary)]">—</span>),
+    cell: (r) => (r.credit > 0 ? formatKsh(r.credit) : <span className="text-ink-subtle">—</span>),
   },
   {
     key: "running", header: "Balance", align: "right", num: true, priority: 1,
     cell: (r) => (
-      <span className={r.running > 0 ? "font-medium text-[var(--warn)]" : "text-[var(--text-secondary)]"}>
+      <span className={r.running > 0 ? "font-medium text-warn" : "text-ink-soft"}>
         {formatKsh(r.running)}
       </span>
     ),
@@ -109,144 +107,194 @@ export default async function SupplierPage({ params }: Props) {
   const ageingRows = AGEING_LABELS.map((a) => ({ ...a, value: supplier.ageing[a.key] }));
   const paidCount = invoices.filter((i) => i.paymentStatus === "paid").length;
 
+  const infoRows: [string, string][] = [
+    ["KRA PIN", supplier.kraPin ?? "—"],
+    ["Phone", supplier.phone ?? "—"],
+    ["Email", supplier.email ?? "—"],
+    ["Payment terms", `${supplier.paymentTermsDays} days`],
+    ["Last invoice", supplier.lastInvoiceDate ?? "—"],
+    ["Last payment", supplier.lastPaymentDate ?? "—"],
+  ];
+
   return (
     <AppShell
-      title={supplier.name}
-      subtitle="Supplier account"
+      title="Suppliers"
+      subtitle={supplier.name}
       staff={currentStaff}
       branch={stationName}
       activeHref="/suppliers"
     >
-      <PageHeader
-        title={supplier.name}
-        subtitle={
-          [
-            supplier.isActive ? "Active" : "Inactive",
-            `${supplier.paymentTermsDays}-day terms`,
-            supplier.phone ?? null,
-            supplier.email ?? null,
-          ].filter(Boolean).join(" · ")
-        }
-        action={
-          <Link
-            href="/purchases/new"
-            className="inline-flex h-[var(--touch-target)] items-center gap-2 rounded-lg bg-[var(--orange-500)] px-4 text-[var(--text-sm)] font-semibold text-[var(--text-on-orange)] hover:bg-[var(--orange-600)]"
-          >
-            New invoice
+      {/* ── page header ── */}
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex flex-wrap items-center gap-3">
+          <Link href="/suppliers" className="text-xs font-medium text-ink-soft transition hover:text-ink">
+            ← Suppliers
           </Link>
-        }
-      />
-
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <KpiCard
-          label="We owe"
-          value={formatKsh(supplier.balance)}
-          subtext={supplier.balance > 0 ? "Outstanding" : "Account settled"}
-        />
-        <KpiCard
-          label="Overdue"
-          value={formatKsh(supplier.overdueAmount)}
-          subtext={supplier.overdueAmount > 0 ? "Past due date" : "Nothing overdue"}
-        />
-        <KpiCard
-          label="Total billed"
-          value={formatKsh(supplier.totalBilled)}
-          subtext={`${invoices.length} invoice${invoices.length === 1 ? "" : "s"}`}
-        />
-        <KpiCard
-          label="Total paid"
-          value={formatKsh(supplier.totalPaid)}
-          subtext={`${paidCount} settled`}
-        />
+          <h1 className="text-md font-semibold text-ink">{supplier.name}</h1>
+          <StatusBadge tone={supplier.isActive ? "ok" : "critical"}>
+            {supplier.isActive ? "Active" : "Inactive"}
+          </StatusBadge>
+        </div>
+        <Link
+          href="/purchases/new"
+          className="inline-flex h-9 items-center gap-2 rounded-lg bg-flame-500 px-4 text-sm font-semibold text-white transition hover:bg-flame-600"
+        >
+          New invoice
+        </Link>
       </div>
 
-      <Card title="Ageing" subtitle="What we owe, by how late it is">
-        <dl className="grid grid-cols-2 gap-3 sm:grid-cols-5">
-          {ageingRows.map((a) => (
-            <div key={a.key} className="rounded-lg border border-[var(--line)] bg-[var(--surface)] px-3 py-2.5">
-              <dt className="text-[var(--text-xs)] text-[var(--text-tertiary)]">{a.label}</dt>
-              <dd
-                className={
-                  a.value > 0 && (a.key === "d61_90" || a.key === "d90Plus")
-                    ? "mt-0.5 text-[var(--text-base)] font-semibold text-[var(--critical)]"
-                    : a.value > 0
-                      ? "mt-0.5 text-[var(--text-base)] font-semibold text-[var(--warn)]"
-                      : "mt-0.5 text-[var(--text-base)] font-semibold text-[var(--text-tertiary)]"
-                }
-              >
-                {formatKsh(a.value)}
-              </dd>
-            </div>
-          ))}
-        </dl>
-      </Card>
+      {/* ── two-column layout ── */}
+      <div className="flex flex-col gap-4 lg:grid lg:grid-cols-[340px_1fr] lg:gap-6">
 
-      <Tabs
-        label="Supplier account"
-        tabs={[
-          {
-            id: "invoices",
-            label: `Invoices (${invoices.length})`,
-            content: (
-              <DataTable
-                columns={invoiceColumns}
-                rows={invoices}
-                rowKey={(r) => r.id}
-                rowHref={(r) => `/purchases/${r.id}`}
-                rowLabel={(r) => r.invoiceNo}
-                caption={`Invoices from ${supplier.name}`}
-                empty={
-                  <EmptyState
-                    title="No invoices yet"
-                    description="Purchase invoices raised against this supplier will appear here."
-                  />
-                }
-              />
-            ),
-          },
-          {
-            id: "statement",
-            label: `Statement (${statement.length})`,
-            content: (
-              <DataTable
-                columns={statementColumns}
-                rows={statement}
-                rowKey={(r) => `${r.date}-${r.reference}-${r.kind}`}
-                caption={`Statement for ${supplier.name}`}
-                empty={
-                  <EmptyState
-                    title="Nothing on the account"
-                    description="Invoices and payments build the running balance here."
-                  />
-                }
-              />
-            ),
-          },
-          {
-            id: "details",
-            label: "Details",
-            content: (
-              <dl className="grid gap-x-6 gap-y-3 sm:grid-cols-2">
-                {[
-                  ["Supplier", supplier.name],
-                  ["Status", supplier.isActive ? "Active" : "Inactive"],
-                  ["Payment terms", `${supplier.paymentTermsDays} days`],
-                  ["KRA PIN", supplier.kraPin ?? "—"],
-                  ["Phone", supplier.phone ?? "—"],
-                  ["Email", supplier.email ?? "—"],
-                  ["Last invoice", supplier.lastInvoiceDate ?? "—"],
-                  ["Last payment", supplier.lastPaymentDate ?? "—"],
-                ].map(([k, v]) => (
-                  <div key={k} className="flex items-baseline justify-between gap-4 border-b border-[var(--line)] pb-2">
-                    <dt className="text-[var(--text-sm)] text-[var(--text-tertiary)]">{k}</dt>
-                    <dd className="text-right text-[var(--text-sm)] font-medium text-[var(--text-primary)]">{v}</dd>
+        {/* SIDE — supplier info card */}
+        <aside className="flex flex-col gap-4 lg:order-1">
+          <div className="overflow-hidden rounded-xl border border-line bg-card shadow-card">
+
+            {/* compact summary strip */}
+            <div className="flex flex-wrap items-center gap-x-5 gap-y-1 border-b border-line px-5 py-3">
+              <span className="text-xs text-ink-soft">
+                Billed{" "}
+                <span className="num font-semibold text-ink">{formatKsh(supplier.totalBilled)}</span>
+              </span>
+              <span className="text-ink-subtle">·</span>
+              <span className="text-xs text-ink-soft">
+                Paid{" "}
+                <span className="num font-semibold text-ink">{formatKsh(supplier.totalPaid)}</span>
+              </span>
+              <span className="text-ink-subtle">·</span>
+              <span className="text-xs text-ink-soft">
+                We owe{" "}
+                <span className={`num font-semibold ${supplier.balance > 0 ? "text-warn" : "text-ok"}`}>
+                  {supplier.balance > 0 ? formatKsh(supplier.balance) : "Settled"}
+                </span>
+              </span>
+              {supplier.overdueAmount > 0 && (
+                <>
+                  <span className="text-ink-subtle">·</span>
+                  <span className="text-xs text-ink-soft">
+                    Overdue{" "}
+                    <span className="num font-semibold text-critical">{formatKsh(supplier.overdueAmount)}</span>
+                  </span>
+                </>
+              )}
+            </div>
+
+            {/* supplier info */}
+            <dl className="divide-y divide-line">
+              {infoRows.map(([k, v]) => (
+                <div key={k} className="flex items-baseline justify-between gap-4 px-5 py-2.5">
+                  <dt className="text-xs text-ink-soft shrink-0">{k}</dt>
+                  <dd className="text-right text-sm font-medium text-ink">{v}</dd>
+                </div>
+              ))}
+            </dl>
+
+            {/* ageing */}
+            <div className="border-t border-line px-5 py-4">
+              <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-ink-soft">
+                Ageing
+              </p>
+              <dl className="grid grid-cols-5 gap-2">
+                {ageingRows.map((a) => (
+                  <div key={a.key} className="rounded-lg border border-line bg-canvas px-2 py-2 text-center">
+                    <dt className="text-xs text-ink-subtle">{a.label}</dt>
+                    <dd
+                      className={`num mt-0.5 text-sm font-semibold ${
+                        a.value > 0 && (a.key === "d61_90" || a.key === "d90Plus")
+                          ? "text-critical"
+                          : a.value > 0
+                          ? "text-warn"
+                          : "text-ink-subtle"
+                      }`}
+                    >
+                      {formatKsh(a.value)}
+                    </dd>
                   </div>
                 ))}
               </dl>
-            ),
-          },
-        ]}
-      />
+            </div>
+
+            {/* invoices count footer */}
+            <p className="border-t border-line px-5 py-2 text-xs text-ink-subtle">
+              {invoices.length} invoice{invoices.length === 1 ? "" : "s"} · {paidCount} settled
+            </p>
+          </div>
+        </aside>
+
+        {/* MAIN — tabs */}
+        <main className="min-w-0 lg:order-2">
+          <div className="overflow-hidden rounded-xl border border-line bg-card shadow-card">
+            <div className="px-5 py-4">
+              <Tabs
+                label="Supplier account"
+                tabs={[
+                  {
+                    id: "invoices",
+                    label: `Invoices (${invoices.length})`,
+                    content: (
+                      <DataTable
+                        columns={invoiceColumns}
+                        rows={invoices}
+                        rowKey={(r) => r.id}
+                        rowHref={(r) => `/purchases/${r.id}`}
+                        rowLabel={(r) => r.invoiceNo}
+                        caption={`Invoices from ${supplier.name}`}
+                        empty={
+                          <EmptyState
+                            title="No invoices yet"
+                            description="Purchase invoices raised against this supplier will appear here."
+                          />
+                        }
+                      />
+                    ),
+                  },
+                  {
+                    id: "statement",
+                    label: `Statement (${statement.length})`,
+                    content: (
+                      <DataTable
+                        columns={statementColumns}
+                        rows={statement}
+                        rowKey={(r) => `${r.date}-${r.reference}-${r.kind}`}
+                        caption={`Statement for ${supplier.name}`}
+                        empty={
+                          <EmptyState
+                            title="Nothing on the account"
+                            description="Invoices and payments build the running balance here."
+                          />
+                        }
+                      />
+                    ),
+                  },
+                  {
+                    id: "details",
+                    label: "Details",
+                    content: (
+                      <dl className="grid gap-x-6 gap-y-3 sm:grid-cols-2">
+                        {[
+                          ["Supplier", supplier.name],
+                          ["Status", supplier.isActive ? "Active" : "Inactive"],
+                          ["Payment terms", `${supplier.paymentTermsDays} days`],
+                          ["KRA PIN", supplier.kraPin ?? "—"],
+                          ["Phone", supplier.phone ?? "—"],
+                          ["Email", supplier.email ?? "—"],
+                          ["Last invoice", supplier.lastInvoiceDate ?? "—"],
+                          ["Last payment", supplier.lastPaymentDate ?? "—"],
+                        ].map(([k, v]) => (
+                          <div key={k} className="flex items-baseline justify-between gap-4 border-b border-line pb-2">
+                            <dt className="text-sm text-ink-soft">{k}</dt>
+                            <dd className="text-right text-sm font-medium text-ink">{v}</dd>
+                          </div>
+                        ))}
+                      </dl>
+                    ),
+                  },
+                ]}
+              />
+            </div>
+          </div>
+        </main>
+      </div>
     </AppShell>
   );
 }

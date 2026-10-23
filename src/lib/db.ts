@@ -34,7 +34,7 @@ export interface CustomerContext {
   diagnostic?: string;
 }
 
-const CONNECT_TIMEOUT_MS = 8_000;
+const CONNECT_TIMEOUT_MS = 4_000;
 
 declare global {
   // Survives Next.js hot reloads in development.

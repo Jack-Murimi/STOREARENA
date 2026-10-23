@@ -23,13 +23,18 @@ import { createSupabaseServerClient } from "@/lib/supabase/server";
  * authenticated visitor on /login straight back to "/".
  */
 export default async function PortalLayout({ children }: { children: ReactNode }) {
-  const supabase = await createSupabaseServerClient();
+  // Run auth check and DB context in parallel — cuts sequential round-trips.
+  // getSession() reads the cookie — no network call. Middleware already verified
+  // the JWT via getUser() so a second network round-trip here is redundant.
+  const [supabase, { products, notice, diagnostic }] = await Promise.all([
+    createSupabaseServerClient(),
+    getCustomerContext(),
+  ]);
   const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) redirect("/login");
+    data: { session },
+  } = await supabase.auth.getSession();
+  if (!session) redirect("/login");
 
-  const { products, notice, diagnostic } = await getCustomerContext();
   // A database outage must not be reported as "you are not staff": that would
   // send a legitimate manager to a page telling them their account was
   // deactivated, and hide the real cause from whoever is on call.
