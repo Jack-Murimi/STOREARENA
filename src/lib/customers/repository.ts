@@ -138,12 +138,21 @@ export class CustomerRepository {
     );
     if (customers.length === 0) return [];
 
-    const locations = await this.db.query<Row>(
-      `SELECT * FROM customer_locations ORDER BY is_primary DESC, label`,
-    );
-    const contacts = await this.db.query<Row>(
-      `SELECT * FROM customer_contacts ORDER BY is_primary DESC, name`,
-    );
+    const customerIds = customers.map((row) => String(row.id));
+    const [locations, contacts] = await Promise.all([
+      this.db.query<Row>(
+        `SELECT * FROM customer_locations
+          WHERE customer_id = ANY($1::text[])
+          ORDER BY is_primary DESC, label`,
+        [customerIds],
+      ),
+      this.db.query<Row>(
+        `SELECT * FROM customer_contacts
+          WHERE customer_id = ANY($1::text[])
+          ORDER BY is_primary DESC, name`,
+        [customerIds],
+      ),
+    ]);
 
     return customers.map((row) => {
       const customer = toCustomer(row);

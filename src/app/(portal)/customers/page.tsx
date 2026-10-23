@@ -19,6 +19,7 @@ import { formatKenyanPhone, type CustomerRecord } from "@/lib/customers";
 import { currentStaff, stationName } from "@/lib/data";
 import { getCustomerContext } from "@/lib/db";
 import { formatKsh } from "@/lib/format";
+import type { CustomerBalance } from "@/lib/billing";
 
 export const metadata: Metadata = {
   title: "Customers",
@@ -55,8 +56,12 @@ export default async function CustomersPage({ searchParams }: PageProps) {
     );
   }
 
-  const customers = await service.list(query ? { search: query } : undefined);
-  const balances = billing ? await billing.balances() : {};
+  const [customers, balances] = await Promise.all([
+    service.list(query ? { search: query } : undefined),
+    billing
+      ? billing.balances()
+      : Promise.resolve({} as Record<string, CustomerBalance>),
+  ]);
   const activeCount = customers.filter((c) => c.active).length;
 
   const columns: DataColumn<CustomerRecord>[] = [

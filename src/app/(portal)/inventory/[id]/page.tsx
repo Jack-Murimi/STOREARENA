@@ -75,7 +75,7 @@ export default async function ProductStockPage({ params, searchParams }: PagePro
     return shell(
       <section className="rounded-xl border border-warn/25 bg-warn-soft px-5 py-8 text-center">
         <p className="text-sm font-semibold text-ink">
-          This product's stock could not be loaded.
+          This product&apos;s stock could not be loaded.
         </p>
         <p className="mx-auto mt-2 max-w-xl break-words font-mono text-xs text-ink-soft">
           {detail}
