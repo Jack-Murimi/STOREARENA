@@ -61,6 +61,31 @@ export function OpeningStockSetup({
     <form action={saveOpeningStock} className="space-y-4">
       <input type="hidden" name="entries" value={JSON.stringify(entries)} />
 
+      {/* Date + reference at the top — fill these in before counting */}
+      <div className="grid gap-3 sm:grid-cols-2">
+        <label className="space-y-1">
+          <span className="block text-xs font-semibold uppercase tracking-wide text-ink-soft">
+            Stock-take date
+          </span>
+          <input
+            type="date"
+            name="occurredOn"
+            defaultValue={today()}
+            className="h-10 w-full rounded-lg border border-line bg-white px-3 text-sm outline-none focus:border-flame-500"
+          />
+        </label>
+        <label className="space-y-1">
+          <span className="block text-xs font-semibold uppercase tracking-wide text-ink-soft">
+            Count-sheet reference
+          </span>
+          <input
+            name="reference"
+            placeholder="Optional — e.g. CS-001"
+            className="h-10 w-full rounded-lg border border-line bg-white px-3 text-sm outline-none focus:border-flame-500"
+          />
+        </label>
+      </div>
+
       <div className="rounded-lg border border-sky-200 bg-sky-50 px-3 py-3 text-xs leading-5 text-sky-950">
         <strong>First stock count only.</strong> Full cylinders become FIFO opening lots at the cost
         entered. Empty cylinders receive an EMPTY balance and cylinder custody, but no gas cost.
@@ -146,30 +171,11 @@ export function OpeningStockSetup({
         </table>
       </div>
 
-      <div className="flex flex-wrap items-end justify-between gap-3 border-t border-line pt-3">
-        <div className="grid gap-2 sm:grid-cols-2">
-          <label className="space-y-1">
-            <span className="block text-xs font-semibold uppercase tracking-wide text-ink-soft">Opening date</span>
-            <input
-              type="date"
-              name="occurredOn"
-              defaultValue={today()}
-              className="rounded-lg border border-line bg-white px-3 py-2 text-sm outline-none focus:border-flame-500"
-            />
-          </label>
-          <label className="space-y-1">
-            <span className="block text-xs font-semibold uppercase tracking-wide text-ink-soft">Count-sheet reference</span>
-            <input
-              name="reference"
-              placeholder="Optional"
-              className="rounded-lg border border-line bg-white px-3 py-2 text-sm outline-none focus:border-flame-500"
-            />
-          </label>
-        </div>
-        <div className="text-right">
-          <p className="mb-1 text-xs text-ink-soft">{entries.length} branch-product entr{entries.length === 1 ? "y" : "ies"} ready</p>
-          <SubmitButton pendingLabel="Saving opening stock…">Save opening stock</SubmitButton>
-        </div>
+      <div className="flex items-center justify-between gap-3 border-t border-line pt-3">
+        <p className="text-xs text-ink-soft">
+          {entries.length} branch-product entr{entries.length === 1 ? "y" : "ies"} ready
+        </p>
+        <SubmitButton pendingLabel="Saving opening stock…">Save opening stock</SubmitButton>
       </div>
     </form>
   );

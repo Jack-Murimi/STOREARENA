@@ -4,6 +4,7 @@ import { AppShell } from "@/components/AppShell";
 import { DatabaseUnavailable } from "@/components/customers/DatabaseUnavailable";
 import { SavedToast } from "@/components/customers/SavedToast";
 import { SubmitButton } from "@/components/customers/SubmitButton";
+import { InventorySearch } from "@/components/inventory/InventorySearch";
 import { NewProductForm } from "@/components/inventory/NewProductForm";
 import { OpeningStockSetup } from "@/components/inventory/OpeningStockSetup";
 import {
@@ -23,7 +24,7 @@ import { formatKsh } from "@/lib/format";
 import { LocationKind } from "@/lib/stock/types";
 import type { StockLocation } from "@/lib/stock/types";
 import type { StockRow } from "@/lib/stock/stock-db";
-import { CylinderIcon, SearchIcon } from "@/components/icons";
+import { CylinderIcon } from "@/components/icons";
 import { canManageCatalogue, currentStaffAccess } from "@/lib/auth";
 
 export const metadata: Metadata = {
@@ -281,22 +282,12 @@ export default async function InventoryPage({ searchParams }: PageProps) {
         {!creatingProduct && !openingSetup ? (
           <FilterBar
             search={
-            <form action="/inventory" method="get" role="search" className="w-full sm:w-64">
-              <input type="hidden" name="cat" value={categoryFilter} />
-              <input type="hidden" name="branch" value={branchFilter} />
-              {showZero ? <input type="hidden" name="zero" value="1" /> : null}
-              <label className="relative block">
-                <span className="sr-only">Search products by name or brand</span>
-                <SearchIcon className="pointer-events-none absolute top-1/2 left-2.5 h-4 w-4 -translate-y-1/2 text-ink-subtle" />
-                <input
-                  type="search"
-                  name="q"
-                  defaultValue={query}
-                  placeholder="Search products…"
-                  className="h-9 w-full rounded-md border border-border bg-surface pl-8 pr-2 text-sm text-ink placeholder:text-ink-subtle focus:border-orange-500 focus:outline-none"
-                />
-              </label>
-            </form>
+            <InventorySearch
+              defaultValue={query}
+              cat={categoryFilter}
+              branch={branchFilter}
+              zero={showZero}
+            />
           }
           filters={
             <>

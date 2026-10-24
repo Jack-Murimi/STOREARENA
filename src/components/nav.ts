@@ -1,4 +1,4 @@
-import { CashIcon, ChartIcon, CylinderIcon, GaugeIcon, ReceiptIcon, TruckIcon, UsersIcon } from "./icons";
+import { CashIcon, ChartIcon, ClockIcon, CylinderIcon, GaugeIcon, ReceiptIcon, TruckIcon, UsersIcon } from "./icons";
 
 /** One source of truth for desktop groups and the compact mobile navigation. */
 export interface NavItem {
@@ -31,6 +31,8 @@ export const navGroups: NavGroup[] = [
     label: "Stock & supply",
     items: [
       { label: "Inventory", short: "Stock", icon: CylinderIcon, href: "/inventory", matchPrefix: "/inventory" },
+      { label: "Shift count", short: "Count", icon: ClockIcon, href: "/inventory/shift-count", matchPrefix: "/inventory/shift-count" },
+      { label: "Stock counts", short: "Counts", icon: ReceiptIcon, href: "/stock-counts", matchPrefix: "/stock-counts" },
       { label: "Transfers", short: "Move", icon: TruckIcon, href: "/transfers", matchPrefix: "/transfers" },
       { label: "Purchases", short: "Buy", icon: ReceiptIcon, href: "/purchases", matchPrefix: "/purchases" },
       { label: "Suppliers", short: "Suppliers", icon: TruckIcon, href: "/suppliers", matchPrefix: "/suppliers" },
