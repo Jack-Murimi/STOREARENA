@@ -53,6 +53,8 @@ export const mobileMoreGroups: NavGroup[] = navGroups.map((group) => ({ ...group
 
 export function navItemIsActive(item: NavItem, path = "/"): boolean {
   if (item.href === "/") return path === "/";
+  // Shift count lives below inventory but has its own navigation item.
+  if (item.href === "/inventory" && path.startsWith("/inventory/shift-count")) return false;
   const prefix = item.matchPrefix ?? item.href;
   return path === prefix || path.startsWith(`${prefix}/`);
 }

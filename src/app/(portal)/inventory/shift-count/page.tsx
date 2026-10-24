@@ -97,7 +97,7 @@ export default async function ShiftCountPage({ searchParams }: PageProps) {
       subtitle={activeBranch.name}
       staff={currentStaff}
       branch={stationName}
-      activeHref="/inventory"
+      activeHref="/inventory/shift-count"
     >
       <SavedToast key={saved ?? undefined} message={saved} tone="good" />
       <SavedToast key={error ?? undefined} message={error} tone="bad" />
