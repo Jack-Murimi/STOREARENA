@@ -26,7 +26,7 @@ export function PageHeader({
           <p className="truncate text-sm text-ink-muted">{subtitle}</p>
         ) : null}
       </div>
-      <div className="flex shrink-0 items-center gap-2">
+      <div className="flex w-full items-center gap-2 sm:w-auto sm:shrink-0">
         {menu}
         {action}
       </div>

@@ -175,7 +175,7 @@ function Cards<T>({
                 ))}
               </dl>
               {rest.length > 0 ? (
-                <details className="mt-1">
+                <details className="relative z-20 mt-1">
                   <summary className="cursor-pointer text-xs font-medium text-orange-700">
                     More
                   </summary>

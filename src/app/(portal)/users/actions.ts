@@ -7,7 +7,7 @@ import { getCustomerContext } from "@/lib/db";
 import type { Database } from "@/lib/customers/repository";
 import { currentStaffAccess, type StaffAccess } from "@/lib/auth";
 
-const ROLES = ["attendant", "manager", "director", "admin"] as const;
+const ROLES = ["attendant", "manager", "director", "admin", "rider"] as const;
 type Role = (typeof ROLES)[number];
 
 const text = (form: FormData, key: string): string => {
@@ -63,12 +63,14 @@ export async function inviteStaff(form: FormData): Promise<void> {
   const email = text(form, "email").toLowerCase();
   const role = text(form, "role") as Role;
   const branchIds = branchesFrom(form);
+  const riderId = text(form, "rider_id");
 
   if (name.length < 2 || !email.includes("@")) fail("Enter the staff member’s name and email.");
   if (!ROLES.includes(role)) fail("Choose a valid role.");
   if ((role === "attendant" || role === "manager") && branchIds.length === 0) {
     fail("Choose a branch for an attendant or manager.");
   }
+  if (role === "rider" && !riderId) fail("Choose the rider account to link.");
 
   const existing = await db.query("select id from app_users where email = $1", [email]);
   if (existing[0]) fail("That email already has an account.");
@@ -101,6 +103,10 @@ export async function inviteStaff(form: FormData): Promise<void> {
           [data.user.id, branchId, staff.id],
         );
       }
+      if (role === "rider") {
+        const linked = await tx.query("update riders set user_id = $2 where id = $1 and user_id is null returning id", [riderId, data.user.id]);
+        if (!linked[0]) throw new Error("That rider is already linked to another account.");
+      }
     });
   } catch (error) {
     await admin.auth.admin.deleteUser(data.user.id).catch(() => {});
@@ -120,12 +126,14 @@ export async function updateStaff(form: FormData): Promise<void> {
   const name = text(form, "name");
   const role = text(form, "role") as Role;
   const branchIds = branchesFrom(form);
+  const riderId = text(form, "rider_id");
   const active = form.get("active") === "on";
 
   if (!id || name.length < 2 || !ROLES.includes(role)) fail("Enter a valid name and role.");
   if ((role === "attendant" || role === "manager") && branchIds.length === 0) {
     fail("Choose at least one branch for an attendant or manager.");
   }
+  if (role === "rider" && !riderId) fail("Choose the rider account to link.");
   if (id === staff.id && role !== staff.role) fail("You cannot change your own role.");
   if (id === staff.id && !active) fail("You cannot deactivate your own account.");
 
@@ -158,6 +166,11 @@ export async function updateStaff(form: FormData): Promise<void> {
         "insert into user_branches (user_id, branch_id, granted_by) values ($1, $2, $3)",
         [id, branchId, staff.id],
       );
+    }
+    await tx.query("update riders set user_id = null where user_id = $1", [id]);
+    if (role === "rider") {
+      const linked = await tx.query("update riders set user_id = $2 where id = $1 and user_id is null returning id", [riderId, id]);
+      if (!linked[0]) throw new Error("That rider is already linked to another account.");
     }
   });
 

@@ -28,12 +28,9 @@ export function SegmentedControl({
   };
 
   return (
-    <div
-      role="group"
-      aria-label={label}
-      className="inline-flex items-center gap-0.5 rounded-md border border-border bg-surface-muted p-0.5"
-    >
-      {options.map((option) => {
+    <div className="max-w-full overflow-x-auto pb-1">
+      <div role="group" aria-label={label} className="inline-flex min-w-max items-center gap-0.5 rounded-md border border-border bg-surface-muted p-0.5">
+        {options.map((option) => {
         const active = option.value === activeValue;
         return (
           <a
@@ -49,7 +46,8 @@ export function SegmentedControl({
             {option.label}
           </a>
         );
-      })}
+        })}
+      </div>
     </div>
   );
 }

@@ -2,7 +2,7 @@
  * Pure application authorisation policy. Kept independent of Auth and the
  * database so every mutation and test uses exactly the same role rules.
  */
-export const APP_ROLES = ["attendant", "manager", "director", "admin"] as const;
+export const APP_ROLES = ["attendant", "manager", "director", "admin", "rider"] as const;
 export type AppRole = (typeof APP_ROLES)[number];
 
 export interface StaffAccess {

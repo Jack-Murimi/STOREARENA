@@ -19,9 +19,9 @@ export function FilterBar({
 }) {
   return (
     <div className="flex flex-wrap items-center gap-2">
-      {search ? <div className="min-w-[180px] flex-1 sm:max-w-xs">{search}</div> : null}
-      {filters ? <div className="flex flex-wrap items-center gap-2">{filters}</div> : null}
-      {action ? <div className="ml-auto flex items-center gap-2">{action}</div> : null}
+      {search ? <div className="min-w-0 basis-full sm:flex-1 sm:basis-auto sm:max-w-xs">{search}</div> : null}
+      {filters ? <div className="flex min-w-0 flex-wrap items-center gap-2">{filters}</div> : null}
+      {action ? <div className="flex w-full items-center gap-2 sm:ml-auto sm:w-auto">{action}</div> : null}
     </div>
   );
 }

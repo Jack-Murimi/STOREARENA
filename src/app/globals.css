@@ -186,6 +186,11 @@ body {
   .page-shell {
     padding: 16px;
   }
+
+  /* Prevent any wide child from widening the document beneath the bottom bar. */
+  .page-shell > * {
+    min-width: 0;
+  }
 }
 
 /* Skeletons share one shimmer so loading states cannot drift apart. */

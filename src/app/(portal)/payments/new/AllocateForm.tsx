@@ -69,7 +69,7 @@ export function AllocateForm({
         </p>
 
         <div className="mt-3 overflow-x-auto">
-          <table className="w-full border-collapse text-[var(--text-sm)]">
+          <table className="w-full min-w-[560px] border-collapse text-[var(--text-sm)]">
             <caption className="sr-only">Pending invoices and how much to allocate from this payment</caption>
             <thead>
               <tr className="border-b border-[var(--line)] text-left text-[var(--text-xs)] text-[var(--text-tertiary)]">
@@ -106,7 +106,7 @@ export function AllocateForm({
           {state.error}
         </p>
       )}
-      <div className="flex justify-end border-t border-[var(--line)] pt-4">
+      <div className="flex border-t border-[var(--line)] pt-4 sm:justify-end">
         <Button type="submit" disabled={pending}>{pending ? "Saving…" : "Record payment"}</Button>
       </div>
     </form>

@@ -159,8 +159,8 @@ export function InvoiceForm({
           {lines.map((line, index) => {
             const lineTotal = (Number(line.quantity) || 0) * (Number(line.unit_cost) || 0);
             return (
-              <div key={index} className="grid gap-2 px-4 py-2 sm:grid-cols-[1fr_120px_80px_110px_100px_auto] sm:items-center">
-                <select
+              <div key={index} className="grid gap-2 px-4 py-3 sm:grid-cols-[1fr_120px_80px_110px_100px_auto] sm:items-center">
+                <label className="space-y-1 sm:contents"><span className="text-xs font-medium text-ink-subtle sm:sr-only">Product</span><select
                   required
                   className={field}
                   value={line.product_id}
@@ -176,8 +176,8 @@ export function InvoiceForm({
                       ))}
                     </optgroup>
                   ))}
-                </select>
-                <select
+                </select></label>
+                <label className="space-y-1 sm:contents"><span className="text-xs font-medium text-ink-subtle sm:sr-only">Purchase type</span><select
                   className={field}
                   value={line.purchase_type}
                   onChange={(e) => set(index, { purchase_type: e.target.value })}
@@ -187,8 +187,8 @@ export function InvoiceForm({
                       {t.label}
                     </option>
                   ))}
-                </select>
-                <input
+                </select></label>
+                <label className="space-y-1 sm:contents"><span className="text-xs font-medium text-ink-subtle sm:sr-only">Quantity</span><input
                   type="number"
                   min="1"
                   step="1"
@@ -197,8 +197,8 @@ export function InvoiceForm({
                   value={line.quantity}
                   onChange={(e) => set(index, { quantity: e.target.value })}
                   aria-label="Quantity"
-                />
-                <input
+                /></label>
+                <label className="space-y-1 sm:contents"><span className="text-xs font-medium text-ink-subtle sm:sr-only">Unit cost</span><input
                   type="number"
                   min="0"
                   step="0.01"
@@ -207,8 +207,8 @@ export function InvoiceForm({
                   value={line.unit_cost}
                   onChange={(e) => set(index, { unit_cost: e.target.value })}
                   aria-label="Unit cost"
-                />
-                <span className="num text-right text-sm text-ink">{formatKsh(lineTotal)}</span>
+                /></label>
+                <span className="flex justify-between text-sm text-ink sm:block sm:text-right"><span className="text-ink-subtle sm:hidden">Line total</span><span className="num">{formatKsh(lineTotal)}</span></span>
                 <button
                   type="button"
                   onClick={() => setLines((p) => p.filter((_, i) => i !== index))}

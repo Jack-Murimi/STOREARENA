@@ -20,28 +20,20 @@ async function riderDatabase() {
   return products.db;
 }
 
-/** Adds a rider to one branch. No rider stock location is created: branch stock
- * stays branch stock, and a rider is simply a delivery assignment. */
+/** Riders are people, not branch stock locations. */
 export async function createRider(form: FormData): Promise<void> {
   const staff = await currentStaffAccess();
   if (!staff) destination("Sign in is required.");
   const name = clean(form, "name");
   const phone = clean(form, "phone");
-  const branchId = clean(form, "branch_id");
   if (name.length < 2) destination("Enter the rider’s full name.", "?new=1");
   if (phone.length < 7) destination("Enter a valid phone number.", "?new=1");
-  if (!branchId) destination("Choose the rider’s branch.", "?new=1");
 
   const db = await riderDatabase();
-  const branch = await db.query<{ id: string }>(
-    "select id from stock_locations where id = $1 and kind = 'BRANCH' and active",
-    [branchId],
-  );
-  if (!branch[0]) destination("Choose an active branch for this rider.", "?new=1");
   try {
     await db.query(
-      "insert into riders (name, phone, branch_id, is_active) values ($1, $2, $3, true)",
-      [name, phone, branchId],
+      "insert into riders (name, phone, is_active) values ($1, $2, true)",
+      [name, phone],
     );
   } catch (error) {
     const message = (error as Error).message;

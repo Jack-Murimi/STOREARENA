@@ -61,6 +61,7 @@ export default async function PortalLayout({ children }: { children: ReactNode }
   }
 
   if (!staff) redirect("/no-access");
+  if (staff.role === "rider") redirect("/rider");
 
   return children;
 }

@@ -25,6 +25,9 @@ export async function GET(request: Request): Promise<Response> {
   if (!staff) {
     return new Response("Sign in is required.", { status: 401 });
   }
+  if (staff.role === "rider") {
+    return new Response("Rider accounts cannot export reports.", { status: 403 });
+  }
 
   const url = new URL(request.url);
   const requested = url.searchParams.get("report") ?? "sales";

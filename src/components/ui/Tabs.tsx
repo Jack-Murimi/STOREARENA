@@ -17,12 +17,9 @@ export function Tabs({
 
   return (
     <div>
-      <div
-        role="tablist"
-        aria-label={label}
-        className="inline-flex items-center gap-0.5 rounded-md border border-border bg-surface-muted p-0.5"
-      >
-        {tabs.map((tab) => (
+      <div className="overflow-x-auto pb-1">
+        <div role="tablist" aria-label={label} className="inline-flex min-w-max items-center gap-0.5 rounded-md border border-border bg-surface-muted p-0.5">
+          {tabs.map((tab) => (
           <button
             key={tab.id}
             type="button"
@@ -37,7 +34,8 @@ export function Tabs({
           >
             {tab.label}
           </button>
-        ))}
+          ))}
+        </div>
       </div>
       <div role="tabpanel" className="mt-3">
         {tabs.find((tab) => tab.id === active)?.content}
