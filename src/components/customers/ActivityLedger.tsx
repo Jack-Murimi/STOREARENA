@@ -23,7 +23,7 @@ function invoiceStatus(invoice: Invoice): { label: string; color: string } {
 const ksh = (n: number) => `KSh ${n.toLocaleString("en-KE")}`;
 
 const controlClass =
-  "rounded-lg border border-line bg-white px-3 py-2 text-sm outline-none focus:border-flame-500 focus:ring-2 focus:ring-flame-400/20";
+  "rounded-lg border border-line bg-surface text-ink px-3 py-2 text-sm outline-none focus:border-flame-500 focus:ring-2 focus:ring-flame-400/20";
 
 function InvoiceIcon() {
   return (
@@ -120,7 +120,7 @@ export function ActivityLedger({
                 onClick={() => setTab(t.id)}
                 className={`rounded-md px-3 py-1 text-xs font-semibold transition ${
                   tab === t.id
-                    ? "bg-white text-ink shadow-card"
+                    ? "bg-surface text-ink shadow-card"
                     : "text-ink-soft hover:text-ink"
                 }`}
               >

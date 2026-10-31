@@ -3,7 +3,7 @@
 import { useRef, useState } from "react";
 
 const controlClass =
-  "w-full rounded-lg border border-line bg-white px-3 py-2 text-sm text-ink outline-none transition placeholder:text-ink-soft/50 focus:border-flame-400 focus:ring-2 focus:ring-flame-400/20";
+  "w-full rounded-lg border border-line bg-surface text-ink px-3 py-2 text-sm text-ink outline-none transition placeholder:text-ink-soft/50 focus:border-flame-400 focus:ring-2 focus:ring-flame-400/20";
 
 /**
  * Parses a Google Maps URL or a plain "lat, lng" string.
@@ -118,7 +118,7 @@ export function PinField({
             href={`https://www.google.com/maps?q=${coords.lat},${coords.lng}`}
             target="_blank"
             rel="noreferrer"
-            className="shrink-0 rounded-lg bg-white px-3 py-2 text-xs font-semibold text-info ring-1 ring-info/25 transition hover:bg-info-soft"
+            className="shrink-0 rounded-lg bg-surface px-3 py-2 text-xs font-semibold text-info ring-1 ring-info/25 transition hover:bg-info-soft"
           >
             Verify ↗
           </a>

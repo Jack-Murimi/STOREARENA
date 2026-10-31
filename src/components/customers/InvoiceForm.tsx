@@ -82,7 +82,7 @@ export function InvoiceForm({ customerId }: { customerId: string }) {
             list="invoice-catalog"
             required={index === 0}
             placeholder="Afri Gas 13 kg refill"
-            className="rounded-lg border border-line bg-white px-3 py-2 text-sm outline-none focus:border-flame-500"
+            className="rounded-lg border border-line bg-surface text-ink px-3 py-2 text-sm outline-none focus:border-flame-500"
           />
           <input
             name={`line_quantity_${index}`}
@@ -90,7 +90,7 @@ export function InvoiceForm({ customerId }: { customerId: string }) {
             onChange={(e) => patch(row.key, "quantity", e.target.value)}
             inputMode="decimal"
             placeholder="Qty"
-            className="rounded-lg border border-line bg-white px-3 py-2 text-sm outline-none focus:border-flame-500"
+            className="rounded-lg border border-line bg-surface text-ink px-3 py-2 text-sm outline-none focus:border-flame-500"
           />
           <input
             name={`line_price_${index}`}
@@ -98,7 +98,7 @@ export function InvoiceForm({ customerId }: { customerId: string }) {
             onChange={(e) => patch(row.key, "price", e.target.value)}
             inputMode="decimal"
             placeholder="Unit price"
-            className="rounded-lg border border-line bg-white px-3 py-2 text-sm outline-none focus:border-flame-500"
+            className="rounded-lg border border-line bg-surface text-ink px-3 py-2 text-sm outline-none focus:border-flame-500"
           />
           <button
             type="button"
@@ -157,12 +157,12 @@ export function InvoiceForm({ customerId }: { customerId: string }) {
           type="date"
           name="issuedOn"
           defaultValue={new Date().toISOString().slice(0, 10)}
-          className="rounded-lg border border-line bg-white px-3 py-2 text-sm outline-none focus:border-flame-500"
+          className="rounded-lg border border-line bg-surface text-ink px-3 py-2 text-sm outline-none focus:border-flame-500"
         />
         <input
           name="notes"
           placeholder="Note on the invoice (optional)"
-          className="min-w-[180px] flex-1 rounded-lg border border-line bg-white px-3 py-2 text-sm outline-none focus:border-flame-500"
+          className="min-w-[180px] flex-1 rounded-lg border border-line bg-surface text-ink placeholder:text-ink-subtle px-3 py-2 text-sm outline-none focus:border-flame-500"
         />
         <SubmitButton pendingLabel="Raising…">Raise invoice</SubmitButton>
         <button

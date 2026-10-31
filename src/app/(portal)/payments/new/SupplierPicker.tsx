@@ -20,7 +20,7 @@ export function SupplierPicker({
         const id = e.target.value;
         router.push(id ? `/payments/new?supplier=${encodeURIComponent(id)}` : "/payments/new");
       }}
-      className="w-full rounded-lg border border-[var(--line)] bg-white px-3 py-2 text-[var(--text-sm)] text-[var(--text-primary)] outline-none focus:border-[var(--orange-400)] focus:ring-2 focus:ring-[var(--orange-100)]"
+      className="w-full rounded-lg border border-[var(--line)] bg-surface px-3 py-2 text-[var(--text-sm)] text-[var(--text-primary)] outline-none focus:border-[var(--orange-400)] focus:ring-2 focus:ring-[var(--orange-100)]"
     >
       <option value="">Choose a supplier…</option>
       {suppliers.map((s) => (

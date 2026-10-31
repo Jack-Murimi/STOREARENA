@@ -12,7 +12,7 @@ import {
 import { SubmitButton } from "./SubmitButton";
 
 const controlClass =
-  "w-full rounded-lg border border-line bg-white px-3 py-2 text-sm text-ink outline-none transition placeholder:text-ink-soft/50 focus:border-flame-400 focus:ring-2 focus:ring-flame-400/20";
+  "w-full rounded-lg border border-line bg-surface text-ink px-3 py-2 text-sm text-ink outline-none transition placeholder:text-ink-soft/50 focus:border-flame-400 focus:ring-2 focus:ring-flame-400/20";
 
 const roles = ["", ...ROLE_SUGGESTIONS];
 
@@ -106,7 +106,7 @@ function ContactRow({
             >
               <span className="text-base leading-none tracking-widest">···</span>
             </summary>
-            <div className="absolute right-0 top-full z-20 mt-1 w-36 overflow-hidden rounded-lg border border-line bg-white shadow-raised">
+            <div className="absolute right-0 top-full z-20 mt-1 w-36 overflow-hidden rounded-lg border border-line bg-surface shadow-raised">
               <button
                 type="button"
                 onClick={() => setEditing((e) => !e)}

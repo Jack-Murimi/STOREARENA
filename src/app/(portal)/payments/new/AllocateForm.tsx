@@ -6,8 +6,8 @@ import { recordAllocatedPayment } from "../actions";
 
 const label = "block text-[var(--text-xs)] font-medium text-[var(--text-secondary)] mb-1.5";
 const field =
-  "w-full rounded-lg border border-[var(--line)] bg-white px-3 py-2 text-[var(--text-sm)] text-[var(--text-primary)] outline-none focus:border-[var(--orange-400)] focus:ring-2 focus:ring-[var(--orange-100)]";
-const num = "w-full rounded-lg border border-[var(--line)] bg-white px-2 py-1.5 text-right text-[var(--text-sm)] outline-none focus:border-[var(--orange-400)] focus:ring-2 focus:ring-[var(--orange-100)]";
+  "w-full rounded-lg border border-[var(--line)] bg-surface px-3 py-2 text-[var(--text-sm)] text-[var(--text-primary)] outline-none focus:border-[var(--orange-400)] focus:ring-2 focus:ring-[var(--orange-100)]";
+const num = "w-full rounded-lg border border-[var(--line)] bg-surface px-2 py-1.5 text-right text-[var(--text-sm)] outline-none focus:border-[var(--orange-400)] focus:ring-2 focus:ring-[var(--orange-100)]";
 
 const METHODS = [
   { code: "mpesa", label: "M-Pesa" }, { code: "cash", label: "Cash" },

@@ -6,7 +6,7 @@ import { recordPayment } from "../actions";
 
 const label = "block text-[var(--text-xs)] font-medium text-[var(--text-secondary)] mb-1.5";
 const field =
-  "w-full rounded-lg border border-[var(--line)] bg-white px-3 py-2 text-[var(--text-sm)] text-[var(--text-primary)] outline-none focus:border-[var(--orange-400)] focus:ring-2 focus:ring-[var(--orange-100)]";
+  "w-full rounded-lg border border-[var(--line)] bg-surface px-3 py-2 text-[var(--text-sm)] text-[var(--text-primary)] outline-none focus:border-[var(--orange-400)] focus:ring-2 focus:ring-[var(--orange-100)]";
 
 /** Display labels only. The server maps these to the codes the column accepts. */
 const METHODS = [

@@ -10,7 +10,7 @@ import {
 import { SubmitButton } from "./SubmitButton";
 
 const controlClass =
-  "w-full rounded-lg border border-line bg-white px-3 py-2 text-sm text-ink outline-none transition placeholder:text-ink-soft/50 focus:border-flame-400 focus:ring-2 focus:ring-flame-400/20";
+  "w-full rounded-lg border border-line bg-surface text-ink px-3 py-2 text-sm text-ink outline-none transition placeholder:text-ink-soft/50 focus:border-flame-400 focus:ring-2 focus:ring-flame-400/20";
 
 function KindBadge({ kind }: { kind: CustomerKind }) {
   return (
@@ -104,12 +104,12 @@ export function CustomerPageHeader({
               type="button"
               onClick={() => setMenuOpen((o) => !o)}
               aria-label="More actions"
-              className="flex h-9 w-9 items-center justify-center rounded-lg border border-line bg-white text-ink-soft transition hover:bg-canvas hover:text-ink"
+              className="flex h-9 w-9 items-center justify-center rounded-lg border border-line bg-surface text-ink-soft transition hover:bg-canvas hover:text-ink"
             >
               <span className="text-base leading-none tracking-widest">···</span>
             </button>
             {menuOpen && (
-              <div className="absolute right-0 top-full z-30 mt-1 w-44 overflow-hidden rounded-lg border border-line bg-white shadow-raised">
+              <div className="absolute right-0 top-full z-30 mt-1 w-44 overflow-hidden rounded-lg border border-line bg-surface shadow-raised">
                 <button
                   type="button"
                   onClick={() => {

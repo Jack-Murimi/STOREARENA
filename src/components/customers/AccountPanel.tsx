@@ -140,17 +140,17 @@ export function AccountPanel({
             inputMode="decimal"
             required
             placeholder="Amount"
-            className="rounded-lg border border-line bg-white px-3 py-2 text-sm outline-none focus:border-flame-500"
+            className="rounded-lg border border-line bg-surface text-ink px-3 py-2 text-sm outline-none focus:border-flame-500"
           />
           <input
             name="reference"
             placeholder="M-Pesa code / cheque no."
-            className="rounded-lg border border-line bg-white px-3 py-2 text-sm outline-none focus:border-flame-500"
+            className="rounded-lg border border-line bg-surface text-ink placeholder:text-ink-subtle px-3 py-2 text-sm outline-none focus:border-flame-500"
           />
           <select
             name="method"
             defaultValue="MPESA"
-            className="rounded-lg border border-line bg-white px-3 py-2 text-sm outline-none focus:border-flame-500"
+            className="rounded-lg border border-line bg-surface text-ink px-3 py-2 text-sm outline-none focus:border-flame-500"
           >
             {PAYMENT_METHODS.map((method) => (
               <option key={method} value={method}>
@@ -162,7 +162,7 @@ export function AccountPanel({
             type="date"
             name="receivedOn"
             defaultValue={new Date().toISOString().slice(0, 10)}
-            className="rounded-lg border border-line bg-white px-3 py-2 text-sm outline-none focus:border-flame-500"
+            className="rounded-lg border border-line bg-surface text-ink px-3 py-2 text-sm outline-none focus:border-flame-500"
           />
           <SubmitButton pendingLabel="Saving…">Record payment</SubmitButton>
         </form>

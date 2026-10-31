@@ -6,7 +6,7 @@ import type { ReactNode } from "react";
  */
 
 const controlClass =
-  "w-full rounded-lg border border-line bg-white px-3 py-2 text-sm text-ink outline-none transition placeholder:text-ink-soft/50 focus:border-flame-400 focus:ring-2 focus:ring-flame-400/20";
+  "w-full rounded-lg border border-line bg-surface text-ink px-3 py-2 text-sm text-ink outline-none transition placeholder:text-ink-soft/50 focus:border-flame-400 focus:ring-2 focus:ring-flame-400/20";
 
 export function Field({
   label,
@@ -112,7 +112,7 @@ export function SubmitButton({
   const tones = {
     primary:
       "bg-flame-500 text-white hover:bg-flame-600 ring-1 ring-flame-600/20",
-    ghost: "bg-white text-ink hover:bg-canvas ring-1 ring-line",
+    ghost: "bg-surface text-ink hover:bg-canvas ring-1 ring-line",
     danger: "bg-bad-soft text-bad hover:bg-bad-soft/70 ring-1 ring-bad/20",
   } as const;
 

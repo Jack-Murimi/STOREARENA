@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { ThemeToggle } from "./ThemeToggle";
 import { UserMenu } from "./UserMenu";
 import type { StaffMember } from "@/lib/types";
 
@@ -61,6 +62,7 @@ export function Topbar({
               {branch}
             </span>
           ) : null}
+          <ThemeToggle />
           <UserMenu name={staff.name} role={staff.role} initials={staff.initials} />
         </div>
       </div>

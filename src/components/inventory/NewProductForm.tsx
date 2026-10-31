@@ -125,7 +125,7 @@ export function NewProductForm({
               onInput={(event) => {
                 event.currentTarget.value = caps(event.currentTarget.value);
               }}
-              className="w-full rounded-lg border border-line bg-white px-3 py-2 text-sm uppercase outline-none focus:border-flame-500"
+              className="w-full rounded-lg border border-line bg-surface text-ink px-3 py-2 text-sm uppercase outline-none focus:border-flame-500"
             />
           </label>
           <label className="space-y-1">
@@ -133,7 +133,7 @@ export function NewProductForm({
             <select
               name="stockModel"
               defaultValue={StockModel.Cylinder}
-              className="w-full rounded-lg border border-line bg-white px-3 py-2 text-sm outline-none focus:border-flame-500"
+              className="w-full rounded-lg border border-line bg-surface text-ink px-3 py-2 text-sm outline-none focus:border-flame-500"
             >
               <option value={StockModel.Cylinder}>Cylinder</option>
               <option value={StockModel.Simple}>Simple item</option>
@@ -192,7 +192,7 @@ export function NewProductForm({
       </div>
 
       {productState.error ? (
-        <p role="alert" className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm font-medium text-red-800">
+        <p role="alert" className="rounded-lg border border-critical bg-critical-bg px-3 py-2 text-sm font-medium text-critical">
           {productState.error}
         </p>
       ) : null}
@@ -204,7 +204,7 @@ export function NewProductForm({
           required
           value={categoryId}
           onChange={(event) => setCategoryId(event.target.value)}
-          className="w-full rounded-lg border border-line bg-white px-3 py-2 text-sm outline-none focus:border-flame-500"
+          className="w-full rounded-lg border border-line bg-surface text-ink px-3 py-2 text-sm outline-none focus:border-flame-500"
         >
           <option value="">Choose a category…</option>
           {categories.map((item) => (
@@ -213,11 +213,11 @@ export function NewProductForm({
             </option>
           ))}
         </select>
-        {productState.field === "category" ? <span className="block text-xs font-medium text-red-700">{productState.error}</span> : null}
+        {productState.field === "category" ? <span className="block text-xs font-medium text-critical">{productState.error}</span> : null}
       </label>
 
       {isCylinder ? (
-        <div className="rounded-lg border border-sky-200 bg-sky-50 px-3 py-2.5 text-xs leading-5 text-sky-950">
+        <div className="rounded-lg border border-info bg-info-bg px-3 py-2.5 text-xs leading-5 text-info">
           <strong>REFILL and EMPTY are stock states.</strong> Create this cylinder once; receiving,
           selling, returns, and transfers update its separate refill and empty balances.
         </div>
@@ -257,7 +257,7 @@ export function NewProductForm({
               required
               value={brandId}
               onChange={(event) => setBrandId(event.target.value)}
-              className="w-full rounded-lg border border-line bg-white px-3 py-2 text-sm outline-none focus:border-flame-500"
+              className="w-full rounded-lg border border-line bg-surface text-ink px-3 py-2 text-sm outline-none focus:border-flame-500"
             >
               <option value="">Choose a brand…</option>
               {brands.map((brand) => (
@@ -276,11 +276,11 @@ export function NewProductForm({
                 value={newBrandName}
                 onChange={(event) => setNewBrandName(caps(event.target.value))}
                 placeholder="AFRIGAS"
-                className="w-full rounded-lg border border-line bg-white px-3 py-2 text-sm uppercase outline-none focus:border-flame-500"
+                className="w-full rounded-lg border border-line bg-surface text-ink px-3 py-2 text-sm uppercase outline-none focus:border-flame-500"
               />
             </label>
           )}
-          {productState.field === "brand" ? <p className="text-xs font-medium text-red-700">{productState.error}</p> : null}
+          {productState.field === "brand" ? <p className="text-xs font-medium text-critical">{productState.error}</p> : null}
         </fieldset>
 
         {isCylinder ? (
@@ -301,7 +301,7 @@ export function NewProductForm({
                       className={`rounded-full border px-3 py-1.5 text-xs font-semibold transition ${
                         selected
                           ? "border-flame-600 bg-flame-600 text-white"
-                          : "border-line bg-white text-ink hover:border-flame-400"
+                          : "border-line bg-surface text-ink hover:border-flame-400"
                       }`}
                     >
                       {size} KG
@@ -327,7 +327,7 @@ export function NewProductForm({
                   }
                 }}
                 placeholder="Custom size"
-                className="min-w-0 flex-1 rounded-lg border border-line bg-white px-3 py-2 text-sm outline-none focus:border-flame-500"
+                className="min-w-0 flex-1 rounded-lg border border-line bg-surface text-ink px-3 py-2 text-sm outline-none focus:border-flame-500"
               />
               <button
                 type="button"
@@ -337,9 +337,9 @@ export function NewProductForm({
                 Add size
               </button>
             </div>
-            {customSizeError ? <p id="custom-size-error" role="alert" className="text-xs font-medium text-red-700">{customSizeError}</p> : null}
-            {sizeError ? <p role="alert" className="text-xs font-medium text-red-700">{sizeError}</p> : null}
-            {productState.field === "size" ? <p className="text-xs font-medium text-red-700">{productState.error}</p> : null}
+            {customSizeError ? <p id="custom-size-error" role="alert" className="text-xs font-medium text-critical">{customSizeError}</p> : null}
+            {sizeError ? <p role="alert" className="text-xs font-medium text-critical">{sizeError}</p> : null}
+            {productState.field === "size" ? <p className="text-xs font-medium text-critical">{productState.error}</p> : null}
             {orderedSizes.length === 0 ? (
               <p className="text-xs text-ink-soft">Choose at least one size to set its selling price.</p>
             ) : (
@@ -358,13 +358,13 @@ export function NewProductForm({
                         setSizePrices((current) => ({ ...current, [size]: event.target.value }))
                       }
                       placeholder="e.g. 2500"
-                      className="w-full rounded-lg border border-line bg-white px-3 py-2 text-sm outline-none focus:border-flame-500"
+                      className="w-full rounded-lg border border-line bg-surface text-ink px-3 py-2 text-sm outline-none focus:border-flame-500"
                     />
                   </label>
                 ))}
               </div>
             )}
-            {productState.field === "price" ? <p className="text-xs font-medium text-red-700">{productState.error}</p> : null}
+            {productState.field === "price" ? <p className="text-xs font-medium text-critical">{productState.error}</p> : null}
             <span className="block text-xs text-ink-soft">
               Product names: <strong className="text-ink">{cylinderPreviews}</strong>
             </span>
@@ -380,9 +380,9 @@ export function NewProductForm({
                 placeholder="REGULATOR"
                 value={simpleName}
                 onChange={(event) => setSimpleName(caps(event.currentTarget.value))}
-                className="w-full rounded-lg border border-line bg-white px-3 py-2 text-sm uppercase outline-none focus:border-flame-500"
+                className="w-full rounded-lg border border-line bg-surface text-ink px-3 py-2 text-sm uppercase outline-none focus:border-flame-500"
               />
-              {productState.field === "name" ? <span className="block text-xs font-medium text-red-700">{productState.error}</span> : null}
+              {productState.field === "name" ? <span className="block text-xs font-medium text-critical">{productState.error}</span> : null}
             </label>
             <label className="space-y-1">
               <span className="text-xs font-semibold uppercase tracking-wide text-ink-soft">Standard selling price (KSh)</span>
@@ -395,9 +395,9 @@ export function NewProductForm({
                 value={simplePrice}
                 onChange={(event) => setSimplePrice(event.target.value)}
                 placeholder="Optional"
-                className="w-full rounded-lg border border-line bg-white px-3 py-2 text-sm outline-none focus:border-flame-500"
+                className="w-full rounded-lg border border-line bg-surface text-ink px-3 py-2 text-sm outline-none focus:border-flame-500"
               />
-              {productState.field === "price" ? <span className="block text-xs font-medium text-red-700">{productState.error}</span> : null}
+              {productState.field === "price" ? <span className="block text-xs font-medium text-critical">{productState.error}</span> : null}
             </label>
           </>
         )}

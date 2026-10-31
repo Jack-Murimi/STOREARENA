@@ -207,7 +207,7 @@ export default async function ProductStockPage({ params, searchParams }: PagePro
                       required
                       minLength={2}
                       defaultValue={product.name}
-                      className="w-full rounded-lg border border-line bg-white px-3 py-2 text-sm uppercase outline-none focus:border-flame-500"
+                      className="w-full rounded-lg border border-line bg-surface text-ink px-3 py-2 text-sm uppercase outline-none focus:border-flame-500"
                     />
                   </label>
                   <label className="space-y-1">
@@ -221,7 +221,7 @@ export default async function ProductStockPage({ params, searchParams }: PagePro
                       min="0.01"
                       defaultValue={product.sellingPrice ?? ""}
                       placeholder="Optional"
-                      className="w-full rounded-lg border border-line bg-white px-3 py-2 text-sm outline-none focus:border-flame-500"
+                      className="w-full rounded-lg border border-line bg-surface text-ink px-3 py-2 text-sm outline-none focus:border-flame-500"
                     />
                   </label>
                 </div>
@@ -278,7 +278,7 @@ export default async function ProductStockPage({ params, searchParams }: PagePro
               className={`rounded-full px-3 py-1.5 text-xs font-medium transition ${
                 branchFilter === ""
                   ? "bg-flame-600 text-white"
-                  : "bg-white text-ink ring-1 ring-line hover:bg-canvas"
+                  : "bg-surface text-ink ring-1 ring-line hover:bg-canvas"
               }`}
             >
               All branches
@@ -290,7 +290,7 @@ export default async function ProductStockPage({ params, searchParams }: PagePro
                 className={`rounded-full px-3 py-1.5 text-xs font-medium transition ${
                   branchFilter === location.id
                     ? "bg-flame-600 text-white"
-                    : "bg-white text-ink ring-1 ring-line hover:bg-canvas"
+                    : "bg-surface text-ink ring-1 ring-line hover:bg-canvas"
                 }`}
               >
                 {location.name}
@@ -379,7 +379,7 @@ export default async function ProductStockPage({ params, searchParams }: PagePro
                     <select
                       name="locationId"
                       required
-                      className="rounded-lg border border-line bg-white px-3 py-2 text-sm outline-none focus:border-flame-500"
+                      className="rounded-lg border border-line bg-surface text-ink px-3 py-2 text-sm outline-none focus:border-flame-500"
                     >
                       <option value="">Branch…</option>
                       {receiptBranches.map((location) => (
@@ -398,7 +398,7 @@ export default async function ProductStockPage({ params, searchParams }: PagePro
                         inputMode="numeric"
                         placeholder="Quantity"
                         aria-label="Quantity received"
-                        className="rounded-lg border border-line bg-white px-3 py-2 text-sm outline-none focus:border-flame-500"
+                        className="rounded-lg border border-line bg-surface text-ink px-3 py-2 text-sm outline-none focus:border-flame-500"
                       />
                       <input
                         type="number"
@@ -409,19 +409,19 @@ export default async function ProductStockPage({ params, searchParams }: PagePro
                         inputMode="decimal"
                         placeholder="Unit cost (KSh)"
                         aria-label="Unit cost in Kenyan shillings"
-                        className="rounded-lg border border-line bg-white px-3 py-2 text-sm outline-none focus:border-flame-500"
+                        className="rounded-lg border border-line bg-surface text-ink px-3 py-2 text-sm outline-none focus:border-flame-500"
                       />
                     </div>
                     <input
                       type="date"
                       name="purchasedOn"
                       defaultValue={new Date().toISOString().slice(0, 10)}
-                      className="rounded-lg border border-line bg-white px-3 py-2 text-sm outline-none focus:border-flame-500"
+                      className="rounded-lg border border-line bg-surface text-ink px-3 py-2 text-sm outline-none focus:border-flame-500"
                     />
                     <input
                       name="reference"
                       placeholder="Delivery note / depot ref"
-                      className="rounded-lg border border-line bg-white px-3 py-2 text-sm outline-none focus:border-flame-500"
+                      className="rounded-lg border border-line bg-surface text-ink placeholder:text-ink-subtle px-3 py-2 text-sm outline-none focus:border-flame-500"
                     />
                     <SubmitButton pendingLabel="Saving…">Receive</SubmitButton>
                   </form>
