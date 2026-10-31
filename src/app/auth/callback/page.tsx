@@ -18,7 +18,14 @@ export default function AuthCallbackPage() {
     const finish = async () => {
       try {
         const supabase = createSupabaseBrowserClient();
-        const code = new URLSearchParams(window.location.search).get("code");
+        const params = new URLSearchParams(window.location.search);
+        const code = params.get("code");
+        const next = params.get("next");
+        // Validate next to prevent open redirects
+        const destination =
+          next && next.startsWith("/") && !next.startsWith("//")
+            ? next
+            : "/";
         if (code) {
           const { error } = await supabase.auth.exchangeCodeForSession(code);
           if (error) throw error;
@@ -28,7 +35,7 @@ export default function AuthCallbackPage() {
         await new Promise((resolve) => window.setTimeout(resolve, 80));
         const { data: { session } } = await supabase.auth.getSession();
         if (!session) throw new Error("No verified session was returned by the link.");
-        if (!cancelled) router.replace("/auth/set-password");
+        if (!cancelled) router.replace(destination);
       } catch {
         if (!cancelled) setMessage("This password link has expired or was already used. Ask an Admin for a new one.");
       }
