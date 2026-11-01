@@ -67,9 +67,6 @@ export async function inviteStaff(form: FormData): Promise<void> {
 
   if (name.length < 2 || !email.includes("@")) fail("Enter the staff member’s name and email.");
   if (!ROLES.includes(role)) fail("Choose a valid role.");
-  if ((role === "attendant" || role === "manager") && branchIds.length === 0) {
-    fail("Choose a branch for an attendant or manager.");
-  }
   if (role === "rider" && !riderId) fail("Choose the rider account to link.");
 
   const existing = await db.query("select id from app_users where email = $1", [email]);
@@ -130,9 +127,6 @@ export async function updateStaff(form: FormData): Promise<void> {
   const active = form.get("active") === "on";
 
   if (!id || name.length < 2 || !ROLES.includes(role)) fail("Enter a valid name and role.");
-  if ((role === "attendant" || role === "manager") && branchIds.length === 0) {
-    fail("Choose at least one branch for an attendant or manager.");
-  }
   if (role === "rider" && !riderId) fail("Choose the rider account to link.");
   if (id === staff.id && role !== staff.role) fail("You cannot change your own role.");
   if (id === staff.id && !active) fail("You cannot deactivate your own account.");
