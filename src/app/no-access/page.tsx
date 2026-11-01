@@ -14,18 +14,19 @@ export default function NoAccessPage() {
   return (
     <main className="grid min-h-screen place-items-center bg-surface-sunken p-4">
       <section className="w-full max-w-md rounded-lg border border-border bg-surface p-6 shadow-raised">
-        <h1 className="text-xl font-semibold text-ink">No portal access</h1>
-        <p className="mt-2 text-sm text-ink-muted">
+        <p className="text-sm font-semibold text-orange-700">Gateway Gas Enterprises</p>
+        <h1 className="mt-2 text-2xl font-semibold text-ink">No portal access</h1>
+        <p className="mt-3 text-sm text-ink-muted">
           You are signed in, but this account is not an active member of Gateway Gas
           staff. Either it has been deactivated, or the invitation was never finished.
         </p>
-        <p className="mt-2 text-sm text-ink-muted">
-          Ask an administrator to check your role under <strong>Users</strong>.
+        <p className="mt-3 text-sm text-ink-muted">
+          Ask an administrator to check your role under <strong className="font-semibold text-ink">Users</strong>.
         </p>
-        <form action="/auth/signout" method="post" className="mt-5">
+        <form action="/auth/signout" method="post" className="mt-6">
           <button
             type="submit"
-            className="h-10 rounded-md border border-border px-4 text-sm font-semibold text-ink hover:bg-surface-muted"
+            className="h-10 rounded-md border border-border px-4 text-sm font-semibold text-ink hover:bg-surface-sunken"
           >
             Sign out
           </button>
